@@ -16,7 +16,15 @@ export default defineConfig({
   ],
   vite: {
     ssr: {
-      external: ['node:buffer', 'node:path', 'node:fs', 'node:stream']
+      external: [
+        'node:buffer',
+        'node:path',
+        'node:fs',
+        'node:fs/promises',
+        'node:stream',
+        'node:url',
+        'node:crypto'
+      ]
     }
   }
 });
