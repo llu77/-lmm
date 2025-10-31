@@ -1,5 +1,5 @@
 name = "lkm-hr-system"
-pages_build_output_dir = "dist"
+pages_build_output_dir = "symbolai-worker/dist"
 compatibility_date = "2025-01-01"
 
 # Note: Do NOT include a [build] section for Cloudflare Pages
