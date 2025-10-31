@@ -1,0 +1,772 @@
+---
+/**
+ * MCP Tools Dashboard
+ *
+ * Admin-only dashboard for managing Cloudflare infrastructure via MCP.
+ * Features:
+ * - D1 database query console
+ * - KV namespace inspector
+ * - R2 bucket browser
+ * - Worker management
+ * - Build monitoring
+ */
+
+import { getSession } from '@/lib/session';
+import { loadUserPermissions } from '@/lib/permissions';
+
+const sessionCookie = Astro.cookies.get('session')?.value;
+
+if (!sessionCookie) {
+  return Astro.redirect('/auth/login');
+}
+
+const session = await getSession(Astro.locals.runtime.env.SESSIONS, sessionCookie);
+
+if (!session) {
+  return Astro.redirect('/auth/login');
+}
+
+// Load permissions
+const enhancedSession = await loadUserPermissions(Astro.locals.runtime.env.DB, session.userId);
+
+// Check if admin
+if (enhancedSession.role !== 'Admin') {
+  return new Response('Forbidden: Admin access required', { status: 403 });
+}
+---
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>أدوات MCP - SymbolAI</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        padding: 20px;
+      }
+
+      .container {
+        max-width: 1400px;
+        margin: 0 auto;
+      }
+
+      .header {
+        background: white;
+        border-radius: 12px;
+        padding: 24px;
+        margin-bottom: 24px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+
+      .header h1 {
+        color: #1a202c;
+        font-size: 28px;
+        margin-bottom: 8px;
+      }
+
+      .header p {
+        color: #718096;
+        font-size: 14px;
+      }
+
+      .connection-status {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-top: 16px;
+        padding: 12px;
+        background: #f7fafc;
+        border-radius: 8px;
+      }
+
+      .status-indicator {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: #fc8181;
+      }
+
+      .status-indicator.connected {
+        background: #48bb78;
+      }
+
+      .btn {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 600;
+        transition: all 0.2s;
+      }
+
+      .btn-primary {
+        background: #667eea;
+        color: white;
+      }
+
+      .btn-primary:hover {
+        background: #5a67d8;
+      }
+
+      .btn-danger {
+        background: #f56565;
+        color: white;
+      }
+
+      .btn-danger:hover {
+        background: #e53e3e;
+      }
+
+      .tabs {
+        display: flex;
+        gap: 8px;
+        background: white;
+        padding: 8px;
+        border-radius: 12px;
+        margin-bottom: 24px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+
+      .tab {
+        flex: 1;
+        padding: 12px 24px;
+        background: transparent;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 600;
+        color: #4a5568;
+        transition: all 0.2s;
+      }
+
+      .tab.active {
+        background: #667eea;
+        color: white;
+      }
+
+      .tab-content {
+        display: none;
+        background: white;
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+
+      .tab-content.active {
+        display: block;
+      }
+
+      .query-console {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      .query-input {
+        width: 100%;
+        min-height: 120px;
+        padding: 12px;
+        border: 2px solid #e2e8f0;
+        border-radius: 8px;
+        font-family: 'Courier New', monospace;
+        font-size: 14px;
+        resize: vertical;
+      }
+
+      .query-input:focus {
+        outline: none;
+        border-color: #667eea;
+      }
+
+      .results-container {
+        margin-top: 16px;
+        max-height: 500px;
+        overflow: auto;
+      }
+
+      .results-table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      .results-table th,
+      .results-table td {
+        padding: 12px;
+        text-align: right;
+        border-bottom: 1px solid #e2e8f0;
+      }
+
+      .results-table th {
+        background: #f7fafc;
+        font-weight: 600;
+        color: #2d3748;
+      }
+
+      .card {
+        background: #f7fafc;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 12px;
+      }
+
+      .card h3 {
+        color: #2d3748;
+        font-size: 16px;
+        margin-bottom: 8px;
+      }
+
+      .card p {
+        color: #718096;
+        font-size: 14px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 16px;
+      }
+
+      .loading {
+        text-align: center;
+        padding: 40px;
+        color: #718096;
+      }
+
+      .error {
+        background: #fed7d7;
+        color: #c53030;
+        padding: 12px;
+        border-radius: 8px;
+        margin-bottom: 16px;
+      }
+
+      .success {
+        background: #c6f6d5;
+        color: #22543d;
+        padding: 12px;
+        border-radius: 8px;
+        margin-bottom: 16px;
+      }
+
+      .build-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px;
+        background: white;
+        border-radius: 8px;
+        margin-bottom: 12px;
+        border-right: 4px solid #cbd5e0;
+      }
+
+      .build-item.success {
+        border-right-color: #48bb78;
+      }
+
+      .build-item.failure {
+        border-right-color: #f56565;
+      }
+
+      .build-info {
+        flex: 1;
+      }
+
+      .build-meta {
+        font-size: 12px;
+        color: #718096;
+        margin-top: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <!-- Header -->
+      <div class="header">
+        <h1>🛠️ أدوات Cloudflare MCP</h1>
+        <p>إدارة متقدمة للبنية التحتية عبر Model Context Protocol</p>
+
+        <div class="connection-status">
+          <div class="status-indicator" id="statusIndicator"></div>
+          <span id="statusText">جاري التحقق من الاتصال...</span>
+          <button class="btn btn-primary" id="connectBtn" style="margin-right: auto;">
+            الاتصال بـ MCP
+          </button>
+          <button class="btn btn-danger" id="disconnectBtn" style="display: none;">
+            قطع الاتصال
+          </button>
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="tabs">
+        <button class="tab active" data-tab="d1">قواعد البيانات D1</button>
+        <button class="tab" data-tab="kv">KV Namespaces</button>
+        <button class="tab" data-tab="r2">R2 Buckets</button>
+        <button class="tab" data-tab="workers">Workers</button>
+        <button class="tab" data-tab="builds">Build Monitor</button>
+      </div>
+
+      <!-- D1 Tab -->
+      <div class="tab-content active" id="d1-tab">
+        <h2 style="margin-bottom: 16px;">🗄️ D1 Query Console</h2>
+
+        <div id="d1Message"></div>
+
+        <select id="d1DatabaseSelect" class="query-input" style="min-height: auto; margin-bottom: 16px;">
+          <option value="">اختر قاعدة البيانات...</option>
+        </select>
+
+        <div class="query-console">
+          <textarea
+            id="sqlQuery"
+            class="query-input"
+            placeholder="أدخل استعلام SQL هنا...&#10;&#10;مثال:&#10;SELECT * FROM users_new WHERE branch_id = 'branch_1010' LIMIT 10;"
+          ></textarea>
+
+          <button class="btn btn-primary" id="executeQueryBtn">
+            تنفيذ الاستعلام
+          </button>
+
+          <div class="results-container" id="queryResults"></div>
+        </div>
+      </div>
+
+      <!-- KV Tab -->
+      <div class="tab-content" id="kv-tab">
+        <h2 style="margin-bottom: 16px;">🔑 KV Namespaces</h2>
+        <div id="kvMessage"></div>
+        <div id="kvList" class="grid"></div>
+      </div>
+
+      <!-- R2 Tab -->
+      <div class="tab-content" id="r2-tab">
+        <h2 style="margin-bottom: 16px;">📦 R2 Buckets</h2>
+        <div id="r2Message"></div>
+        <div id="r2List" class="grid"></div>
+      </div>
+
+      <!-- Workers Tab -->
+      <div class="tab-content" id="workers-tab">
+        <h2 style="margin-bottom: 16px;">⚙️ Workers</h2>
+        <div id="workersMessage"></div>
+        <div id="workersList" class="grid"></div>
+      </div>
+
+      <!-- Builds Tab -->
+      <div class="tab-content" id="builds-tab">
+        <h2 style="margin-bottom: 16px;">🚀 Build Monitor</h2>
+        <div id="buildsMessage"></div>
+        <div id="buildsList"></div>
+      </div>
+    </div>
+
+    <script>
+      // State
+      let connected = false;
+      let databases = [];
+
+      // Check connection status on load
+      checkConnectionStatus();
+
+      // Tab switching
+      document.querySelectorAll('.tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+          const tabName = tab.dataset.tab;
+
+          document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+          document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+          tab.classList.add('active');
+          document.getElementById(`${tabName}-tab`).classList.add('active');
+
+          // Load data when tab is activated
+          if (connected) {
+            loadTabData(tabName);
+          }
+        });
+      });
+
+      // Connect button
+      document.getElementById('connectBtn').addEventListener('click', showConnectInstructions);
+
+      // Disconnect button
+      document.getElementById('disconnectBtn').addEventListener('click', disconnect);
+
+      // Execute query button
+      document.getElementById('executeQueryBtn').addEventListener('click', executeQuery);
+
+      // Functions
+      async function checkConnectionStatus() {
+        try {
+          const response = await fetch('/api/mcp/auth/status');
+          const data = await response.json();
+
+          if (data.connected) {
+            setConnected(true);
+            loadD1Databases();
+          } else {
+            setConnected(false);
+          }
+        } catch (error) {
+          console.error('Failed to check connection:', error);
+          setConnected(false);
+        }
+      }
+
+      function setConnected(isConnected) {
+        connected = isConnected;
+        const indicator = document.getElementById('statusIndicator');
+        const text = document.getElementById('statusText');
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+
+        if (isConnected) {
+          indicator.classList.add('connected');
+          text.textContent = 'متصل بـ Cloudflare MCP';
+          connectBtn.style.display = 'none';
+          disconnectBtn.style.display = 'block';
+        } else {
+          indicator.classList.remove('connected');
+          text.textContent = 'غير متصل';
+          connectBtn.style.display = 'block';
+          disconnectBtn.style.display = 'none';
+        }
+      }
+
+      async function showConnectInstructions() {
+        try {
+          const response = await fetch('/api/mcp/auth/connect', { method: 'POST' });
+          const data = await response.json();
+
+          const instructions = data.instructions;
+          const message = `
+            <div class="card">
+              <h3>خطوات الاتصال بـ Cloudflare MCP:</h3>
+              <ol style="margin-right: 20px; margin-top: 12px;">
+                <li style="margin-bottom: 8px;">${instructions.step1}</li>
+                <li style="margin-bottom: 8px;">${instructions.step2}
+                  <ul style="margin-right: 20px; margin-top: 8px;">
+                    ${instructions.permissions.map(p => `<li>${p}</li>`).join('')}
+                  </ul>
+                </li>
+                <li style="margin-bottom: 8px;">${instructions.step3}</li>
+              </ol>
+              <div style="margin-top: 16px;">
+                <input type="text" id="apiTokenInput" placeholder="API Token" style="width: 100%; padding: 8px; border: 1px solid #e2e8f0; border-radius: 4px; margin-bottom: 8px;">
+                <input type="text" id="accountIdInput" placeholder="Account ID" style="width: 100%; padding: 8px; border: 1px solid #e2e8f0; border-radius: 4px; margin-bottom: 8px;">
+                <button class="btn btn-primary" onclick="submitToken()">حفظ الاتصال</button>
+              </div>
+            </div>
+          `;
+
+          document.getElementById('d1Message').innerHTML = message;
+        } catch (error) {
+          showError('d1Message', 'فشل عرض تعليمات الاتصال');
+        }
+      }
+
+      async function submitToken() {
+        const apiToken = document.getElementById('apiTokenInput').value;
+        const accountId = document.getElementById('accountIdInput').value;
+
+        if (!apiToken || !accountId) {
+          alert('الرجاء إدخال API Token و Account ID');
+          return;
+        }
+
+        try {
+          const response = await fetch('/api/mcp/auth/callback', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ apiToken, accountId }),
+          });
+
+          const data = await response.json();
+
+          if (data.success) {
+            document.getElementById('d1Message').innerHTML = '<div class="success">تم الاتصال بنجاح! ✅</div>';
+            setConnected(true);
+            loadD1Databases();
+          } else {
+            showError('d1Message', data.error || 'فشل الاتصال');
+          }
+        } catch (error) {
+          showError('d1Message', 'فشل حفظ الاتصال');
+        }
+      }
+
+      async function disconnect() {
+        if (!confirm('هل أنت متأكد من قطع الاتصال؟')) return;
+
+        try {
+          const response = await fetch('/api/mcp/auth/disconnect', { method: 'POST' });
+          const data = await response.json();
+
+          if (data.success) {
+            setConnected(false);
+            clearAllData();
+          }
+        } catch (error) {
+          alert('فشل قطع الاتصال');
+        }
+      }
+
+      async function loadD1Databases() {
+        try {
+          const response = await fetch('/api/mcp/d1/list');
+          const data = await response.json();
+
+          if (data.success) {
+            databases = data.databases;
+            const select = document.getElementById('d1DatabaseSelect');
+            select.innerHTML = '<option value="">اختر قاعدة البيانات...</option>';
+
+            databases.forEach(db => {
+              const option = document.createElement('option');
+              option.value = db.uuid;
+              option.textContent = `${db.name} (${db.num_tables} tables)`;
+              select.appendChild(option);
+            });
+          }
+        } catch (error) {
+          showError('d1Message', 'فشل تحميل قواعد البيانات');
+        }
+      }
+
+      async function executeQuery() {
+        const databaseId = document.getElementById('d1DatabaseSelect').value;
+        const sql = document.getElementById('sqlQuery').value.trim();
+
+        if (!databaseId) {
+          showError('d1Message', 'الرجاء اختيار قاعدة البيانات');
+          return;
+        }
+
+        if (!sql) {
+          showError('d1Message', 'الرجاء إدخال استعلام SQL');
+          return;
+        }
+
+        try {
+          document.getElementById('queryResults').innerHTML = '<div class="loading">جاري التنفيذ...</div>';
+
+          const response = await fetch('/api/mcp/d1/query', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ databaseId, sql }),
+          });
+
+          const data = await response.json();
+
+          if (data.success) {
+            displayQueryResults(data.results, data.meta);
+          } else {
+            showError('d1Message', data.error || 'فشل تنفيذ الاستعلام');
+            document.getElementById('queryResults').innerHTML = '';
+          }
+        } catch (error) {
+          showError('d1Message', 'فشل تنفيذ الاستعلام');
+          document.getElementById('queryResults').innerHTML = '';
+        }
+      }
+
+      function displayQueryResults(results, meta) {
+        const container = document.getElementById('queryResults');
+
+        if (!results || results.length === 0) {
+          container.innerHTML = '<div class="card"><p>لا توجد نتائج</p></div>';
+          return;
+        }
+
+        const keys = Object.keys(results[0]);
+
+        let html = `
+          <div style="margin-bottom: 8px; color: #718096; font-size: 14px;">
+            النتائج: ${results.length} صف | الوقت: ${meta.executionTime}ms
+          </div>
+          <table class="results-table">
+            <thead>
+              <tr>
+                ${keys.map(key => `<th>${key}</th>`).join('')}
+              </tr>
+            </thead>
+            <tbody>
+              ${results.map(row => `
+                <tr>
+                  ${keys.map(key => `<td>${row[key] ?? ''}</td>`).join('')}
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+
+        container.innerHTML = html;
+      }
+
+      async function loadTabData(tabName) {
+        switch (tabName) {
+          case 'kv':
+            await loadKVNamespaces();
+            break;
+          case 'r2':
+            await loadR2Buckets();
+            break;
+          case 'workers':
+            await loadWorkers();
+            break;
+          case 'builds':
+            await loadBuilds();
+            break;
+        }
+      }
+
+      async function loadKVNamespaces() {
+        try {
+          document.getElementById('kvList').innerHTML = '<div class="loading">جاري التحميل...</div>';
+
+          const response = await fetch('/api/mcp/kv/list');
+          const data = await response.json();
+
+          if (data.success) {
+            const container = document.getElementById('kvList');
+            container.innerHTML = '';
+
+            data.namespaces.forEach(ns => {
+              const card = document.createElement('div');
+              card.className = 'card';
+              card.innerHTML = `
+                <h3>${ns.title}</h3>
+                <p>ID: ${ns.id}</p>
+              `;
+              container.appendChild(card);
+            });
+          }
+        } catch (error) {
+          showError('kvMessage', 'فشل تحميل KV Namespaces');
+        }
+      }
+
+      async function loadR2Buckets() {
+        try {
+          document.getElementById('r2List').innerHTML = '<div class="loading">جاري التحميل...</div>';
+
+          const response = await fetch('/api/mcp/r2/list');
+          const data = await response.json();
+
+          if (data.success) {
+            const container = document.getElementById('r2List');
+            container.innerHTML = '';
+
+            data.buckets.forEach(bucket => {
+              const card = document.createElement('div');
+              card.className = 'card';
+              card.innerHTML = `
+                <h3>${bucket.name}</h3>
+                <p>تاريخ الإنشاء: ${new Date(bucket.creation_date).toLocaleDateString('ar')}</p>
+              `;
+              container.appendChild(card);
+            });
+          }
+        } catch (error) {
+          showError('r2Message', 'فشل تحميل R2 Buckets');
+        }
+      }
+
+      async function loadWorkers() {
+        try {
+          document.getElementById('workersList').innerHTML = '<div class="loading">جاري التحميل...</div>';
+
+          const response = await fetch('/api/mcp/workers/list');
+          const data = await response.json();
+
+          if (data.success) {
+            const container = document.getElementById('workersList');
+            container.innerHTML = '';
+
+            data.workers.forEach(worker => {
+              const card = document.createElement('div');
+              card.className = 'card';
+              card.innerHTML = `
+                <h3>${worker.id}</h3>
+                <p>آخر تعديل: ${new Date(worker.modified_on).toLocaleDateString('ar')}</p>
+              `;
+              container.appendChild(card);
+            });
+          }
+        } catch (error) {
+          showError('workersMessage', 'فشل تحميل Workers');
+        }
+      }
+
+      async function loadBuilds() {
+        try {
+          document.getElementById('buildsList').innerHTML = '<div class="loading">جاري التحميل...</div>';
+
+          const response = await fetch('/api/mcp/builds/list?limit=20');
+          const data = await response.json();
+
+          if (data.success) {
+            const container = document.getElementById('buildsList');
+            container.innerHTML = '';
+
+            // Show stats
+            const statsCard = document.createElement('div');
+            statsCard.className = 'card';
+            statsCard.innerHTML = `
+              <h3>📊 إحصائيات البناء</h3>
+              <p>الإجمالي: ${data.stats.total} | ناجح: ${data.stats.successful} | فاشل: ${data.stats.failed} | نسبة النجاح: ${data.stats.successRate}</p>
+            `;
+            container.appendChild(statsCard);
+
+            // Show builds
+            data.builds.forEach(build => {
+              const buildItem = document.createElement('div');
+              buildItem.className = `build-item ${build.status}`;
+              buildItem.innerHTML = `
+                <div class="build-info">
+                  <strong>${build.deployment_trigger.metadata.commit_message}</strong>
+                  <div class="build-meta">
+                    ${new Date(build.created_on).toLocaleString('ar')} -
+                    Branch: ${build.deployment_trigger.metadata.branch}
+                  </div>
+                </div>
+                <div style="font-size: 20px;">
+                  ${build.status === 'success' ? '✅' : build.status === 'failure' ? '❌' : '⏳'}
+                </div>
+              `;
+              container.appendChild(buildItem);
+            });
+          }
+        } catch (error) {
+          showError('buildsMessage', 'فشل تحميل Builds');
+        }
+      }
+
+      function showError(elementId, message) {
+        const element = document.getElementById(elementId);
+        element.innerHTML = `<div class="error">${message}</div>`;
+      }
+
+      function clearAllData() {
+        document.getElementById('d1DatabaseSelect').innerHTML = '<option value="">اختر قاعدة البيانات...</option>';
+        document.getElementById('queryResults').innerHTML = '';
+        document.getElementById('kvList').innerHTML = '';
+        document.getElementById('r2List').innerHTML = '';
+        document.getElementById('workersList').innerHTML = '';
+        document.getElementById('buildsList').innerHTML = '';
+      }
+    </script>
+  </body>
+</html>
