@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "cd symbolai-worker && npm install && npm run build && cd .. && cp -r symbolai-worker/dist .",
+    "build": "cd symbolai-worker && npm install && npm run build",
     "dev": "cd symbolai-worker && npm run dev",
     "preview": "cd symbolai-worker && npm run preview"
   },
