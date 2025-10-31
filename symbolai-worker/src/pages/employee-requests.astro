@@ -1,0 +1,223 @@
+---
+import MainLayout from '@/layouts/MainLayout.astro';
+
+// Check authentication
+const cookieHeader = Astro.request.headers.get('Cookie');
+if (!cookieHeader?.includes('session=')) {
+  return Astro.redirect('/auth/login');
+}
+---
+
+<MainLayout title="طلبات الموظفين - SymbolAI">
+  <div class="space-y-6">
+    <div>
+      <h1 class="text-3xl font-bold">طلبات موظفي الفرع</h1>
+      <p class="text-muted-foreground mt-2">عرض وتتبع طلبات موظفي الفرع</p>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="grid gap-4 md:grid-cols-4">
+      <div class="rounded-lg border bg-card p-4">
+        <h3 class="text-sm font-medium text-muted-foreground">إجمالي الطلبات</h3>
+        <p class="text-2xl font-bold mt-2" id="total-count">0</p>
+      </div>
+      <div class="rounded-lg border bg-card p-4">
+        <h3 class="text-sm font-medium text-muted-foreground">معلقة</h3>
+        <p class="text-2xl font-bold mt-2 text-yellow-600" id="pending-count">0</p>
+      </div>
+      <div class="rounded-lg border bg-card p-4">
+        <h3 class="text-sm font-medium text-muted-foreground">موافق عليها</h3>
+        <p class="text-2xl font-bold mt-2 text-green-600" id="approved-count">0</p>
+      </div>
+      <div class="rounded-lg border bg-card p-4">
+        <h3 class="text-sm font-medium text-muted-foreground">مرفوضة</h3>
+        <p class="text-2xl font-bold mt-2 text-red-600" id="rejected-count">0</p>
+      </div>
+    </div>
+
+    <!-- Requests by Type -->
+    <div class="rounded-lg border bg-card p-6">
+      <h3 class="text-xl font-semibold mb-4">التوزيع حسب النوع</h3>
+      <div class="grid gap-3 md:grid-cols-3">
+        <div class="p-3 border rounded-lg">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-medium">سلفة</span>
+            <span class="text-xl font-bold" id="type-سلفة">0</span>
+          </div>
+        </div>
+        <div class="p-3 border rounded-lg">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-medium">إجازة</span>
+            <span class="text-xl font-bold" id="type-إجازة">0</span>
+          </div>
+        </div>
+        <div class="p-3 border rounded-lg">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-medium">صرف متأخرات</span>
+            <span class="text-xl font-bold" id="type-صرف متأخرات">0</span>
+          </div>
+        </div>
+        <div class="p-3 border rounded-lg">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-medium">استئذان</span>
+            <span class="text-xl font-bold" id="type-استئذان">0</span>
+          </div>
+        </div>
+        <div class="p-3 border rounded-lg">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-medium">مخالفة</span>
+            <span class="text-xl font-bold" id="type-مخالفة">0</span>
+          </div>
+        </div>
+        <div class="p-3 border rounded-lg">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-medium">استقالة</span>
+            <span class="text-xl font-bold" id="type-استقالة">0</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Requests Table -->
+    <div class="rounded-lg border bg-card p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-xl font-semibold">قائمة الطلبات</h3>
+        <select id="status-filter" class="rounded-md border px-3 py-2 text-sm">
+          <option value="all">جميع الحالات</option>
+          <option value="pending">معلقة</option>
+          <option value="approved">موافق عليها</option>
+          <option value="rejected">مرفوضة</option>
+        </select>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full">
+          <thead>
+            <tr class="border-b">
+              <th class="text-right p-3 font-medium">اسم الموظف</th>
+              <th class="text-right p-3 font-medium">نوع الطلب</th>
+              <th class="text-right p-3 font-medium">تاريخ التقديم</th>
+              <th class="text-right p-3 font-medium">الحالة</th>
+              <th class="text-right p-3 font-medium">الرد</th>
+            </tr>
+          </thead>
+          <tbody id="requests-table-body">
+            <tr>
+              <td colspan="5" class="text-center p-8 text-muted-foreground">
+                جاري التحميل...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    interface Request {
+      id: string;
+      employee_name: string;
+      request_type: string;
+      request_date: string;
+      status: string;
+      admin_response?: string;
+    }
+
+    function formatDate(dateStr: string): string {
+      if (!dateStr) return '-';
+      return new Date(dateStr).toLocaleDateString('ar-EG');
+    }
+
+    function getStatusBadge(status: string): string {
+      const badges: { [key: string]: string } = {
+        'pending': '<span class="px-3 py-1 rounded text-sm bg-yellow-100 text-yellow-800">⏳ معلقة</span>',
+        'approved': '<span class="px-3 py-1 rounded text-sm bg-green-100 text-green-800">✓ موافق عليها</span>',
+        'rejected': '<span class="px-3 py-1 rounded text-sm bg-red-100 text-red-800">✗ مرفوضة</span>'
+      };
+      return badges[status] || status;
+    }
+
+    async function loadRequests() {
+      const statusFilter = (document.getElementById('status-filter') as HTMLSelectElement).value;
+
+      try {
+        // Note: This should ideally be filtered by the manager's branch
+        // For now, using 'all' endpoint (requires admin access in current implementation)
+        const response = await fetch(`/api/requests/all?status=${statusFilter}`);
+        const data = await response.json();
+
+        if (data.success) {
+          const requests: Request[] = data.requests;
+          updateStats(requests);
+          renderRequests(requests);
+        } else {
+          // Fallback to empty if user doesn't have admin access
+          updateStats([]);
+          renderRequests([]);
+        }
+      } catch (error) {
+        console.error('Error loading requests:', error);
+        updateStats([]);
+        renderRequests([]);
+      }
+    }
+
+    function updateStats(requests: Request[]) {
+      // Count by status
+      const pending = requests.filter(r => r.status === 'pending').length;
+      const approved = requests.filter(r => r.status === 'approved').length;
+      const rejected = requests.filter(r => r.status === 'rejected').length;
+
+      document.getElementById('total-count')!.textContent = requests.length.toString();
+      document.getElementById('pending-count')!.textContent = pending.toString();
+      document.getElementById('approved-count')!.textContent = approved.toString();
+      document.getElementById('rejected-count')!.textContent = rejected.toString();
+
+      // Count by type
+      const types = ['سلفة', 'إجازة', 'صرف متأخرات', 'استئذان', 'مخالفة', 'استقالة'];
+      types.forEach(type => {
+        const count = requests.filter(r => r.request_type === type).length;
+        const element = document.getElementById(`type-${type}`);
+        if (element) {
+          element.textContent = count.toString();
+        }
+      });
+    }
+
+    function renderRequests(requests: Request[]) {
+      const tbody = document.getElementById('requests-table-body')!;
+
+      if (requests.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="5" class="text-center p-8 text-muted-foreground">
+              لا توجد طلبات
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = requests.map(req => `
+        <tr class="border-b hover:bg-gray-50">
+          <td class="p-3 font-medium">${req.employee_name}</td>
+          <td class="p-3">${req.request_type}</td>
+          <td class="p-3">${formatDate(req.request_date)}</td>
+          <td class="p-3">${getStatusBadge(req.status)}</td>
+          <td class="p-3">
+            ${req.admin_response
+              ? `<span class="text-sm">${req.admin_response.substring(0, 50)}${req.admin_response.length > 50 ? '...' : ''}</span>`
+              : '<span class="text-muted-foreground text-sm">-</span>'
+            }
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    // Filter
+    document.getElementById('status-filter')?.addEventListener('change', loadRequests);
+
+    // Initial load
+    loadRequests();
+  </script>
+</MainLayout>

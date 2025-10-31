@@ -1,0 +1,11 @@
+---
+// Redirect to dashboard or login based on session
+const cookieHeader = Astro.request.headers.get('Cookie');
+const hasSession = cookieHeader?.includes('session=');
+
+if (hasSession) {
+  return Astro.redirect('/dashboard');
+} else {
+  return Astro.redirect('/auth/login');
+}
+---

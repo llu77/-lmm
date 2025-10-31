@@ -1,0 +1,374 @@
+---
+import MainLayout from '@/layouts/MainLayout.astro';
+import { requireAuth } from '@/lib/session';
+
+// Check authentication
+const cookieHeader = Astro.request.headers.get('Cookie');
+if (!cookieHeader?.includes('session=')) {
+  return Astro.redirect('/auth/login');
+}
+---
+
+<MainLayout title="لوحة التحكم - SymbolAI">
+  <div class="space-y-8">
+    <!-- Header with user info and branch selector -->
+    <div class="flex justify-between items-start">
+      <div>
+        <h1 class="text-3xl font-bold">لوحة التحكم</h1>
+        <p class="text-muted-foreground mt-2">نظرة عامة على الأداء المالي</p>
+      </div>
+      <div class="flex gap-4 items-center">
+        <!-- User info -->
+        <div class="text-left">
+          <div id="user-role-badge" class="mb-1"></div>
+          <div class="text-sm text-muted-foreground" id="user-branch-info"></div>
+        </div>
+        <!-- Branch selector (only for admins) -->
+        <div id="branch-selector-container" class="hidden">
+          <select
+            id="branch-selector"
+            class="px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+          >
+            <option value="">جميع الفروع</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- KPI Cards -->
+    <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4" id="kpi-cards">
+      <div class="rounded-lg border bg-card text-card-foreground shadow-sm p-6">
+        <div class="flex flex-row items-center justify-between space-y-0 pb-2">
+          <h3 class="text-sm font-medium">إجمالي الإيرادات</h3>
+          <svg class="h-4 w-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <div class="space-y-1">
+          <div class="text-2xl font-bold" id="total-revenue">...</div>
+          <p class="text-xs text-muted-foreground">هذا الشهر</p>
+        </div>
+      </div>
+
+      <div class="rounded-lg border bg-card text-card-foreground shadow-sm p-6">
+        <div class="flex flex-row items-center justify-between space-y-0 pb-2">
+          <h3 class="text-sm font-medium">إجمالي المصروفات</h3>
+          <svg class="h-4 w-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+          </svg>
+        </div>
+        <div class="space-y-1">
+          <div class="text-2xl font-bold" id="total-expenses">...</div>
+          <p class="text-xs text-muted-foreground">هذا الشهر</p>
+        </div>
+      </div>
+
+      <div class="rounded-lg border bg-card text-card-foreground shadow-sm p-6">
+        <div class="flex flex-row items-center justify-between space-y-0 pb-2">
+          <h3 class="text-sm font-medium">صافي الربح</h3>
+          <svg class="h-4 w-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+          </svg>
+        </div>
+        <div class="space-y-1">
+          <div class="text-2xl font-bold" id="net-profit">...</div>
+          <p class="text-xs text-muted-foreground" id="profit-description">الإيرادات - المصروفات</p>
+        </div>
+      </div>
+
+      <div class="rounded-lg border bg-card text-card-foreground shadow-sm p-6">
+        <div class="flex flex-row items-center justify-between space-y-0 pb-2">
+          <h3 class="text-sm font-medium">عدد الموظفين</h3>
+          <svg class="h-4 w-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+          </svg>
+        </div>
+        <div class="space-y-1">
+          <div class="text-2xl font-bold" id="employee-count">...</div>
+          <p class="text-xs text-muted-foreground">موظف نشط</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chart and Recent Activities -->
+    <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+      <div class="col-span-4 rounded-lg border bg-card text-card-foreground shadow-sm">
+        <div class="p-6 pb-4">
+          <h3 class="font-semibold leading-none tracking-tight">الإيرادات والمصروفات</h3>
+          <p class="text-sm text-muted-foreground mt-2">آخر 7 أيام</p>
+        </div>
+        <div class="p-6 pt-0">
+          <canvas id="revenue-chart" class="w-full h-80"></canvas>
+        </div>
+      </div>
+
+      <div class="col-span-3 rounded-lg border bg-card text-card-foreground shadow-sm">
+        <div class="p-6 pb-4">
+          <h3 class="font-semibold leading-none tracking-tight">النشاطات الأخيرة</h3>
+        </div>
+        <div class="p-6 pt-0">
+          <div class="space-y-4" id="recent-activities">
+            <p class="text-sm text-muted-foreground">جاري التحميل...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Alerts Section -->
+    <div id="alerts-section" class="hidden">
+      <div class="rounded-lg border border-yellow-200 bg-yellow-50 p-4">
+        <div class="flex items-start">
+          <svg class="h-5 w-5 text-yellow-600 mt-0.5 ml-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <div>
+            <h3 class="text-sm font-medium text-yellow-800">تنبيهات مطلوبة</h3>
+            <div class="mt-2 text-sm text-yellow-700" id="alert-content"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    import '/public/js/permissions.js';
+
+    interface Stats {
+      totalRevenue: number;
+      totalExpenses: number;
+      netProfit: number;
+      employeeCount: number;
+      mismatchedCount: number;
+    }
+
+    interface ChartDataPoint {
+      dateAr: string;
+      revenue: number;
+      expense: number;
+      profit: number;
+    }
+
+    interface Activity {
+      type: string;
+      title: string;
+      amount: number;
+      date: string;
+    }
+
+    // Format currency in Arabic
+    function formatCurrency(amount: number): string {
+      return new Intl.NumberFormat('ar-EG', {
+        style: 'currency',
+        currency: 'EGP',
+        minimumFractionDigits: 2
+      }).format(amount);
+    }
+
+    // Load branches for selector
+    async function loadBranches() {
+      try {
+        const response = await fetch('/api/branches/list');
+        const data = await response.json();
+
+        if (data.success && data.branches) {
+          const branchSelector = document.getElementById('branch-selector') as HTMLSelectElement;
+          data.branches.forEach((branch: any) => {
+            const option = document.createElement('option');
+            option.value = branch.id;
+            option.textContent = branch.name_ar || branch.name;
+            branchSelector.appendChild(option);
+          });
+
+          // Set selected branch from URL or permissions
+          const urlParams = new URLSearchParams(window.location.search);
+          const branchIdFromUrl = urlParams.get('branchId');
+          if (branchIdFromUrl) {
+            branchSelector.value = branchIdFromUrl;
+            window.PermissionsManager.setSelectedBranchId(branchIdFromUrl);
+          } else {
+            const selectedBranch = window.PermissionsManager.getSelectedBranchId();
+            if (selectedBranch) {
+              branchSelector.value = selectedBranch;
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error loading branches:', error);
+      }
+    }
+
+    // Fetch dashboard stats
+    async function loadDashboard() {
+      try {
+        // Get selected branch
+        const branchSelector = document.getElementById('branch-selector') as HTMLSelectElement;
+        const selectedBranch = branchSelector?.value || window.PermissionsManager.getSelectedBranchId();
+
+        const url = selectedBranch
+          ? `/api/dashboard/stats?branchId=${selectedBranch}`
+          : '/api/dashboard/stats';
+
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (!data.success) {
+          throw new Error(data.error || 'Failed to load dashboard');
+        }
+
+        // Update KPI cards
+        const stats: Stats = data.stats;
+        document.getElementById('total-revenue')!.textContent = formatCurrency(stats.totalRevenue);
+        document.getElementById('total-expenses')!.textContent = formatCurrency(stats.totalExpenses);
+        document.getElementById('net-profit')!.textContent = formatCurrency(stats.netProfit);
+        document.getElementById('employee-count')!.textContent = stats.employeeCount.toString();
+
+        // Update profit color based on positive/negative
+        const profitEl = document.getElementById('net-profit')!;
+        if (stats.netProfit >= 0) {
+          profitEl.classList.add('text-green-600');
+        } else {
+          profitEl.classList.add('text-red-600');
+        }
+
+        // Show alerts if mismatched revenues exist
+        if (stats.mismatchedCount > 0) {
+          const alertsSection = document.getElementById('alerts-section')!;
+          const alertContent = document.getElementById('alert-content')!;
+          alertsSection.classList.remove('hidden');
+          alertContent.textContent = `يوجد ${stats.mismatchedCount} سجل إيراد غير متطابق. يرجى المراجعة.`;
+        }
+
+        // Render chart
+        renderChart(data.chartData);
+
+        // Render recent activities
+        renderActivities(data.recentActivities);
+
+      } catch (error) {
+        console.error('Error loading dashboard:', error);
+        alert('حدث خطأ أثناء تحميل لوحة التحكم');
+      }
+    }
+
+    // Simple chart rendering using canvas
+    function renderChart(chartData: ChartDataPoint[]) {
+      const canvas = document.getElementById('revenue-chart') as HTMLCanvasElement;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      // Set canvas size
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = rect.width * window.devicePixelRatio;
+      canvas.height = rect.height * window.devicePixelRatio;
+      ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+
+      const width = rect.width;
+      const height = rect.height;
+      const padding = 40;
+
+      // Calculate max value for scaling
+      const maxValue = Math.max(
+        ...chartData.map(d => Math.max(d.revenue, d.expense))
+      );
+
+      // Clear canvas
+      ctx.clearRect(0, 0, width, height);
+
+      // Draw bars
+      const barWidth = (width - padding * 2) / chartData.length / 3;
+      const barGap = barWidth / 2;
+
+      chartData.forEach((d, i) => {
+        const x = padding + i * (barWidth * 3 + barGap);
+        const revenueHeight = (d.revenue / maxValue) * (height - padding * 2);
+        const expenseHeight = (d.expense / maxValue) * (height - padding * 2);
+
+        // Revenue bar (green)
+        ctx.fillStyle = '#10b981';
+        ctx.fillRect(x, height - padding - revenueHeight, barWidth, revenueHeight);
+
+        // Expense bar (red)
+        ctx.fillStyle = '#ef4444';
+        ctx.fillRect(x + barWidth + barGap / 2, height - padding - expenseHeight, barWidth, expenseHeight);
+
+        // Date label
+        ctx.fillStyle = '#6b7280';
+        ctx.font = '12px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(d.dateAr, x + barWidth, height - padding + 20);
+      });
+
+      // Legend
+      ctx.fillStyle = '#10b981';
+      ctx.fillRect(width - 150, 20, 20, 20);
+      ctx.fillStyle = '#000';
+      ctx.textAlign = 'right';
+      ctx.fillText('إيرادات', width - 160, 35);
+
+      ctx.fillStyle = '#ef4444';
+      ctx.fillRect(width - 150, 50, 20, 20);
+      ctx.fillStyle = '#000';
+      ctx.fillText('مصروفات', width - 160, 65);
+    }
+
+    // Render recent activities
+    function renderActivities(activities: Activity[]) {
+      const container = document.getElementById('recent-activities')!;
+
+      if (activities.length === 0) {
+        container.innerHTML = '<p class="text-sm text-muted-foreground">لا توجد نشاطات حديثة</p>';
+        return;
+      }
+
+      container.innerHTML = activities.slice(0, 5).map(activity => `
+        <div class="flex items-center">
+          <div class="ml-4 space-y-1 flex-1">
+            <p class="text-sm font-medium leading-none">${activity.title}</p>
+            <p class="text-sm text-muted-foreground">
+              ${formatCurrency(activity.amount)}
+            </p>
+          </div>
+          <div class="${activity.type === 'revenue' ? 'text-green-600' : 'text-red-600'} font-medium">
+            ${activity.type === 'revenue' ? '+' : '-'}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Initialize permissions and load dashboard
+    document.addEventListener('permissionsLoaded', async () => {
+      // Show branch selector only for admins with canViewAllBranches
+      if (window.PermissionsManager.has('canViewAllBranches')) {
+        const branchSelectorContainer = document.getElementById('branch-selector-container');
+        if (branchSelectorContainer) {
+          branchSelectorContainer.classList.remove('hidden');
+          await loadBranches();
+        }
+      }
+
+      // Load dashboard data
+      loadDashboard();
+    });
+
+    // Handle branch selection change
+    const branchSelector = document.getElementById('branch-selector');
+    if (branchSelector) {
+      branchSelector.addEventListener('change', (e) => {
+        const target = e.target as HTMLSelectElement;
+        const branchId = target.value;
+
+        if (branchId) {
+          window.PermissionsManager.setSelectedBranchId(branchId);
+        }
+
+        // Reload dashboard with new branch
+        loadDashboard();
+      });
+    }
+
+    // Listen for branch change events
+    window.addEventListener('branchChanged', () => {
+      loadDashboard();
+    });
+  </script>
+</MainLayout>

@@ -1,0 +1,485 @@
+---
+import MainLayout from '@/layouts/MainLayout.astro';
+
+// Check authentication - redirect to login if not authenticated
+const cookieHeader = Astro.request.headers.get('Cookie');
+if (!cookieHeader?.includes('session=')) {
+  return Astro.redirect('/auth/login');
+}
+---
+
+<MainLayout title="إدارة المستخدمين - SymbolAI">
+  <div class="space-y-6">
+    <!-- Header -->
+    <div class="flex justify-between items-center">
+      <div>
+        <h1 class="text-3xl font-bold">إدارة المستخدمين</h1>
+        <p class="text-muted-foreground mt-2">عرض وإدارة مستخدمي النظام</p>
+      </div>
+      <button
+        id="add-user-btn"
+        class="bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors"
+      >
+        + إضافة مستخدم جديد
+      </button>
+    </div>
+
+    <!-- Filters -->
+    <div class="flex gap-4 flex-wrap">
+      <select id="role-filter" class="px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+        <option value="">جميع الأدوار</option>
+        <option value="role_admin">مدير النظام</option>
+        <option value="role_supervisor">مشرف</option>
+        <option value="role_employee">موظف</option>
+        <option value="role_partner">شريك</option>
+      </select>
+
+      <select id="branch-filter" class="px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+        <option value="">جميع الفروع</option>
+      </select>
+
+      <select id="status-filter" class="px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+        <option value="">جميع الحالات</option>
+        <option value="active">نشط</option>
+        <option value="inactive">غير نشط</option>
+      </select>
+    </div>
+
+    <!-- Users Table -->
+    <div class="rounded-lg border bg-card">
+      <div class="overflow-x-auto">
+        <table class="w-full">
+          <thead class="border-b bg-muted/50">
+            <tr>
+              <th class="px-4 py-3 text-right text-sm font-medium">اسم المستخدم</th>
+              <th class="px-4 py-3 text-right text-sm font-medium">الاسم الكامل</th>
+              <th class="px-4 py-3 text-right text-sm font-medium">البريد الإلكتروني</th>
+              <th class="px-4 py-3 text-right text-sm font-medium">الدور</th>
+              <th class="px-4 py-3 text-right text-sm font-medium">الفرع</th>
+              <th class="px-4 py-3 text-right text-sm font-medium">الحالة</th>
+              <th class="px-4 py-3 text-right text-sm font-medium">الإجراءات</th>
+            </tr>
+          </thead>
+          <tbody id="users-table-body">
+            <tr>
+              <td colspan="7" class="px-4 py-8 text-center text-muted-foreground">
+                جاري التحميل...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Empty State -->
+    <div id="empty-state" class="hidden text-center py-12">
+      <svg class="mx-auto h-12 w-12 text-muted-foreground mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+      </svg>
+      <h3 class="text-lg font-medium">لا يوجد مستخدمين</h3>
+      <p class="text-muted-foreground mt-2">ابدأ بإضافة مستخدم جديد</p>
+    </div>
+  </div>
+
+  <!-- Add/Edit User Modal -->
+  <div id="user-modal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+    <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex justify-between items-center">
+        <h2 id="modal-title" class="text-xl font-bold">إضافة مستخدم جديد</h2>
+        <button id="close-modal" class="text-muted-foreground hover:text-foreground">
+          <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <form id="user-form" class="space-y-4">
+        <input type="hidden" id="user-id" />
+
+        <div>
+          <label class="block text-sm font-medium mb-2">اسم المستخدم *</label>
+          <input
+            type="text"
+            id="username"
+            required
+            class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+            placeholder="supervisor_laban"
+          />
+        </div>
+
+        <div id="password-field">
+          <label class="block text-sm font-medium mb-2">كلمة المرور *</label>
+          <input
+            type="password"
+            id="password"
+            required
+            class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+            placeholder="********"
+          />
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium mb-2">البريد الإلكتروني</label>
+          <input
+            type="email"
+            id="email"
+            class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+            placeholder="user@symbolai.net"
+          />
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium mb-2">الاسم الكامل</label>
+          <input
+            type="text"
+            id="full-name"
+            class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+            placeholder="محمد أحمد"
+          />
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium mb-2">رقم الهاتف</label>
+          <input
+            type="tel"
+            id="phone"
+            class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+            placeholder="+966501234567"
+          />
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium mb-2">الدور *</label>
+          <select
+            id="role-id"
+            required
+            class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+          >
+            <option value="">اختر الدور</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium mb-2">الفرع</label>
+          <select
+            id="branch-id"
+            class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+          >
+            <option value="">لا يوجد (مدير النظام)</option>
+          </select>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <input type="checkbox" id="is-active" class="rounded" checked />
+          <label for="is-active" class="text-sm font-medium">مستخدم نشط</label>
+        </div>
+
+        <div class="flex gap-2 pt-4">
+          <button
+            type="submit"
+            class="flex-1 bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors"
+          >
+            حفظ
+          </button>
+          <button
+            type="button"
+            id="cancel-btn"
+            class="flex-1 bg-muted text-muted-foreground px-4 py-2 rounded-lg hover:bg-muted/80 transition-colors"
+          >
+            إلغاء
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    import '/public/js/permissions.js';
+
+    // Permission check - must have canManageUsers
+    document.addEventListener('permissionsLoaded', () => {
+      if (!window.PermissionsManager.has('canManageUsers')) {
+        alert('ليس لديك صلاحية للوصول إلى هذه الصفحة');
+        window.location.href = '/dashboard';
+      }
+    });
+
+    // State
+    let users = [];
+    let branches = [];
+    let roles = [];
+    let editingUserId = null;
+
+    // Role name mappings
+    const roleNames = {
+      'role_admin': 'مدير النظام',
+      'role_supervisor': 'مشرف',
+      'role_employee': 'موظف',
+      'role_partner': 'شريك'
+    };
+
+    // Load initial data
+    async function loadInitialData() {
+      await Promise.all([
+        loadUsers(),
+        loadBranches(),
+        loadRoles()
+      ]);
+    }
+
+    // Load users
+    async function loadUsers() {
+      try {
+        const response = await fetch('/api/users/list');
+        const data = await response.json();
+
+        if (data.success) {
+          users = data.users || [];
+          renderUsers();
+        } else {
+          alert('خطأ في تحميل المستخدمين: ' + (data.error || 'Unknown error'));
+        }
+      } catch (error) {
+        console.error('Error loading users:', error);
+        alert('حدث خطأ أثناء تحميل البيانات');
+      }
+    }
+
+    // Load branches
+    async function loadBranches() {
+      try {
+        const response = await fetch('/api/branches/list');
+        const data = await response.json();
+
+        if (data.success) {
+          branches = data.branches || [];
+          populateBranchFilters();
+        }
+      } catch (error) {
+        console.error('Error loading branches:', error);
+      }
+    }
+
+    // Load roles
+    async function loadRoles() {
+      try {
+        const response = await fetch('/api/roles/list');
+        const data = await response.json();
+
+        if (data.success) {
+          roles = data.roles || [];
+          populateRoleSelect();
+        }
+      } catch (error) {
+        console.error('Error loading roles:', error);
+      }
+    }
+
+    // Populate branch filters
+    function populateBranchFilters() {
+      const branchFilter = document.getElementById('branch-filter');
+      const branchSelect = document.getElementById('branch-id');
+
+      branches.forEach(branch => {
+        // Filter dropdown
+        const filterOption = document.createElement('option');
+        filterOption.value = branch.id;
+        filterOption.textContent = branch.name_ar || branch.name;
+        branchFilter.appendChild(filterOption);
+
+        // Form dropdown
+        const selectOption = document.createElement('option');
+        selectOption.value = branch.id;
+        selectOption.textContent = branch.name_ar || branch.name;
+        branchSelect.appendChild(selectOption);
+      });
+    }
+
+    // Populate role select
+    function populateRoleSelect() {
+      const roleSelect = document.getElementById('role-id');
+
+      roles.forEach(role => {
+        const option = document.createElement('option');
+        option.value = role.id;
+        option.textContent = role.name_ar || role.name;
+        roleSelect.appendChild(option);
+      });
+    }
+
+    // Render users
+    function renderUsers() {
+      const tbody = document.getElementById('users-table-body');
+      const emptyState = document.getElementById('empty-state');
+
+      // Apply filters
+      const roleFilter = document.getElementById('role-filter').value;
+      const branchFilter = document.getElementById('branch-filter').value;
+      const statusFilter = document.getElementById('status-filter').value;
+
+      let filteredUsers = users;
+
+      if (roleFilter) {
+        filteredUsers = filteredUsers.filter(u => u.role_id === roleFilter);
+      }
+
+      if (branchFilter) {
+        filteredUsers = filteredUsers.filter(u => u.branch_id === branchFilter);
+      }
+
+      if (statusFilter === 'active') {
+        filteredUsers = filteredUsers.filter(u => u.is_active);
+      } else if (statusFilter === 'inactive') {
+        filteredUsers = filteredUsers.filter(u => !u.is_active);
+      }
+
+      if (filteredUsers.length === 0) {
+        tbody.innerHTML = '';
+        emptyState.classList.remove('hidden');
+        return;
+      }
+
+      emptyState.classList.add('hidden');
+
+      tbody.innerHTML = filteredUsers.map(user => {
+        const roleName = roleNames[user.role_id] || user.role_id;
+        const branchName = branches.find(b => b.id === user.branch_id)?.name_ar || 'لا يوجد';
+
+        return `
+          <tr class="border-b hover:bg-muted/50">
+            <td class="px-4 py-3 text-sm">${user.username}</td>
+            <td class="px-4 py-3 text-sm">${user.full_name || '-'}</td>
+            <td class="px-4 py-3 text-sm">${user.email || '-'}</td>
+            <td class="px-4 py-3">
+              <span class="px-2 py-1 text-xs rounded-full ${getRoleColorClass(user.role_id)}">
+                ${roleName}
+              </span>
+            </td>
+            <td class="px-4 py-3 text-sm">${branchName}</td>
+            <td class="px-4 py-3">
+              <span class="px-2 py-1 text-xs rounded-full ${user.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+                ${user.is_active ? 'نشط' : 'غير نشط'}
+              </span>
+            </td>
+            <td class="px-4 py-3">
+              <button
+                onclick="editUser('${user.id}')"
+                class="text-sm text-primary hover:underline"
+              >
+                تعديل
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // Get role color class
+    function getRoleColorClass(roleId) {
+      const colors = {
+        'role_admin': 'bg-red-100 text-red-800',
+        'role_supervisor': 'bg-blue-100 text-blue-800',
+        'role_employee': 'bg-green-100 text-green-800',
+        'role_partner': 'bg-purple-100 text-purple-800'
+      };
+      return colors[roleId] || 'bg-gray-100 text-gray-800';
+    }
+
+    // Open modal for new user
+    document.getElementById('add-user-btn').addEventListener('click', () => {
+      editingUserId = null;
+      document.getElementById('modal-title').textContent = 'إضافة مستخدم جديد';
+      document.getElementById('user-form').reset();
+      document.getElementById('password-field').style.display = 'block';
+      document.getElementById('password').required = true;
+      document.getElementById('is-active').checked = true;
+      document.getElementById('user-modal').classList.remove('hidden');
+      document.getElementById('user-modal').classList.add('flex');
+    });
+
+    // Edit user
+    window.editUser = (userId) => {
+      const user = users.find(u => u.id === userId);
+      if (!user) return;
+
+      editingUserId = userId;
+      document.getElementById('modal-title').textContent = 'تعديل المستخدم';
+      document.getElementById('user-id').value = user.id;
+      document.getElementById('username').value = user.username || '';
+      document.getElementById('email').value = user.email || '';
+      document.getElementById('full-name').value = user.full_name || '';
+      document.getElementById('phone').value = user.phone || '';
+      document.getElementById('role-id').value = user.role_id || '';
+      document.getElementById('branch-id').value = user.branch_id || '';
+      document.getElementById('is-active').checked = user.is_active;
+
+      // Hide password field for editing
+      document.getElementById('password-field').style.display = 'none';
+      document.getElementById('password').required = false;
+
+      document.getElementById('user-modal').classList.remove('hidden');
+      document.getElementById('user-modal').classList.add('flex');
+    };
+
+    // Close modal
+    function closeModal() {
+      document.getElementById('user-modal').classList.add('hidden');
+      document.getElementById('user-modal').classList.remove('flex');
+      document.getElementById('user-form').reset();
+      editingUserId = null;
+    }
+
+    document.getElementById('close-modal').addEventListener('click', closeModal);
+    document.getElementById('cancel-btn').addEventListener('click', closeModal);
+
+    // Submit form
+    document.getElementById('user-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const formData = {
+        username: document.getElementById('username').value,
+        email: document.getElementById('email').value || undefined,
+        fullName: document.getElementById('full-name').value || undefined,
+        phone: document.getElementById('phone').value || undefined,
+        roleId: document.getElementById('role-id').value,
+        branchId: document.getElementById('branch-id').value || null,
+        isActive: document.getElementById('is-active').checked
+      };
+
+      // Add password only for new users
+      if (!editingUserId) {
+        formData.password = document.getElementById('password').value;
+      }
+
+      try {
+        const url = editingUserId ? '/api/users/update' : '/api/users/create';
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(editingUserId ? { id: editingUserId, ...formData } : formData)
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          alert(editingUserId ? 'تم تحديث المستخدم بنجاح' : 'تم إضافة المستخدم بنجاح');
+          closeModal();
+          loadUsers();
+        } else {
+          alert('خطأ: ' + (data.error || 'حدث خطأ غير معروف'));
+        }
+      } catch (error) {
+        console.error('Error saving user:', error);
+        alert('حدث خطأ أثناء حفظ البيانات');
+      }
+    });
+
+    // Filter change handlers
+    document.getElementById('role-filter').addEventListener('change', renderUsers);
+    document.getElementById('branch-filter').addEventListener('change', renderUsers);
+    document.getElementById('status-filter').addEventListener('change', renderUsers);
+
+    // Initial load
+    loadInitialData();
+  </script>
+</MainLayout>

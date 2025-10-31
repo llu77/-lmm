@@ -1,0 +1,663 @@
+---
+import MainLayout from '@/layouts/MainLayout.astro';
+
+// Check authentication (admin only)
+const cookieHeader = Astro.request.headers.get('Cookie');
+if (!cookieHeader?.includes('session=')) {
+  return Astro.redirect('/auth/login');
+}
+---
+
+<MainLayout title="إعدادات البريد الإلكتروني - SymbolAI">
+  <div class="space-y-6">
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-3xl font-bold">إعدادات البريد الإلكتروني</h1>
+        <p class="text-muted-foreground mt-2">إدارة وإحصائيات نظام البريد الإلكتروني</p>
+      </div>
+      <button
+        id="test-email-btn"
+        class="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors font-medium"
+      >
+        📧 إرسال تجريبي
+      </button>
+    </div>
+
+    <!-- Email Stats Cards -->
+    <div class="grid gap-4 md:grid-cols-4">
+      <div class="rounded-lg border bg-card p-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-medium text-muted-foreground">إجمالي المرسل</h3>
+          <svg class="h-4 w-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+          </svg>
+        </div>
+        <p class="text-2xl font-bold mt-2 text-green-600" id="stat-sent">0</p>
+        <p class="text-xs text-muted-foreground mt-1">آخر 24 ساعة</p>
+      </div>
+
+      <div class="rounded-lg border bg-card p-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-medium text-muted-foreground">فشل الإرسال</h3>
+          <svg class="h-4 w-4 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <p class="text-2xl font-bold mt-2 text-red-600" id="stat-failed">0</p>
+        <p class="text-xs text-muted-foreground mt-1">آخر 24 ساعة</p>
+      </div>
+
+      <div class="rounded-lg border bg-card p-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-medium text-muted-foreground">معدل التحديد</h3>
+          <svg class="h-4 w-4 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <p class="text-2xl font-bold mt-2 text-yellow-600" id="stat-rate-limited">0</p>
+        <p class="text-xs text-muted-foreground mt-1">آخر 24 ساعة</p>
+      </div>
+
+      <div class="rounded-lg border bg-card p-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-medium text-muted-foreground">معدل التسليم</h3>
+          <svg class="h-4 w-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <p class="text-2xl font-bold mt-2 text-blue-600" id="stat-delivery-rate">0%</p>
+        <p class="text-xs text-muted-foreground mt-1">من المرسلة بنجاح</p>
+      </div>
+    </div>
+
+    <!-- Charts Section -->
+    <div class="grid gap-4 md:grid-cols-2">
+      <div class="rounded-lg border bg-card p-6">
+        <h3 class="font-semibold mb-4">الإرسال خلال 24 ساعة</h3>
+        <canvas id="hourly-chart" class="w-full h-64"></canvas>
+      </div>
+
+      <div class="rounded-lg border bg-card p-6">
+        <h3 class="font-semibold mb-4">أكثر التريقرات استخداماً</h3>
+        <div id="trigger-list" class="space-y-3">
+          <p class="text-sm text-muted-foreground">جاري التحميل...</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Email Logs Table -->
+    <div class="rounded-lg border bg-card p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-xl font-semibold">سجل الإرسال</h3>
+        <div class="flex gap-2">
+          <select id="status-filter" class="rounded-md border px-3 py-2 text-sm">
+            <option value="">كل الحالات</option>
+            <option value="sent">مرسل</option>
+            <option value="failed">فشل</option>
+            <option value="queued">في الانتظار</option>
+            <option value="rate_limited">محدد</option>
+          </select>
+          <select id="trigger-filter" class="rounded-md border px-3 py-2 text-sm">
+            <option value="">كل التريقرات</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full">
+          <thead>
+            <tr class="border-b">
+              <th class="text-right p-3 font-medium">التاريخ</th>
+              <th class="text-right p-3 font-medium">المستلم</th>
+              <th class="text-right p-3 font-medium">نوع التريقر</th>
+              <th class="text-right p-3 font-medium">الحالة</th>
+              <th class="text-right p-3 font-medium">التسليم</th>
+              <th class="text-right p-3 font-medium">الرسالة</th>
+            </tr>
+          </thead>
+          <tbody id="logs-table-body">
+            <tr>
+              <td colspan="6" class="text-center p-8 text-muted-foreground">
+                جاري التحميل...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Pagination -->
+      <div class="flex items-center justify-between mt-4 pt-4 border-t">
+        <p class="text-sm text-muted-foreground" id="pagination-info">عرض 0 من 0</p>
+        <div class="flex gap-2">
+          <button id="prev-page" class="px-3 py-1 border rounded-md hover:bg-gray-50 disabled:opacity-50" disabled>
+            السابق
+          </button>
+          <button id="next-page" class="px-3 py-1 border rounded-md hover:bg-gray-50 disabled:opacity-50" disabled>
+            التالي
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Email Settings Form -->
+    <div class="rounded-lg border bg-card p-6">
+      <h3 class="text-xl font-semibold mb-4">إعدادات النظام</h3>
+
+      <form id="settings-form" class="space-y-4">
+        <div class="grid gap-4 md:grid-cols-2">
+          <div>
+            <label class="block text-sm font-medium mb-2">البريد المرسل</label>
+            <input type="email" id="from_email" class="w-full rounded-md border px-3 py-2" placeholder="info@symbolai.net" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-2">اسم المرسل</label>
+            <input type="text" id="from_name" class="w-full rounded-md border px-3 py-2" placeholder="SymbolAI" />
+          </div>
+        </div>
+
+        <div class="grid gap-4 md:grid-cols-2">
+          <div>
+            <label class="block text-sm font-medium mb-2">الرد على</label>
+            <input type="email" id="reply_to" class="w-full rounded-md border px-3 py-2" placeholder="support@symbolai.net" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-2">بريد المدير</label>
+            <input type="email" id="admin_email" class="w-full rounded-md border px-3 py-2" placeholder="admin@symbolai.net" />
+          </div>
+        </div>
+
+        <div class="border-t pt-4">
+          <h4 class="font-medium mb-3">حدود الإرسال</h4>
+          <div class="grid gap-4 md:grid-cols-4">
+            <div>
+              <label class="block text-sm font-medium mb-2">عام (ساعي)</label>
+              <input type="number" id="rate_limit_global_hourly" min="0" class="w-full rounded-md border px-3 py-2" placeholder="100" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-2">عام (يومي)</label>
+              <input type="number" id="rate_limit_global_daily" min="0" class="w-full rounded-md border px-3 py-2" placeholder="500" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-2">مستخدم (ساعي)</label>
+              <input type="number" id="rate_limit_user_hourly" min="0" class="w-full rounded-md border px-3 py-2" placeholder="10" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-2">مستخدم (يومي)</label>
+              <input type="number" id="rate_limit_user_daily" min="0" class="w-full rounded-md border px-3 py-2" placeholder="30" />
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <input type="checkbox" id="global_enable" class="rounded" />
+          <label for="global_enable" class="text-sm font-medium">تفعيل نظام البريد الإلكتروني</label>
+        </div>
+
+        <div class="flex justify-end pt-4">
+          <button
+            type="submit"
+            id="save-settings-btn"
+            class="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
+            حفظ الإعدادات
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Test Email Dialog -->
+  <div id="test-email-dialog" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+    <div class="bg-white rounded-lg p-6 w-full max-w-lg mx-4">
+      <h2 class="text-2xl font-bold mb-4">إرسال بريد تجريبي</h2>
+
+      <form id="test-email-form" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium mb-2">المستلم *</label>
+          <input type="email" id="test-to" required class="w-full rounded-md border px-3 py-2" placeholder="test@example.com" />
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium mb-2">القالب *</label>
+          <select id="test-template" required class="w-full rounded-md border px-3 py-2">
+            <option value="">اختر قالب...</option>
+            <option value="employee_request_created">طلب موظف جديد</option>
+            <option value="employee_request_responded">رد على طلب</option>
+            <option value="product_order_pending">طلب منتجات معلق</option>
+            <option value="product_order_approved">طلب منتجات موافق عليه</option>
+            <option value="product_order_rejected">طلب منتجات مرفوض</option>
+            <option value="product_order_completed">طلب منتجات مكتمل</option>
+            <option value="payroll_generated">كشف راتب</option>
+            <option value="bonus_approved">مكافأة موافق عليها</option>
+            <option value="revenue_mismatch">تحذير إيراد غير متطابق</option>
+            <option value="large_expense">تنبيه مصروف كبير</option>
+          </select>
+        </div>
+
+        <div class="flex gap-3 justify-end pt-4">
+          <button
+            type="button"
+            id="cancel-test-btn"
+            class="px-4 py-2 border rounded-md hover:bg-gray-50"
+          >
+            إلغاء
+          </button>
+          <button
+            type="submit"
+            class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
+            إرسال
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script>
+    interface EmailLog {
+      id: string;
+      to_email: string;
+      trigger_type: string;
+      status: string;
+      delivery_status: string;
+      error_message?: string;
+      created_at: string;
+      delivered_at?: string;
+    }
+
+    interface EmailStats {
+      total: number;
+      sent: number;
+      failed: number;
+      queued: number;
+      rate_limited: number;
+      delivery: {
+        total: number;
+        delivered: number;
+        bounced: number;
+        complained: number;
+        rate: string;
+      };
+      hourlyBreakdown: any[];
+      triggerCounts: any[];
+    }
+
+    let currentPage = 1;
+    const pageSize = 10;
+    let totalLogs = 0;
+    let currentFilters = { status: '', triggerType: '' };
+    let hourlyChart: any;
+
+    // Load initial data
+    async function loadStats() {
+      try {
+        const response = await fetch('/api/email/logs/stats?hours=24');
+        const data = await response.json();
+
+        if (data.success) {
+          updateStatsCards(data.stats);
+          renderHourlyChart(data.stats.hourlyBreakdown);
+          renderTriggerList(data.stats.triggerCounts);
+        }
+      } catch (error) {
+        console.error('Failed to load stats:', error);
+      }
+    }
+
+    function updateStatsCards(stats: EmailStats) {
+      document.getElementById('stat-sent')!.textContent = stats.sent.toString();
+      document.getElementById('stat-failed')!.textContent = stats.failed.toString();
+      document.getElementById('stat-rate-limited')!.textContent = stats.rate_limited.toString();
+      document.getElementById('stat-delivery-rate')!.textContent = stats.delivery.rate + '%';
+    }
+
+    function renderHourlyChart(data: any[]) {
+      const ctx = document.getElementById('hourly-chart') as HTMLCanvasElement;
+
+      if (hourlyChart) {
+        hourlyChart.destroy();
+      }
+
+      hourlyChart = new (window as any).Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: data.map(d => new Date(d.hour).toLocaleTimeString('ar-EG', { hour: '2-digit' })),
+          datasets: [
+            {
+              label: 'مرسل',
+              data: data.map(d => d.sent),
+              borderColor: 'rgb(34, 197, 94)',
+              backgroundColor: 'rgba(34, 197, 94, 0.1)',
+              tension: 0.3
+            },
+            {
+              label: 'فشل',
+              data: data.map(d => d.failed),
+              borderColor: 'rgb(239, 68, 68)',
+              backgroundColor: 'rgba(239, 68, 68, 0.1)',
+              tension: 0.3
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              rtl: true,
+              textDirection: 'rtl'
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: {
+                precision: 0
+              }
+            }
+          }
+        }
+      });
+    }
+
+    function renderTriggerList(triggers: any[]) {
+      const container = document.getElementById('trigger-list')!;
+
+      if (triggers.length === 0) {
+        container.innerHTML = '<p class="text-sm text-muted-foreground">لا توجد بيانات</p>';
+        return;
+      }
+
+      container.innerHTML = triggers.slice(0, 5).map(t => `
+        <div class="flex items-center justify-between p-3 rounded-lg bg-gray-50">
+          <span class="text-sm font-medium">${translateTrigger(t.trigger_type)}</span>
+          <span class="text-sm font-bold text-blue-600">${t.count}</span>
+        </div>
+      `).join('');
+
+      // Populate trigger filter dropdown
+      const triggerFilter = document.getElementById('trigger-filter') as HTMLSelectElement;
+      const existingOptions = Array.from(triggerFilter.options).map(o => o.value);
+
+      triggers.forEach(t => {
+        if (!existingOptions.includes(t.trigger_type)) {
+          const option = document.createElement('option');
+          option.value = t.trigger_type;
+          option.textContent = translateTrigger(t.trigger_type);
+          triggerFilter.appendChild(option);
+        }
+      });
+    }
+
+    function translateTrigger(type: string): string {
+      const translations: Record<string, string> = {
+        'employee_request_created': 'طلب موظف جديد',
+        'employee_request_responded': 'رد على طلب',
+        'product_order_pending': 'طلب منتجات معلق',
+        'product_order_approved': 'طلب موافق عليه',
+        'product_order_rejected': 'طلب مرفوض',
+        'product_order_completed': 'طلب مكتمل',
+        'payroll_generated': 'كشف راتب',
+        'bonus_approved': 'مكافأة',
+        'revenue_mismatch': 'إيراد غير متطابق',
+        'large_expense': 'مصروف كبير',
+        'backup_completed': 'نسخ احتياطي',
+        'backup_failed': 'فشل نسخ احتياطي',
+        'payroll_reminder': 'تذكير راتب',
+        'bonus_reminder': 'تذكير مكافأة',
+        'manual_send': 'إرسال يدوي'
+      };
+      return translations[type] || type;
+    }
+
+    async function loadLogs() {
+      try {
+        const params = new URLSearchParams({
+          page: currentPage.toString(),
+          limit: pageSize.toString(),
+          ...(currentFilters.status && { status: currentFilters.status }),
+          ...(currentFilters.triggerType && { triggerType: currentFilters.triggerType })
+        });
+
+        const response = await fetch(`/api/email/logs/list?${params}`);
+        const data = await response.json();
+
+        if (data.success) {
+          renderLogsTable(data.logs);
+          totalLogs = data.total;
+          updatePagination();
+        }
+      } catch (error) {
+        console.error('Failed to load logs:', error);
+      }
+    }
+
+    function renderLogsTable(logs: EmailLog[]) {
+      const tbody = document.getElementById('logs-table-body')!;
+
+      if (logs.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="6" class="text-center p-8 text-muted-foreground">
+              لا توجد سجلات
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = logs.map(log => `
+        <tr class="border-b hover:bg-gray-50">
+          <td class="p-3 text-sm">${new Date(log.created_at).toLocaleString('ar-EG')}</td>
+          <td class="p-3 text-sm">${log.to_email}</td>
+          <td class="p-3 text-sm">${translateTrigger(log.trigger_type)}</td>
+          <td class="p-3">
+            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(log.status)}">
+              ${translateStatus(log.status)}
+            </span>
+          </td>
+          <td class="p-3">
+            ${log.delivery_status ? `
+              <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getDeliveryColor(log.delivery_status)}">
+                ${translateDeliveryStatus(log.delivery_status)}
+              </span>
+            ` : '<span class="text-xs text-muted-foreground">-</span>'}
+          </td>
+          <td class="p-3 text-sm">
+            ${log.error_message ? `<span class="text-red-600 text-xs">${log.error_message}</span>` : '-'}
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function getStatusColor(status: string): string {
+      const colors: Record<string, string> = {
+        'sent': 'bg-green-100 text-green-800',
+        'failed': 'bg-red-100 text-red-800',
+        'queued': 'bg-blue-100 text-blue-800',
+        'rate_limited': 'bg-yellow-100 text-yellow-800'
+      };
+      return colors[status] || 'bg-gray-100 text-gray-800';
+    }
+
+    function getDeliveryColor(status: string): string {
+      const colors: Record<string, string> = {
+        'delivered': 'bg-green-100 text-green-800',
+        'bounced': 'bg-red-100 text-red-800',
+        'complained': 'bg-orange-100 text-orange-800'
+      };
+      return colors[status] || 'bg-gray-100 text-gray-800';
+    }
+
+    function translateStatus(status: string): string {
+      const translations: Record<string, string> = {
+        'sent': 'مرسل',
+        'failed': 'فشل',
+        'queued': 'في الانتظار',
+        'rate_limited': 'محدد'
+      };
+      return translations[status] || status;
+    }
+
+    function translateDeliveryStatus(status: string): string {
+      const translations: Record<string, string> = {
+        'delivered': 'تم التسليم',
+        'bounced': 'مرتد',
+        'complained': 'شكوى'
+      };
+      return translations[status] || status;
+    }
+
+    function updatePagination() {
+      const start = (currentPage - 1) * pageSize + 1;
+      const end = Math.min(currentPage * pageSize, totalLogs);
+
+      document.getElementById('pagination-info')!.textContent = `عرض ${start}-${end} من ${totalLogs}`;
+
+      (document.getElementById('prev-page') as HTMLButtonElement).disabled = currentPage === 1;
+      (document.getElementById('next-page') as HTMLButtonElement).disabled = end >= totalLogs;
+    }
+
+    async function loadSettings() {
+      try {
+        const response = await fetch('/api/email/settings/get');
+        const data = await response.json();
+
+        if (data.success) {
+          const settings = data.settings;
+          (document.getElementById('from_email') as HTMLInputElement).value = settings.from_email || '';
+          (document.getElementById('from_name') as HTMLInputElement).value = settings.from_name || '';
+          (document.getElementById('reply_to') as HTMLInputElement).value = settings.reply_to || '';
+          (document.getElementById('admin_email') as HTMLInputElement).value = settings.admin_email || '';
+          (document.getElementById('rate_limit_global_hourly') as HTMLInputElement).value = settings.rate_limit_global_hourly || '';
+          (document.getElementById('rate_limit_global_daily') as HTMLInputElement).value = settings.rate_limit_global_daily || '';
+          (document.getElementById('rate_limit_user_hourly') as HTMLInputElement).value = settings.rate_limit_user_hourly || '';
+          (document.getElementById('rate_limit_user_daily') as HTMLInputElement).value = settings.rate_limit_user_daily || '';
+          (document.getElementById('global_enable') as HTMLInputElement).checked = settings.global_enable === '1' || settings.global_enable === 'true';
+        }
+      } catch (error) {
+        console.error('Failed to load settings:', error);
+      }
+    }
+
+    // Event listeners
+    document.getElementById('prev-page')?.addEventListener('click', () => {
+      if (currentPage > 1) {
+        currentPage--;
+        loadLogs();
+      }
+    });
+
+    document.getElementById('next-page')?.addEventListener('click', () => {
+      if (currentPage * pageSize < totalLogs) {
+        currentPage++;
+        loadLogs();
+      }
+    });
+
+    document.getElementById('status-filter')?.addEventListener('change', (e) => {
+      currentFilters.status = (e.target as HTMLSelectElement).value;
+      currentPage = 1;
+      loadLogs();
+    });
+
+    document.getElementById('trigger-filter')?.addEventListener('change', (e) => {
+      currentFilters.triggerType = (e.target as HTMLSelectElement).value;
+      currentPage = 1;
+      loadLogs();
+    });
+
+    document.getElementById('settings-form')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const settings = {
+        from_email: (document.getElementById('from_email') as HTMLInputElement).value,
+        from_name: (document.getElementById('from_name') as HTMLInputElement).value,
+        reply_to: (document.getElementById('reply_to') as HTMLInputElement).value,
+        admin_email: (document.getElementById('admin_email') as HTMLInputElement).value,
+        rate_limit_global_hourly: (document.getElementById('rate_limit_global_hourly') as HTMLInputElement).value,
+        rate_limit_global_daily: (document.getElementById('rate_limit_global_daily') as HTMLInputElement).value,
+        rate_limit_user_hourly: (document.getElementById('rate_limit_user_hourly') as HTMLInputElement).value,
+        rate_limit_user_daily: (document.getElementById('rate_limit_user_daily') as HTMLInputElement).value,
+        global_enable: (document.getElementById('global_enable') as HTMLInputElement).checked ? '1' : '0'
+      };
+
+      try {
+        const response = await fetch('/api/email/settings/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ settings })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          alert('تم حفظ الإعدادات بنجاح');
+        } else {
+          alert('فشل حفظ الإعدادات: ' + data.error);
+        }
+      } catch (error) {
+        console.error('Failed to save settings:', error);
+        alert('حدث خطأ أثناء حفظ الإعدادات');
+      }
+    });
+
+    // Test email dialog
+    document.getElementById('test-email-btn')?.addEventListener('click', () => {
+      document.getElementById('test-email-dialog')?.classList.remove('hidden');
+    });
+
+    document.getElementById('cancel-test-btn')?.addEventListener('click', () => {
+      document.getElementById('test-email-dialog')?.classList.add('hidden');
+    });
+
+    document.getElementById('test-email-form')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const to = (document.getElementById('test-to') as HTMLInputElement).value;
+      const templateId = (document.getElementById('test-template') as HTMLSelectElement).value;
+
+      try {
+        const response = await fetch('/api/email/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to,
+            templateId,
+            variables: {
+              employeeName: 'موظف تجريبي',
+              requestType: 'اختبار',
+              requestDate: new Date().toLocaleDateString('ar-EG'),
+              requestDetails: 'هذا بريد تجريبي للاختبار',
+              requestId: 'TEST-001',
+              branchId: 'TEST'
+            },
+            priority: 'high'
+          })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          alert('تم إرسال البريد التجريبي بنجاح');
+          document.getElementById('test-email-dialog')?.classList.add('hidden');
+          loadLogs(); // Reload logs
+        } else {
+          alert('فشل الإرسال: ' + data.error);
+        }
+      } catch (error) {
+        console.error('Failed to send test email:', error);
+        alert('حدث خطأ أثناء الإرسال');
+      }
+    });
+
+    // Load data on page load
+    loadStats();
+    loadLogs();
+    loadSettings();
+
+    // Auto-refresh stats every 30 seconds
+    setInterval(loadStats, 30000);
+  </script>
+</MainLayout>

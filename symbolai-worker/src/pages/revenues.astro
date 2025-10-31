@@ -1,0 +1,309 @@
+---
+import MainLayout from '@/layouts/MainLayout.astro';
+
+// Check authentication
+const cookieHeader = Astro.request.headers.get('Cookie');
+if (!cookieHeader?.includes('session=')) {
+  return Astro.redirect('/auth/login');
+}
+---
+
+<MainLayout title="الإيرادات - SymbolAI">
+  <div class="space-y-6">
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-3xl font-bold">الإيرادات</h1>
+        <p class="text-muted-foreground mt-2">إدارة وتتبع إيرادات الفروع</p>
+      </div>
+      <button
+        id="add-revenue-btn"
+        class="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors font-medium"
+      >
+        + إضافة إيراد
+      </button>
+    </div>
+
+    <!-- Filters -->
+    <div class="rounded-lg border bg-card p-4">
+      <div class="grid gap-4 md:grid-cols-3">
+        <div>
+          <label class="block text-sm font-medium mb-2">من تاريخ</label>
+          <input type="date" id="filter-start-date" class="w-full rounded-md border px-3 py-2" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-2">إلى تاريخ</label>
+          <input type="date" id="filter-end-date" class="w-full rounded-md border px-3 py-2" />
+        </div>
+        <div class="flex items-end">
+          <button
+            id="apply-filter-btn"
+            class="w-full bg-gray-600 text-white py-2 px-4 rounded-md hover:bg-gray-700 transition-colors"
+          >
+            تطبيق الفلتر
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="grid gap-4 md:grid-cols-3">
+      <div class="rounded-lg border bg-card p-4">
+        <h3 class="text-sm font-medium text-muted-foreground">إجمالي الإيرادات</h3>
+        <p class="text-2xl font-bold mt-2" id="total-revenue">0 ج.م</p>
+      </div>
+      <div class="rounded-lg border bg-card p-4">
+        <h3 class="text-sm font-medium text-muted-foreground">عدد السجلات</h3>
+        <p class="text-2xl font-bold mt-2" id="revenue-count">0</p>
+      </div>
+      <div class="rounded-lg border bg-card p-4">
+        <h3 class="text-sm font-medium text-muted-foreground">سجلات غير متطابقة</h3>
+        <p class="text-2xl font-bold mt-2 text-red-600" id="mismatched-count">0</p>
+      </div>
+    </div>
+
+    <!-- Revenue Table -->
+    <div class="rounded-lg border bg-card">
+      <div class="p-6">
+        <h3 class="text-xl font-semibold mb-4">سجلات الإيرادات</h3>
+        <div class="overflow-x-auto">
+          <table class="w-full">
+            <thead>
+              <tr class="border-b">
+                <th class="text-right p-3 font-medium">التاريخ</th>
+                <th class="text-right p-3 font-medium">كاش</th>
+                <th class="text-right p-3 font-medium">شبكة</th>
+                <th class="text-right p-3 font-medium">آجل</th>
+                <th class="text-right p-3 font-medium">الإجمالي</th>
+                <th class="text-right p-3 font-medium">الحالة</th>
+              </tr>
+            </thead>
+            <tbody id="revenue-table-body">
+              <tr>
+                <td colspan="6" class="text-center p-8 text-muted-foreground">
+                  جاري التحميل...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Revenue Dialog -->
+  <div id="add-revenue-dialog" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+    <div class="bg-white rounded-lg p-6 w-full max-w-2xl mx-4">
+      <h2 class="text-2xl font-bold mb-4">إضافة إيراد جديد</h2>
+
+      <form id="add-revenue-form" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium mb-2">التاريخ</label>
+          <input type="date" id="revenue-date" required class="w-full rounded-md border px-3 py-2" />
+        </div>
+
+        <div class="grid gap-4 md:grid-cols-3">
+          <div>
+            <label class="block text-sm font-medium mb-2">كاش</label>
+            <input type="number" id="revenue-cash" step="0.01" min="0" class="w-full rounded-md border px-3 py-2" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-2">شبكة</label>
+            <input type="number" id="revenue-network" step="0.01" min="0" class="w-full rounded-md border px-3 py-2" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-2">آجل</label>
+            <input type="number" id="revenue-budget" step="0.01" min="0" class="w-full rounded-md border px-3 py-2" />
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium mb-2">الإجمالي المدخل</label>
+          <input type="number" id="revenue-total" step="0.01" min="0" required class="w-full rounded-md border px-3 py-2" />
+          <p class="text-sm text-muted-foreground mt-1">المحسوب: <span id="calculated-total">0</span> ج.م</p>
+        </div>
+
+        <div class="flex gap-3 justify-end pt-4">
+          <button
+            type="button"
+            id="cancel-add-btn"
+            class="px-4 py-2 border rounded-md hover:bg-gray-50"
+          >
+            إلغاء
+          </button>
+          <button
+            type="submit"
+            class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
+            حفظ
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    interface Revenue {
+      id: string;
+      date: string;
+      cash: number;
+      network: number;
+      budget: number;
+      total: number;
+      calculated_total: number;
+      is_matched: number;
+    }
+
+    // Set default dates
+    const today = new Date();
+    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+    const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+
+    (document.getElementById('filter-start-date') as HTMLInputElement).valueAsDate = firstDay;
+    (document.getElementById('filter-end-date') as HTMLInputElement).valueAsDate = lastDay;
+    (document.getElementById('revenue-date') as HTMLInputElement).valueAsDate = today;
+
+    function formatCurrency(amount: number): string {
+      return new Intl.NumberFormat('ar-EG', {
+        minimumFractionDigits: 2
+      }).format(amount) + ' ج.م';
+    }
+
+    async function loadRevenues() {
+      const startDate = (document.getElementById('filter-start-date') as HTMLInputElement).value;
+      const endDate = (document.getElementById('filter-end-date') as HTMLInputElement).value;
+
+      try {
+        const response = await fetch(`/api/revenues/list?startDate=${startDate}&endDate=${endDate}`);
+        const data = await response.json();
+
+        if (!data.success) {
+          throw new Error(data.error);
+        }
+
+        const revenues: Revenue[] = data.revenues;
+        renderRevenues(revenues);
+        updateStats(revenues);
+      } catch (error) {
+        console.error('Error loading revenues:', error);
+        alert('حدث خطأ أثناء تحميل الإيرادات');
+      }
+    }
+
+    function renderRevenues(revenues: Revenue[]) {
+      const tbody = document.getElementById('revenue-table-body')!;
+
+      if (revenues.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="6" class="text-center p-8 text-muted-foreground">
+              لا توجد سجلات إيرادات في هذه الفترة
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = revenues.map(r => `
+        <tr class="border-b hover:bg-gray-50">
+          <td class="p-3">${new Date(r.date).toLocaleDateString('ar-EG')}</td>
+          <td class="p-3">${formatCurrency(r.cash)}</td>
+          <td class="p-3">${formatCurrency(r.network)}</td>
+          <td class="p-3">${formatCurrency(r.budget)}</td>
+          <td class="p-3 font-semibold">${formatCurrency(r.total)}</td>
+          <td class="p-3">
+            ${r.is_matched
+              ? '<span class="text-green-600">✓ متطابق</span>'
+              : '<span class="text-red-600">✗ غير متطابق</span>'
+            }
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function updateStats(revenues: Revenue[]) {
+      const totalRevenue = revenues.reduce((sum, r) => sum + r.total, 0);
+      const mismatchedCount = revenues.filter(r => r.is_matched === 0).length;
+
+      document.getElementById('total-revenue')!.textContent = formatCurrency(totalRevenue);
+      document.getElementById('revenue-count')!.textContent = revenues.length.toString();
+      document.getElementById('mismatched-count')!.textContent = mismatchedCount.toString();
+    }
+
+    // Dialog controls
+    const dialog = document.getElementById('add-revenue-dialog')!;
+    const addBtn = document.getElementById('add-revenue-btn')!;
+    const cancelBtn = document.getElementById('cancel-add-btn')!;
+    const form = document.getElementById('add-revenue-form') as HTMLFormElement;
+
+    addBtn.addEventListener('click', () => {
+      dialog.classList.remove('hidden');
+    });
+
+    cancelBtn.addEventListener('click', () => {
+      dialog.classList.add('hidden');
+      form.reset();
+    });
+
+    // Calculate total on input
+    const cashInput = document.getElementById('revenue-cash') as HTMLInputElement;
+    const networkInput = document.getElementById('revenue-network') as HTMLInputElement;
+    const budgetInput = document.getElementById('revenue-budget') as HTMLInputElement;
+
+    function updateCalculatedTotal() {
+      const cash = parseFloat(cashInput.value) || 0;
+      const network = parseFloat(networkInput.value) || 0;
+      const budget = parseFloat(budgetInput.value) || 0;
+      const calculated = cash + network + budget;
+      document.getElementById('calculated-total')!.textContent = calculated.toFixed(2);
+    }
+
+    cashInput.addEventListener('input', updateCalculatedTotal);
+    networkInput.addEventListener('input', updateCalculatedTotal);
+    budgetInput.addEventListener('input', updateCalculatedTotal);
+
+    // Submit form
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const date = (document.getElementById('revenue-date') as HTMLInputElement).value;
+      const cash = parseFloat(cashInput.value) || 0;
+      const network = parseFloat(networkInput.value) || 0;
+      const budget = parseFloat(budgetInput.value) || 0;
+      const total = parseFloat((document.getElementById('revenue-total') as HTMLInputElement).value);
+
+      try {
+        const response = await fetch('/api/revenues/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            branchId: 'BR001',
+            date,
+            cash,
+            network,
+            budget,
+            total
+          })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          alert('تم إضافة الإيراد بنجاح');
+          dialog.classList.add('hidden');
+          form.reset();
+          loadRevenues();
+        } else {
+          alert(data.error || 'حدث خطأ');
+        }
+      } catch (error) {
+        alert('حدث خطأ في الاتصال');
+      }
+    });
+
+    // Filter button
+    document.getElementById('apply-filter-btn')?.addEventListener('click', loadRevenues);
+
+    // Initial load
+    loadRevenues();
+  </script>
+</MainLayout>

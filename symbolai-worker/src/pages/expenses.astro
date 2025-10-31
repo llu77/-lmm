@@ -1,0 +1,470 @@
+---
+import MainLayout from '@/layouts/MainLayout.astro';
+
+// Check authentication
+const cookieHeader = Astro.request.headers.get('Cookie');
+if (!cookieHeader?.includes('session=')) {
+  return Astro.redirect('/auth/login');
+}
+---
+
+<MainLayout title="المصروفات - SymbolAI">
+  <div class="space-y-6">
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-3xl font-bold">المصروفات</h1>
+        <p class="text-muted-foreground mt-2">إدارة وتتبع مصروفات الفروع مع تصنيف AI تلقائي</p>
+      </div>
+      <button
+        id="add-expense-btn"
+        class="bg-red-600 text-white px-6 py-2 rounded-md hover:bg-red-700 transition-colors font-medium"
+      >
+        + إضافة مصروف
+      </button>
+    </div>
+
+    <!-- Filters -->
+    <div class="rounded-lg border bg-card p-4">
+      <div class="grid gap-4 md:grid-cols-4">
+        <div>
+          <label class="block text-sm font-medium mb-2">من تاريخ</label>
+          <input type="date" id="filter-start-date" class="w-full rounded-md border px-3 py-2" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-2">إلى تاريخ</label>
+          <input type="date" id="filter-end-date" class="w-full rounded-md border px-3 py-2" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-2">الفئة</label>
+          <select id="filter-category" class="w-full rounded-md border px-3 py-2">
+            <option value="all">جميع الفئات</option>
+            <option value="رواتب وأجور">رواتب وأجور</option>
+            <option value="إيجارات">إيجارات</option>
+            <option value="مرافق">مرافق</option>
+            <option value="صيانة">صيانة</option>
+            <option value="مشتريات">مشتريات</option>
+            <option value="تسويق">تسويق</option>
+            <option value="نقل ومواصلات">نقل ومواصلات</option>
+            <option value="أخرى">أخرى</option>
+          </select>
+        </div>
+        <div class="flex items-end">
+          <button
+            id="apply-filter-btn"
+            class="w-full bg-gray-600 text-white py-2 px-4 rounded-md hover:bg-gray-700 transition-colors"
+          >
+            تطبيق الفلتر
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="grid gap-4 md:grid-cols-3">
+      <div class="rounded-lg border bg-card p-4">
+        <h3 class="text-sm font-medium text-muted-foreground">إجمالي المصروفات</h3>
+        <p class="text-2xl font-bold mt-2 text-red-600" id="total-expenses">0 ج.م</p>
+      </div>
+      <div class="rounded-lg border bg-card p-4">
+        <h3 class="text-sm font-medium text-muted-foreground">عدد السجلات</h3>
+        <p class="text-2xl font-bold mt-2" id="expense-count">0</p>
+      </div>
+      <div class="rounded-lg border bg-card p-4">
+        <h3 class="text-sm font-medium text-muted-foreground">أعلى فئة</h3>
+        <p class="text-2xl font-bold mt-2" id="top-category">-</p>
+      </div>
+    </div>
+
+    <!-- Chart and Table -->
+    <div class="grid gap-4 md:grid-cols-3">
+      <!-- Pie Chart -->
+      <div class="rounded-lg border bg-card p-6">
+        <h3 class="text-xl font-semibold mb-4">التوزيع حسب الفئة</h3>
+        <canvas id="expense-pie-chart" class="w-full h-64"></canvas>
+      </div>
+
+      <!-- Expense Table -->
+      <div class="col-span-2 rounded-lg border bg-card p-6">
+        <h3 class="text-xl font-semibold mb-4">سجلات المصروفات</h3>
+        <div class="overflow-x-auto">
+          <table class="w-full">
+            <thead>
+              <tr class="border-b">
+                <th class="text-right p-3 font-medium">التاريخ</th>
+                <th class="text-right p-3 font-medium">العنوان</th>
+                <th class="text-right p-3 font-medium">الفئة</th>
+                <th class="text-right p-3 font-medium">المبلغ</th>
+                <th class="text-right p-3 font-medium">إجراءات</th>
+              </tr>
+            </thead>
+            <tbody id="expense-table-body">
+              <tr>
+                <td colspan="5" class="text-center p-8 text-muted-foreground">
+                  جاري التحميل...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Expense Dialog -->
+  <div id="add-expense-dialog" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+    <div class="bg-white rounded-lg p-6 w-full max-w-2xl mx-4">
+      <h2 class="text-2xl font-bold mb-4">إضافة مصروف جديد</h2>
+
+      <form id="add-expense-form" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium mb-2">التاريخ</label>
+          <input type="date" id="expense-date" required class="w-full rounded-md border px-3 py-2" />
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium mb-2">عنوان المصروف</label>
+          <input type="text" id="expense-title" required placeholder="مثال: فاتورة كهرباء" class="w-full rounded-md border px-3 py-2" />
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium mb-2">المبلغ (ج.م)</label>
+          <input type="number" id="expense-amount" step="0.01" min="0" required class="w-full rounded-md border px-3 py-2" />
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium mb-2">الوصف (اختياري)</label>
+          <textarea id="expense-description" rows="2" placeholder="تفاصيل إضافية..." class="w-full rounded-md border px-3 py-2"></textarea>
+        </div>
+
+        <div>
+          <label class="flex items-center gap-2 mb-2">
+            <input type="checkbox" id="auto-categorize" checked class="rounded" />
+            <span class="text-sm font-medium">تصنيف تلقائي بالذكاء الاصطناعي</span>
+          </label>
+        </div>
+
+        <div id="category-section">
+          <label class="block text-sm font-medium mb-2">الفئة</label>
+          <select id="expense-category" class="w-full rounded-md border px-3 py-2">
+            <option value="">سيتم التصنيف تلقائياً...</option>
+            <option value="رواتب وأجور">رواتب وأجور</option>
+            <option value="إيجارات">إيجارات</option>
+            <option value="مرافق">مرافق (كهرباء، ماء، إنترنت)</option>
+            <option value="صيانة">صيانة</option>
+            <option value="مشتريات">مشتريات</option>
+            <option value="تسويق">تسويق</option>
+            <option value="نقل ومواصلات">نقل ومواصلات</option>
+            <option value="أخرى">أخرى</option>
+          </select>
+          <p class="text-sm text-blue-600 mt-1" id="ai-suggestion"></p>
+        </div>
+
+        <div class="flex gap-3 justify-end pt-4">
+          <button
+            type="button"
+            id="cancel-add-btn"
+            class="px-4 py-2 border rounded-md hover:bg-gray-50"
+          >
+            إلغاء
+          </button>
+          <button
+            type="submit"
+            id="submit-btn"
+            class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+          >
+            حفظ
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    interface Expense {
+      id: string;
+      date: string;
+      title: string;
+      amount: number;
+      category: string;
+      description?: string;
+    }
+
+    interface StatsByCategory {
+      [key: string]: {
+        count: number;
+        total: number;
+      };
+    }
+
+    // Colors for categories
+    const categoryColors: { [key: string]: string } = {
+      'رواتب وأجور': '#ef4444',
+      'إيجارات': '#f97316',
+      'مرافق': '#f59e0b',
+      'صيانة': '#84cc16',
+      'مشتريات': '#10b981',
+      'تسويق': '#06b6d4',
+      'نقل ومواصلات': '#3b82f6',
+      'أخرى': '#6b7280'
+    };
+
+    // Set default dates
+    const today = new Date();
+    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+    const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+
+    (document.getElementById('filter-start-date') as HTMLInputElement).valueAsDate = firstDay;
+    (document.getElementById('filter-end-date') as HTMLInputElement).valueAsDate = lastDay;
+    (document.getElementById('expense-date') as HTMLInputElement).valueAsDate = today;
+
+    function formatCurrency(amount: number): string {
+      return new Intl.NumberFormat('ar-EG', {
+        minimumFractionDigits: 2
+      }).format(amount) + ' ج.م';
+    }
+
+    async function loadExpenses() {
+      const startDate = (document.getElementById('filter-start-date') as HTMLInputElement).value;
+      const endDate = (document.getElementById('filter-end-date') as HTMLInputElement).value;
+      const category = (document.getElementById('filter-category') as HTMLSelectElement).value;
+
+      try {
+        const response = await fetch(`/api/expenses/list?startDate=${startDate}&endDate=${endDate}&category=${category}`);
+        const data = await response.json();
+
+        if (!data.success) {
+          throw new Error(data.error);
+        }
+
+        const expenses: Expense[] = data.expenses;
+        const statsByCategory: StatsByCategory = data.statsByCategory;
+
+        renderExpenses(expenses);
+        updateStats(expenses, statsByCategory);
+        renderPieChart(statsByCategory);
+      } catch (error) {
+        console.error('Error loading expenses:', error);
+        alert('حدث خطأ أثناء تحميل المصروفات');
+      }
+    }
+
+    function renderExpenses(expenses: Expense[]) {
+      const tbody = document.getElementById('expense-table-body')!;
+
+      if (expenses.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="5" class="text-center p-8 text-muted-foreground">
+              لا توجد مصروفات في هذه الفترة
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = expenses.map(e => `
+        <tr class="border-b hover:bg-gray-50">
+          <td class="p-3">${new Date(e.date).toLocaleDateString('ar-EG')}</td>
+          <td class="p-3">${e.title}</td>
+          <td class="p-3">
+            <span class="px-2 py-1 rounded text-sm" style="background-color: ${categoryColors[e.category] || '#gray'}20; color: ${categoryColors[e.category] || '#gray'}">
+              ${e.category}
+            </span>
+          </td>
+          <td class="p-3 font-semibold text-red-600">${formatCurrency(e.amount)}</td>
+          <td class="p-3">
+            <button onclick="deleteExpense('${e.id}')" class="text-red-600 hover:text-red-800 text-sm">
+              حذف
+            </button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function updateStats(expenses: Expense[], statsByCategory: StatsByCategory) {
+      const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
+
+      // Find top category
+      let topCategory = '-';
+      let maxAmount = 0;
+      Object.entries(statsByCategory).forEach(([cat, stats]) => {
+        if (stats.total > maxAmount) {
+          maxAmount = stats.total;
+          topCategory = cat;
+        }
+      });
+
+      document.getElementById('total-expenses')!.textContent = formatCurrency(totalExpenses);
+      document.getElementById('expense-count')!.textContent = expenses.length.toString();
+      document.getElementById('top-category')!.textContent = topCategory;
+    }
+
+    function renderPieChart(statsByCategory: StatsByCategory) {
+      const canvas = document.getElementById('expense-pie-chart') as HTMLCanvasElement;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      // Set canvas size
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = rect.width * window.devicePixelRatio;
+      canvas.height = rect.height * window.devicePixelRatio;
+      ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+
+      const width = rect.width;
+      const height = rect.height;
+      const centerX = width / 2;
+      const centerY = height / 2;
+      const radius = Math.min(width, height) / 3;
+
+      // Calculate total
+      const total = Object.values(statsByCategory).reduce((sum, stats) => sum + stats.total, 0);
+
+      if (total === 0) {
+        ctx.fillStyle = '#6b7280';
+        ctx.font = '14px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('لا توجد بيانات', centerX, centerY);
+        return;
+      }
+
+      // Draw pie chart
+      let currentAngle = -Math.PI / 2;
+
+      Object.entries(statsByCategory).forEach(([category, stats]) => {
+        const sliceAngle = (stats.total / total) * 2 * Math.PI;
+
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY);
+        ctx.arc(centerX, centerY, radius, currentAngle, currentAngle + sliceAngle);
+        ctx.closePath();
+
+        ctx.fillStyle = categoryColors[category] || '#6b7280';
+        ctx.fill();
+
+        currentAngle += sliceAngle;
+      });
+
+      // Draw legend
+      let legendY = 20;
+      Object.entries(statsByCategory).forEach(([category, stats]) => {
+        const percentage = ((stats.total / total) * 100).toFixed(1);
+
+        ctx.fillStyle = categoryColors[category] || '#6b7280';
+        ctx.fillRect(width - 150, legendY, 15, 15);
+
+        ctx.fillStyle = '#000';
+        ctx.font = '12px Arial';
+        ctx.textAlign = 'right';
+        ctx.fillText(`${category} (${percentage}%)`, width - 160, legendY + 12);
+
+        legendY += 25;
+      });
+    }
+
+    // Dialog controls
+    const dialog = document.getElementById('add-expense-dialog')!;
+    const addBtn = document.getElementById('add-expense-btn')!;
+    const cancelBtn = document.getElementById('cancel-add-btn')!;
+    const form = document.getElementById('add-expense-form') as HTMLFormElement;
+
+    addBtn.addEventListener('click', () => {
+      dialog.classList.remove('hidden');
+    });
+
+    cancelBtn.addEventListener('click', () => {
+      dialog.classList.add('hidden');
+      form.reset();
+    });
+
+    // Auto-categorize toggle
+    const autoCategorizeCheckbox = document.getElementById('auto-categorize') as HTMLInputElement;
+    const categorySelect = document.getElementById('expense-category') as HTMLSelectElement;
+
+    autoCategorizeCheckbox.addEventListener('change', () => {
+      if (autoCategorizeCheckbox.checked) {
+        categorySelect.value = '';
+        categorySelect.disabled = true;
+      } else {
+        categorySelect.disabled = false;
+      }
+    });
+
+    // Submit form
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const submitBtn = document.getElementById('submit-btn') as HTMLButtonElement;
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'جاري الحفظ...';
+
+      const date = (document.getElementById('expense-date') as HTMLInputElement).value;
+      const title = (document.getElementById('expense-title') as HTMLInputElement).value;
+      const amount = parseFloat((document.getElementById('expense-amount') as HTMLInputElement).value);
+      const description = (document.getElementById('expense-description') as HTMLTextAreaElement).value;
+      const category = categorySelect.value;
+      const autoCategorize = autoCategorizeCheckbox.checked;
+
+      try {
+        const response = await fetch('/api/expenses/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            branchId: 'BR001',
+            date,
+            title,
+            amount,
+            category,
+            description,
+            autoCategorize
+          })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          alert(`تم إضافة المصروف بنجاح!\nالفئة المحددة: ${data.expense.category}`);
+          dialog.classList.add('hidden');
+          form.reset();
+          loadExpenses();
+        } else {
+          alert(data.error || 'حدث خطأ');
+        }
+      } catch (error) {
+        alert('حدث خطأ في الاتصال');
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'حفظ';
+      }
+    });
+
+    // Delete expense
+    (window as any).deleteExpense = async (id: string) => {
+      if (!confirm('هل أنت متأكد من حذف هذا المصروف؟')) return;
+
+      try {
+        const response = await fetch('/api/expenses/delete', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          alert('تم حذف المصروف بنجاح');
+          loadExpenses();
+        } else {
+          alert(data.error || 'حدث خطأ');
+        }
+      } catch (error) {
+        alert('حدث خطأ في الاتصال');
+      }
+    };
+
+    // Filter button
+    document.getElementById('apply-filter-btn')?.addEventListener('click', loadExpenses);
+
+    // Initial load
+    loadExpenses();
+  </script>
+</MainLayout>

@@ -1,0 +1,544 @@
+---
+import MainLayout from '@/layouts/MainLayout.astro';
+
+// Check authentication
+const cookieHeader = Astro.request.headers.get('Cookie');
+if (!cookieHeader?.includes('session=')) {
+  return Astro.redirect('/auth/login');
+}
+---
+
+<MainLayout title="الرواتب - SymbolAI">
+  <div class="space-y-6">
+    <div>
+      <h1 class="text-3xl font-bold">إدارة الرواتب</h1>
+      <p class="text-muted-foreground mt-2">حساب وإدارة رواتب الموظفين الشهرية</p>
+    </div>
+
+    <!-- Calculation Section -->
+    <div class="rounded-lg border bg-card p-6">
+      <h2 class="text-xl font-semibold mb-4">حساب الرواتب</h2>
+
+      <div class="flex gap-4 items-end mb-4">
+        <div class="flex-1">
+          <label class="block text-sm font-medium mb-2">الشهر</label>
+          <select id="calc-month" class="w-full rounded-md border px-3 py-2">
+            <option value="1">يناير</option>
+            <option value="2">فبراير</option>
+            <option value="3">مارس</option>
+            <option value="4">أبريل</option>
+            <option value="5">مايو</option>
+            <option value="6">يونيو</option>
+            <option value="7">يوليو</option>
+            <option value="8">أغسطس</option>
+            <option value="9">سبتمبر</option>
+            <option value="10">أكتوبر</option>
+            <option value="11">نوفمبر</option>
+            <option value="12">ديسمبر</option>
+          </select>
+        </div>
+
+        <div class="flex-1">
+          <label class="block text-sm font-medium mb-2">السنة</label>
+          <select id="calc-year" class="w-full rounded-md border px-3 py-2">
+            <option value="2024">2024</option>
+            <option value="2025">2025</option>
+          </select>
+        </div>
+
+        <button
+          id="calculate-btn"
+          class="bg-primary text-white px-6 py-2 rounded-md hover:bg-primary/90 font-medium"
+        >
+          حساب الرواتب
+        </button>
+      </div>
+
+      <!-- Calculation Results -->
+      <div id="calculation-results" class="hidden">
+        <!-- Summary Cards -->
+        <div class="grid gap-4 md:grid-cols-4 mb-6">
+          <div class="rounded-lg border bg-blue-50 p-4">
+            <h3 class="text-sm font-medium text-blue-700">عدد الموظفين</h3>
+            <p class="text-2xl font-bold mt-2 text-blue-600" id="summary-count">0</p>
+          </div>
+          <div class="rounded-lg border bg-green-50 p-4">
+            <h3 class="text-sm font-medium text-green-700">إجمالي الرواتب الأساسية</h3>
+            <p class="text-2xl font-bold mt-2 text-green-600" id="summary-gross">0 ج.م</p>
+          </div>
+          <div class="rounded-lg border bg-yellow-50 p-4">
+            <h3 class="text-sm font-medium text-yellow-700">إجمالي الخصومات</h3>
+            <p class="text-2xl font-bold mt-2 text-yellow-600" id="summary-deductions">0 ج.م</p>
+          </div>
+          <div class="rounded-lg border bg-purple-50 p-4">
+            <h3 class="text-sm font-medium text-purple-700">صافي الرواتب</h3>
+            <p class="text-2xl font-bold mt-2 text-purple-600" id="summary-net">0 ج.م</p>
+          </div>
+        </div>
+
+        <!-- Detailed Table -->
+        <div class="overflow-x-auto mb-4">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b bg-gray-50">
+                <th class="text-right p-3 font-medium">الموظف</th>
+                <th class="text-right p-3 font-medium">الراتب الأساسي</th>
+                <th class="text-right p-3 font-medium">بدل إشراف</th>
+                <th class="text-right p-3 font-medium">حوافز</th>
+                <th class="text-right p-3 font-medium">مكافآت</th>
+                <th class="text-right p-3 font-medium">إجمالي المستحقات</th>
+                <th class="text-right p-3 font-medium">سلف</th>
+                <th class="text-right p-3 font-medium">خصومات</th>
+                <th class="text-right p-3 font-medium">صافي المستحق</th>
+              </tr>
+            </thead>
+            <tbody id="payroll-table-body">
+              <!-- Rows will be inserted here -->
+            </tbody>
+            <tfoot>
+              <tr class="border-t-2 font-bold bg-gray-50">
+                <td class="p-3">الإجمالي</td>
+                <td class="p-3" id="total-base">0</td>
+                <td class="p-3" id="total-allowance">0</td>
+                <td class="p-3" id="total-incentives">0</td>
+                <td class="p-3" id="total-bonus">0</td>
+                <td class="p-3 text-green-600" id="total-earnings">0</td>
+                <td class="p-3 text-red-600" id="total-advances">0</td>
+                <td class="p-3 text-red-600" id="total-deductions">0</td>
+                <td class="p-3 text-purple-600 text-lg" id="total-net">0</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex gap-3 justify-end">
+          <button
+            id="save-payroll-btn"
+            class="bg-primary text-white px-6 py-2 rounded-md hover:bg-primary/90 font-medium"
+          >
+            حفظ سجل الرواتب
+          </button>
+        </div>
+      </div>
+
+      <div id="no-results" class="text-center p-8 text-muted-foreground hidden">
+        اختر الشهر والسنة ثم اضغط "حساب الرواتب"
+      </div>
+    </div>
+
+    <!-- Historical Records -->
+    <div class="rounded-lg border bg-card p-6">
+      <h2 class="text-xl font-semibold mb-4">السجلات السابقة</h2>
+
+      <div class="flex gap-3 mb-4">
+        <select id="history-month" class="rounded-md border px-3 py-2 text-sm">
+          <option value="">جميع الأشهر</option>
+          <option value="1">يناير</option>
+          <option value="2">فبراير</option>
+          <option value="3">مارس</option>
+          <option value="4">أبريل</option>
+          <option value="5">مايو</option>
+          <option value="6">يونيو</option>
+          <option value="7">يوليو</option>
+          <option value="8">أغسطس</option>
+          <option value="9">سبتمبر</option>
+          <option value="10">أكتوبر</option>
+          <option value="11">نوفمبر</option>
+          <option value="12">ديسمبر</option>
+        </select>
+        <select id="history-year" class="rounded-md border px-3 py-2 text-sm">
+          <option value="">جميع السنوات</option>
+          <option value="2024">2024</option>
+          <option value="2025">2025</option>
+        </select>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b">
+              <th class="text-right p-3 font-medium">الشهر/السنة</th>
+              <th class="text-right p-3 font-medium">عدد الموظفين</th>
+              <th class="text-right p-3 font-medium">صافي الرواتب</th>
+              <th class="text-right p-3 font-medium">تم الإنشاء بواسطة</th>
+              <th class="text-right p-3 font-medium">التاريخ</th>
+              <th class="text-right p-3 font-medium">إجراءات</th>
+            </tr>
+          </thead>
+          <tbody id="history-table-body">
+            <tr>
+              <td colspan="6" class="text-center p-8 text-muted-foreground">
+                جاري التحميل...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- View Payroll Details Dialog -->
+  <dialog id="view-payroll-dialog" class="rounded-lg p-6 shadow-lg max-w-5xl w-full">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-xl font-semibold">تفاصيل الرواتب</h3>
+      <button id="close-payroll-dialog" class="text-gray-500 hover:text-gray-700">✕</button>
+    </div>
+
+    <div id="payroll-details-content">
+      <!-- Payroll details will be inserted here -->
+    </div>
+
+    <div class="flex justify-end mt-4 pt-4 border-t">
+      <button
+        id="close-payroll-dialog-btn"
+        class="border px-6 py-2 rounded-md hover:bg-gray-50"
+      >
+        إغلاق
+      </button>
+    </div>
+  </dialog>
+
+  <script>
+    interface PayrollEmployee {
+      employeeId: string;
+      employeeName: string;
+      nationalId: string;
+      baseSalary: number;
+      supervisorAllowance: number;
+      incentives: number;
+      bonus: number;
+      grossSalary: number;
+      totalEarnings: number;
+      advances: number;
+      deductions: number;
+      totalDeductions: number;
+      netSalary: number;
+    }
+
+    interface PayrollRecord {
+      id: string;
+      branch_id: string;
+      month: string;
+      year: number;
+      employees: PayrollEmployee[];
+      total_net_salary: number;
+      generated_by: string;
+      generated_at: string;
+    }
+
+    let currentPayrollData: PayrollEmployee[] = [];
+    let currentTotals: any = null;
+    let currentMonth: string = '';
+    let currentYear: string = '';
+
+    const monthNames = [
+      '', 'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
+      'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'
+    ];
+
+    // Helper functions
+    function formatCurrency(amount: number): string {
+      return `${amount.toFixed(2)} ج.م`;
+    }
+
+    function formatDate(dateStr: string): string {
+      if (!dateStr) return '-';
+      return new Date(dateStr).toLocaleDateString('ar-EG');
+    }
+
+    // Set current month/year
+    const now = new Date();
+    (document.getElementById('calc-month') as HTMLSelectElement).value = (now.getMonth() + 1).toString();
+    (document.getElementById('calc-year') as HTMLSelectElement).value = now.getFullYear().toString();
+
+    // Calculate payroll
+    document.getElementById('calculate-btn')?.addEventListener('click', async () => {
+      const month = (document.getElementById('calc-month') as HTMLSelectElement).value;
+      const year = (document.getElementById('calc-year') as HTMLSelectElement).value;
+
+      try {
+        const response = await fetch('/api/payroll/calculate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            branchId: 'BR001',
+            month,
+            year
+          })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          currentPayrollData = data.payrollData;
+          currentTotals = data.totals;
+          currentMonth = month;
+          currentYear = year;
+
+          renderPayrollResults(data);
+          document.getElementById('calculation-results')!.classList.remove('hidden');
+          document.getElementById('no-results')!.classList.add('hidden');
+        } else {
+          alert(data.error || 'حدث خطأ أثناء الحساب');
+          document.getElementById('calculation-results')!.classList.add('hidden');
+          document.getElementById('no-results')!.classList.remove('hidden');
+        }
+      } catch (error) {
+        console.error('Error calculating payroll:', error);
+        alert('حدث خطأ أثناء حساب الرواتب');
+      }
+    });
+
+    function renderPayrollResults(data: any) {
+      // Update summary cards
+      document.getElementById('summary-count')!.textContent = data.employeeCount.toString();
+      document.getElementById('summary-gross')!.textContent = formatCurrency(data.totals.totalGrossSalary);
+      document.getElementById('summary-deductions')!.textContent = formatCurrency(
+        data.totals.totalAdvances + data.totals.totalDeductions
+      );
+      document.getElementById('summary-net')!.textContent = formatCurrency(data.totals.totalNetSalary);
+
+      // Render table
+      const tbody = document.getElementById('payroll-table-body')!;
+      tbody.innerHTML = data.payrollData.map((emp: PayrollEmployee) => `
+        <tr class="border-b hover:bg-gray-50">
+          <td class="p-3 font-medium">${emp.employeeName}</td>
+          <td class="p-3">${formatCurrency(emp.baseSalary)}</td>
+          <td class="p-3">${formatCurrency(emp.supervisorAllowance)}</td>
+          <td class="p-3">${formatCurrency(emp.incentives)}</td>
+          <td class="p-3">${formatCurrency(emp.bonus)}</td>
+          <td class="p-3 font-semibold text-green-600">${formatCurrency(emp.totalEarnings)}</td>
+          <td class="p-3 text-red-600">${formatCurrency(emp.advances)}</td>
+          <td class="p-3 text-red-600">${formatCurrency(emp.deductions)}</td>
+          <td class="p-3 font-bold text-purple-600">${formatCurrency(emp.netSalary)}</td>
+        </tr>
+      `).join('');
+
+      // Update totals row
+      document.getElementById('total-base')!.textContent = formatCurrency(
+        data.payrollData.reduce((sum: number, e: PayrollEmployee) => sum + e.baseSalary, 0)
+      );
+      document.getElementById('total-allowance')!.textContent = formatCurrency(
+        data.payrollData.reduce((sum: number, e: PayrollEmployee) => sum + e.supervisorAllowance, 0)
+      );
+      document.getElementById('total-incentives')!.textContent = formatCurrency(
+        data.payrollData.reduce((sum: number, e: PayrollEmployee) => sum + e.incentives, 0)
+      );
+      document.getElementById('total-bonus')!.textContent = formatCurrency(data.totals.totalBonus);
+      document.getElementById('total-earnings')!.textContent = formatCurrency(data.totals.totalEarnings);
+      document.getElementById('total-advances')!.textContent = formatCurrency(data.totals.totalAdvances);
+      document.getElementById('total-deductions')!.textContent = formatCurrency(data.totals.totalDeductions);
+      document.getElementById('total-net')!.textContent = formatCurrency(data.totals.totalNetSalary);
+    }
+
+    // Save payroll
+    document.getElementById('save-payroll-btn')?.addEventListener('click', async () => {
+      if (!currentPayrollData.length) {
+        alert('لا توجد بيانات لحفظها');
+        return;
+      }
+
+      if (!confirm('هل تريد حفظ سجل الرواتب؟ لن تتمكن من التعديل بعد الحفظ.')) {
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/payroll/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            branchId: 'BR001',
+            month: currentMonth,
+            year: currentYear,
+            payrollData: currentPayrollData,
+            totals: currentTotals
+          })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          alert('تم حفظ سجل الرواتب بنجاح');
+          loadHistoricalRecords();
+          // Clear current calculation
+          document.getElementById('calculation-results')!.classList.add('hidden');
+          document.getElementById('no-results')!.classList.remove('hidden');
+          currentPayrollData = [];
+        } else {
+          alert(data.error || 'حدث خطأ أثناء الحفظ');
+        }
+      } catch (error) {
+        console.error('Error saving payroll:', error);
+        alert('حدث خطأ أثناء حفظ الرواتب');
+      }
+    });
+
+    // Load historical records
+    async function loadHistoricalRecords() {
+      const month = (document.getElementById('history-month') as HTMLSelectElement).value;
+      const year = (document.getElementById('history-year') as HTMLSelectElement).value;
+
+      try {
+        let url = '/api/payroll/list?branchId=BR001';
+        if (month) url += `&month=${month}`;
+        if (year) url += `&year=${year}`;
+
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (data.success) {
+          renderHistoricalRecords(data.payrollRecords);
+        }
+      } catch (error) {
+        console.error('Error loading historical records:', error);
+      }
+    }
+
+    function renderHistoricalRecords(records: PayrollRecord[]) {
+      const tbody = document.getElementById('history-table-body')!;
+
+      if (records.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="6" class="text-center p-8 text-muted-foreground">
+              لا توجد سجلات
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = records.map(record => `
+        <tr class="border-b hover:bg-gray-50">
+          <td class="p-3 font-medium">${monthNames[parseInt(record.month)]} ${record.year}</td>
+          <td class="p-3">${record.employees.length}</td>
+          <td class="p-3 font-semibold text-purple-600">${formatCurrency(record.total_net_salary)}</td>
+          <td class="p-3">${record.generated_by || '-'}</td>
+          <td class="p-3 text-sm text-gray-600">${formatDate(record.generated_at)}</td>
+          <td class="p-3">
+            <button
+              onclick="viewPayrollDetails('${record.id}')"
+              class="text-primary hover:underline text-sm"
+            >
+              عرض التفاصيل
+            </button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    // View payroll details
+    const viewDialog = document.getElementById('view-payroll-dialog') as HTMLDialogElement;
+
+    (window as any).viewPayrollDetails = async function(payrollId: string) {
+      try {
+        const response = await fetch(`/api/payroll/list?branchId=BR001`);
+        const data = await response.json();
+
+        if (data.success) {
+          const record = data.payrollRecords.find((r: PayrollRecord) => r.id === payrollId);
+          if (record) {
+            renderPayrollDetails(record);
+            viewDialog.showModal();
+          }
+        }
+      } catch (error) {
+        console.error('Error loading payroll details:', error);
+      }
+    };
+
+    function renderPayrollDetails(record: PayrollRecord) {
+      const content = document.getElementById('payroll-details-content')!;
+
+      const totals = record.employees.reduce((acc, emp) => ({
+        totalGross: acc.totalGross + emp.grossSalary,
+        totalBonus: acc.totalBonus + emp.bonus,
+        totalEarnings: acc.totalEarnings + emp.totalEarnings,
+        totalAdvances: acc.totalAdvances + emp.advances,
+        totalDeductions: acc.totalDeductions + emp.deductions,
+        totalNet: acc.totalNet + emp.netSalary
+      }), {
+        totalGross: 0,
+        totalBonus: 0,
+        totalEarnings: 0,
+        totalAdvances: 0,
+        totalDeductions: 0,
+        totalNet: 0
+      });
+
+      content.innerHTML = `
+        <div class="mb-4 p-4 bg-gray-50 rounded">
+          <h4 class="font-semibold mb-2">معلومات السجل</h4>
+          <div class="grid grid-cols-3 gap-4 text-sm">
+            <div>
+              <span class="text-gray-600">الشهر/السنة:</span>
+              <span class="font-medium mr-2">${monthNames[parseInt(record.month)]} ${record.year}</span>
+            </div>
+            <div>
+              <span class="text-gray-600">عدد الموظفين:</span>
+              <span class="font-medium mr-2">${record.employees.length}</span>
+            </div>
+            <div>
+              <span class="text-gray-600">صافي الرواتب:</span>
+              <span class="font-medium mr-2 text-purple-600">${formatCurrency(record.total_net_salary)}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b bg-gray-50">
+                <th class="text-right p-2 font-medium">الموظف</th>
+                <th class="text-right p-2 font-medium">الراتب الأساسي</th>
+                <th class="text-right p-2 font-medium">المكافآت</th>
+                <th class="text-right p-2 font-medium">إجمالي المستحقات</th>
+                <th class="text-right p-2 font-medium">الخصومات</th>
+                <th class="text-right p-2 font-medium">صافي المستحق</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${record.employees.map(emp => `
+                <tr class="border-b">
+                  <td class="p-2 font-medium">${emp.employeeName}</td>
+                  <td class="p-2">${formatCurrency(emp.baseSalary)}</td>
+                  <td class="p-2">${formatCurrency(emp.bonus)}</td>
+                  <td class="p-2 text-green-600">${formatCurrency(emp.totalEarnings)}</td>
+                  <td class="p-2 text-red-600">${formatCurrency(emp.totalDeductions)}</td>
+                  <td class="p-2 font-bold text-purple-600">${formatCurrency(emp.netSalary)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+            <tfoot>
+              <tr class="border-t-2 font-bold bg-gray-50">
+                <td class="p-2">الإجمالي</td>
+                <td class="p-2">${formatCurrency(totals.totalGross)}</td>
+                <td class="p-2">${formatCurrency(totals.totalBonus)}</td>
+                <td class="p-2 text-green-600">${formatCurrency(totals.totalEarnings)}</td>
+                <td class="p-2 text-red-600">${formatCurrency(totals.totalAdvances + totals.totalDeductions)}</td>
+                <td class="p-2 text-purple-600 text-lg">${formatCurrency(totals.totalNet)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      `;
+    }
+
+    document.getElementById('close-payroll-dialog')?.addEventListener('click', () => {
+      viewDialog.close();
+    });
+
+    document.getElementById('close-payroll-dialog-btn')?.addEventListener('click', () => {
+      viewDialog.close();
+    });
+
+    // Filters
+    document.getElementById('history-month')?.addEventListener('change', loadHistoricalRecords);
+    document.getElementById('history-year')?.addEventListener('change', loadHistoricalRecords);
+
+    // Initial load
+    loadHistoricalRecords();
+    document.getElementById('no-results')!.classList.remove('hidden');
+  </script>
+</MainLayout>

@@ -1,0 +1,382 @@
+---
+import MainLayout from '@/layouts/MainLayout.astro';
+
+// Check authentication
+const cookieHeader = Astro.request.headers.get('Cookie');
+if (!cookieHeader?.includes('session=')) {
+  return Astro.redirect('/auth/login');
+}
+---
+
+<MainLayout title="البونص - SymbolAI">
+  <div class="space-y-6">
+    <div>
+      <h1 class="text-3xl font-bold">حساب البونص الأسبوعي</h1>
+      <p class="text-muted-foreground mt-2">حساب بونص الموظفين بناءً على إيراداتهم</p>
+    </div>
+
+    <!-- Calculation Section -->
+    <div class="rounded-lg border bg-card p-6">
+      <h3 class="text-xl font-semibold mb-4">حساب بونص جديد</h3>
+
+      <div class="grid gap-4 md:grid-cols-3 mb-4">
+        <div>
+          <label class="block text-sm font-medium mb-2">الشهر</label>
+          <select id="bonus-month" class="w-full rounded-md border px-3 py-2">
+            <option value="يناير">يناير</option>
+            <option value="فبراير">فبراير</option>
+            <option value="مارس">مارس</option>
+            <option value="أبريل">أبريل</option>
+            <option value="مايو">مايو</option>
+            <option value="يونيو">يونيو</option>
+            <option value="يوليو">يوليو</option>
+            <option value="أغسطس">أغسطس</option>
+            <option value="سبتمبر">سبتمبر</option>
+            <option value="أكتوبر">أكتوبر</option>
+            <option value="نوفمبر">نوفمبر</option>
+            <option value="ديسمبر">ديسمبر</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-2">السنة</label>
+          <input type="number" id="bonus-year" value="2025" class="w-full rounded-md border px-3 py-2" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-2">رقم الأسبوع</label>
+          <select id="bonus-week" class="w-full rounded-md border px-3 py-2">
+            <option value="1">الأسبوع 1 (أيام 1-7)</option>
+            <option value="2">الأسبوع 2 (أيام 8-14)</option>
+            <option value="3">الأسبوع 3 (أيام 15-21)</option>
+            <option value="4">الأسبوع 4 (أيام 22-28)</option>
+            <option value="5">الأسبوع 5 (أيام 29-31)</option>
+          </select>
+        </div>
+      </div>
+
+      <button
+        id="calculate-btn"
+        class="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors font-medium"
+      >
+        احسب البونص
+      </button>
+
+      <!-- Calculation Results -->
+      <div id="calculation-results" class="mt-6 hidden">
+        <div class="rounded-lg bg-blue-50 border border-blue-200 p-4 mb-4">
+          <div class="grid gap-4 md:grid-cols-3">
+            <div>
+              <p class="text-sm text-blue-700">الفترة</p>
+              <p class="font-bold text-blue-900" id="week-range">-</p>
+            </div>
+            <div>
+              <p class="text-sm text-blue-700">عدد سجلات الإيرادات</p>
+              <p class="font-bold text-blue-900" id="revenue-count">0</p>
+            </div>
+            <div>
+              <p class="text-sm text-blue-700">إجمالي البونص</p>
+              <p class="font-bold text-blue-900" id="total-bonus">0 ج.م</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full">
+            <thead>
+              <tr class="border-b">
+                <th class="text-right p-3 font-medium">اسم الموظف</th>
+                <th class="text-right p-3 font-medium">إجمالي الإيرادات</th>
+                <th class="text-right p-3 font-medium">النسبة</th>
+                <th class="text-right p-3 font-medium">مبلغ البونص</th>
+              </tr>
+            </thead>
+            <tbody id="bonus-table-body">
+            </tbody>
+          </table>
+        </div>
+
+        <div class="flex gap-3 justify-end mt-4">
+          <button
+            id="save-draft-btn"
+            class="px-4 py-2 border rounded-md hover:bg-gray-50"
+          >
+            حفظ كمسودة
+          </button>
+          <button
+            id="approve-save-btn"
+            class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+          >
+            موافقة وحفظ
+          </button>
+        </div>
+
+        <div id="already-exists-warning" class="hidden mt-4 rounded-lg bg-yellow-50 border border-yellow-200 p-4">
+          <p class="text-sm text-yellow-800">⚠️ تنبيه: يوجد بالفعل سجل بونص لهذا الأسبوع. الحفظ سيضيف سجل جديد.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Previous Bonus Records -->
+    <div class="rounded-lg border bg-card p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-xl font-semibold">سجلات البونص السابقة</h3>
+        <div class="flex gap-2">
+          <select id="filter-month" class="rounded-md border px-3 py-2 text-sm">
+            <option value="يناير">يناير</option>
+            <option value="فبراير">فبراير</option>
+            <option value="مارس">مارس</option>
+            <option value="أبريل">أبريل</option>
+            <option value="مايو">مايو</option>
+            <option value="يونيو">يونيو</option>
+            <option value="يوليو">يوليو</option>
+            <option value="أغسطس">أغسطس</option>
+            <option value="سبتمبر">سبتمبر</option>
+            <option value="أكتوبر">أكتوبر</option>
+            <option value="نوفمبر">نوفمبر</option>
+            <option value="ديسمبر">ديسمبر</option>
+          </select>
+          <input type="number" id="filter-year" value="2025" class="w-24 rounded-md border px-3 py-2 text-sm" />
+          <button
+            id="filter-btn"
+            class="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 text-sm"
+          >
+            تطبيق
+          </button>
+        </div>
+      </div>
+
+      <div class="space-y-4" id="bonus-records-list">
+        <p class="text-center text-muted-foreground py-8">جاري التحميل...</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    interface EmployeeBonus {
+      employeeId: string;
+      employeeName: string;
+      totalRevenue: number;
+      bonusAmount: number;
+      bonusPercentage: number;
+    }
+
+    interface BonusCalculation {
+      weekRange: { startDate: string; endDate: string };
+      employeeBonuses: EmployeeBonus[];
+      totalBonusPaid: number;
+      alreadyExists: boolean;
+      revenueCount: number;
+    }
+
+    let currentCalculation: BonusCalculation | null = null;
+
+    const monthNames = [
+      'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
+      'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'
+    ];
+
+    // Set current month
+    const now = new Date();
+    document.getElementById('bonus-month')!.value = monthNames[now.getMonth()];
+    document.getElementById('filter-month')!.value = monthNames[now.getMonth()];
+
+    function formatCurrency(amount: number): string {
+      return new Intl.NumberFormat('ar-EG', {
+        minimumFractionDigits: 2
+      }).format(amount) + ' ج.م';
+    }
+
+    function formatDate(dateStr: string): string {
+      return new Date(dateStr).toLocaleDateString('ar-EG');
+    }
+
+    // Calculate bonus
+    document.getElementById('calculate-btn')?.addEventListener('click', async () => {
+      const month = (document.getElementById('bonus-month') as HTMLSelectElement).value;
+      const year = parseInt((document.getElementById('bonus-year') as HTMLInputElement).value);
+      const weekNumber = parseInt((document.getElementById('bonus-week') as HTMLSelectElement).value);
+
+      const btn = document.getElementById('calculate-btn') as HTMLButtonElement;
+      btn.disabled = true;
+      btn.textContent = 'جاري الحساب...';
+
+      try {
+        const response = await fetch('/api/bonus/calculate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            branchId: 'BR001',
+            weekNumber,
+            month,
+            year
+          })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          currentCalculation = data;
+          displayCalculationResults(data);
+        } else {
+          alert(data.error || 'حدث خطأ');
+        }
+      } catch (error) {
+        alert('حدث خطأ في الاتصال');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'احسب البونص';
+      }
+    });
+
+    function displayCalculationResults(data: BonusCalculation) {
+      const resultsDiv = document.getElementById('calculation-results')!;
+      resultsDiv.classList.remove('hidden');
+
+      // Update summary
+      document.getElementById('week-range')!.textContent =
+        `${formatDate(data.weekRange.startDate)} - ${formatDate(data.weekRange.endDate)}`;
+      document.getElementById('revenue-count')!.textContent = data.revenueCount.toString();
+      document.getElementById('total-bonus')!.textContent = formatCurrency(data.totalBonusPaid);
+
+      // Update table
+      const tbody = document.getElementById('bonus-table-body')!;
+
+      if (data.employeeBonuses.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="4" class="text-center p-8 text-muted-foreground">
+              لا توجد إيرادات للموظفين في هذا الأسبوع
+            </td>
+          </tr>
+        `;
+      } else {
+        tbody.innerHTML = data.employeeBonuses.map(eb => `
+          <tr class="border-b hover:bg-gray-50">
+            <td class="p-3 font-medium">${eb.employeeName}</td>
+            <td class="p-3">${formatCurrency(eb.totalRevenue)}</td>
+            <td class="p-3">${eb.bonusPercentage}%</td>
+            <td class="p-3 font-bold text-green-600">${formatCurrency(eb.bonusAmount)}</td>
+          </tr>
+        `).join('');
+      }
+
+      // Show warning if already exists
+      const warningDiv = document.getElementById('already-exists-warning')!;
+      if (data.alreadyExists) {
+        warningDiv.classList.remove('hidden');
+      } else {
+        warningDiv.classList.add('hidden');
+      }
+    }
+
+    // Save draft
+    document.getElementById('save-draft-btn')?.addEventListener('click', () => {
+      saveBonus(false);
+    });
+
+    // Approve and save
+    document.getElementById('approve-save-btn')?.addEventListener('click', () => {
+      if (confirm('هل أنت متأكد من الموافقة على هذا البونص؟')) {
+        saveBonus(true);
+      }
+    });
+
+    async function saveBonus(approved: boolean) {
+      if (!currentCalculation) return;
+
+      const month = (document.getElementById('bonus-month') as HTMLSelectElement).value;
+      const year = parseInt((document.getElementById('bonus-year') as HTMLInputElement).value);
+      const weekNumber = parseInt((document.getElementById('bonus-week') as HTMLSelectElement).value);
+
+      try {
+        const response = await fetch('/api/bonus/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            branchId: 'BR001',
+            weekNumber,
+            month,
+            year,
+            employeeBonuses: currentCalculation.employeeBonuses,
+            totalBonusPaid: currentCalculation.totalBonusPaid,
+            approved
+          })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          alert(approved ? 'تم الموافقة والحفظ بنجاح!' : 'تم الحفظ كمسودة بنجاح!');
+          document.getElementById('calculation-results')!.classList.add('hidden');
+          currentCalculation = null;
+          loadBonusRecords();
+        } else {
+          alert(data.error || 'حدث خطأ');
+        }
+      } catch (error) {
+        alert('حدث خطأ في الاتصال');
+      }
+    }
+
+    // Load bonus records
+    async function loadBonusRecords() {
+      const month = (document.getElementById('filter-month') as HTMLSelectElement).value;
+      const year = (document.getElementById('filter-year') as HTMLInputElement).value;
+
+      try {
+        const response = await fetch(`/api/bonus/list?month=${month}&year=${year}`);
+        const data = await response.json();
+
+        if (data.success) {
+          displayBonusRecords(data.bonusRecords);
+        } else {
+          alert(data.error || 'حدث خطأ');
+        }
+      } catch (error) {
+        alert('حدث خطأ في الاتصال');
+      }
+    }
+
+    function displayBonusRecords(records: any[]) {
+      const listDiv = document.getElementById('bonus-records-list')!;
+
+      if (records.length === 0) {
+        listDiv.innerHTML = '<p class="text-center text-muted-foreground py-8">لا توجد سجلات بونص</p>';
+        return;
+      }
+
+      listDiv.innerHTML = records.map(record => {
+        const isApproved = record.approved_by !== null;
+        const employeeBonuses = record.employee_bonuses || [];
+
+        return `
+          <div class="rounded-lg border p-4">
+            <div class="flex items-center justify-between mb-2">
+              <div>
+                <h4 class="font-semibold">الأسبوع ${record.week_number} - ${record.month} ${record.year}</h4>
+                <p class="text-sm text-muted-foreground">
+                  ${employeeBonuses.length} موظف • ${formatCurrency(record.total_bonus_paid)}
+                </p>
+              </div>
+              <div>
+                <span class="px-3 py-1 rounded text-sm ${isApproved ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}">
+                  ${isApproved ? '✓ معتمد' : 'مسودة'}
+                </span>
+              </div>
+            </div>
+            ${isApproved ? `
+              <p class="text-sm text-muted-foreground">
+                اعتمد بواسطة: ${record.approved_by} في ${formatDate(record.approved_at)}
+              </p>
+            ` : ''}
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Filter button
+    document.getElementById('filter-btn')?.addEventListener('click', loadBonusRecords);
+
+    // Initial load
+    loadBonusRecords();
+  </script>
+</MainLayout>

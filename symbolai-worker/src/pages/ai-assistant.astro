@@ -1,0 +1,256 @@
+---
+import MainLayout from '@/layouts/MainLayout.astro';
+
+// Check authentication
+const cookieHeader = Astro.request.headers.get('Cookie');
+if (!cookieHeader?.includes('session=')) {
+  return Astro.redirect('/auth/login');
+}
+---
+
+<MainLayout title="المساعد الذكي - SymbolAI">
+  <div class="space-y-6">
+    <div>
+      <h1 class="text-3xl font-bold">المساعد المالي الذكي</h1>
+      <p class="text-muted-foreground mt-2">مدعوم بـ Cloudflare AI Gateway + Anthropic Claude</p>
+    </div>
+
+    <!-- AI Model Selector -->
+    <div class="rounded-lg border bg-card p-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <h3 class="font-semibold">نموذج الذكاء الاصطناعي</h3>
+          <p class="text-sm text-muted-foreground">اختر النموذج المناسب لتحليلك</p>
+        </div>
+        <select id="ai-model" class="rounded-md border px-3 py-2">
+          <option value="claude">Claude 3.5 Sonnet (عالي الجودة)</option>
+          <option value="workers-ai">Workers AI (مجاني)</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Financial Analysis Section -->
+    <div class="grid gap-6 md:grid-cols-2">
+      <div class="rounded-lg border bg-card p-6">
+        <h3 class="text-xl font-semibold mb-4">تحليل مالي ذكي</h3>
+        <p class="text-sm text-muted-foreground mb-4">احصل على تحليل شامل للبيانات المالية مع توصيات مخصصة</p>
+
+        <div class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium mb-2">من تاريخ</label>
+            <input type="date" id="analysis-start-date" class="w-full rounded-md border px-3 py-2" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-2">إلى تاريخ</label>
+            <input type="date" id="analysis-end-date" class="w-full rounded-md border px-3 py-2" />
+          </div>
+          <button
+            id="analyze-btn"
+            class="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors font-medium"
+          >
+            تحليل البيانات
+          </button>
+        </div>
+
+        <div id="analysis-result" class="mt-6 hidden">
+          <div class="rounded-lg bg-blue-50 border border-blue-200 p-4">
+            <h4 class="font-semibold text-blue-900 mb-2">نتائج التحليل</h4>
+            <div id="analysis-content" class="text-sm text-blue-800 whitespace-pre-wrap"></div>
+          </div>
+        </div>
+
+        <div id="analysis-loading" class="mt-6 hidden">
+          <div class="flex items-center justify-center p-4">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <span class="mr-3">جاري التحليل...</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- AI Chat Section -->
+      <div class="rounded-lg border bg-card p-6">
+        <h3 class="text-xl font-semibold mb-4">دردشة مع المساعد</h3>
+        <p class="text-sm text-muted-foreground mb-4">اسأل أي سؤال عن إدارة الأموال والموارد البشرية</p>
+
+        <div class="space-y-4">
+          <div class="border rounded-lg p-4 h-96 overflow-y-auto bg-gray-50" id="chat-messages">
+            <div class="text-center text-muted-foreground text-sm">
+              اكتب سؤالك أدناه لبدء المحادثة
+            </div>
+          </div>
+
+          <div class="flex gap-2">
+            <input
+              type="text"
+              id="chat-input"
+              placeholder="اكتب سؤالك هنا..."
+              class="flex-1 rounded-md border px-3 py-2"
+            />
+            <button
+              id="chat-send-btn"
+              class="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors font-medium"
+            >
+              إرسال
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="rounded-lg border bg-card p-6">
+      <h3 class="text-xl font-semibold mb-4">أسئلة سريعة</h3>
+      <div class="grid gap-3 md:grid-cols-3">
+        <button class="quick-question p-3 border rounded-lg hover:bg-gray-50 text-right text-sm">
+          كيف أحسن الربحية؟
+        </button>
+        <button class="quick-question p-3 border rounded-lg hover:bg-gray-50 text-right text-sm">
+          كيف أدير المصروفات بكفاءة؟
+        </button>
+        <button class="quick-question p-3 border rounded-lg hover:bg-gray-50 text-right text-sm">
+          نصائح لتحفيز الموظفين
+        </button>
+        <button class="quick-question p-3 border rounded-lg hover:bg-gray-50 text-right text-sm">
+          كيف أحسب البونص بشكل عادل؟
+        </button>
+        <button class="quick-question p-3 border rounded-lg hover:bg-gray-50 text-right text-sm">
+          استراتيجيات توفير التكاليف
+        </button>
+        <button class="quick-question p-3 border rounded-lg hover:bg-gray-50 text-right text-sm">
+          كيف أتابع أداء الفروع؟
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Set default dates to current month
+    const today = new Date();
+    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+    const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+
+    (document.getElementById('analysis-start-date') as HTMLInputElement).valueAsDate = firstDay;
+    (document.getElementById('analysis-end-date') as HTMLInputElement).valueAsDate = lastDay;
+
+    // Financial Analysis
+    document.getElementById('analyze-btn')?.addEventListener('click', async () => {
+      const startDate = (document.getElementById('analysis-start-date') as HTMLInputElement).value;
+      const endDate = (document.getElementById('analysis-end-date') as HTMLInputElement).value;
+
+      const resultDiv = document.getElementById('analysis-result')!;
+      const loadingDiv = document.getElementById('analysis-loading')!;
+      const contentDiv = document.getElementById('analysis-content')!;
+
+      resultDiv.classList.add('hidden');
+      loadingDiv.classList.remove('hidden');
+
+      try {
+        const response = await fetch('/api/ai/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ startDate, endDate })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          contentDiv.textContent = data.analysis;
+          resultDiv.classList.remove('hidden');
+        } else {
+          alert(data.error || 'حدث خطأ');
+        }
+      } catch (error) {
+        alert('حدث خطأ في الاتصال');
+      } finally {
+        loadingDiv.classList.add('hidden');
+      }
+    });
+
+    // Chat functionality
+    const chatMessages = document.getElementById('chat-messages')!;
+    const chatInput = document.getElementById('chat-input') as HTMLInputElement;
+    const chatSendBtn = document.getElementById('chat-send-btn')!;
+    const aiModelSelect = document.getElementById('ai-model') as HTMLSelectElement;
+
+    async function sendMessage(message: string) {
+      if (!message.trim()) return;
+
+      // Add user message
+      addMessage('user', message);
+      chatInput.value = '';
+
+      // Show loading
+      const loadingId = addMessage('assistant', 'جاري الكتابة...');
+
+      try {
+        const useWorkersAI = aiModelSelect.value === 'workers-ai';
+
+        const response = await fetch('/api/ai/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message, useWorkersAI })
+        });
+
+        const data = await response.json();
+
+        // Remove loading message
+        document.getElementById(loadingId)?.remove();
+
+        if (data.success) {
+          addMessage('assistant', data.response);
+        } else {
+          addMessage('assistant', 'عذراً، حدث خطأ. يرجى المحاولة مرة أخرى.');
+        }
+      } catch (error) {
+        document.getElementById(loadingId)?.remove();
+        addMessage('assistant', 'عذراً، حدث خطأ في الاتصال.');
+      }
+    }
+
+    function addMessage(role: 'user' | 'assistant', content: string): string {
+      const id = `msg-${Date.now()}`;
+      const messageDiv = document.createElement('div');
+      messageDiv.id = id;
+      messageDiv.className = `mb-4 ${role === 'user' ? 'text-left' : 'text-right'}`;
+
+      const bubble = document.createElement('div');
+      bubble.className = `inline-block max-w-[80%] p-3 rounded-lg ${
+        role === 'user'
+          ? 'bg-blue-600 text-white'
+          : 'bg-gray-200 text-gray-900'
+      }`;
+      bubble.textContent = content;
+
+      messageDiv.appendChild(bubble);
+
+      // Remove welcome message if exists
+      if (chatMessages.querySelector('.text-center')) {
+        chatMessages.innerHTML = '';
+      }
+
+      chatMessages.appendChild(messageDiv);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+
+      return id;
+    }
+
+    chatSendBtn.addEventListener('click', () => {
+      sendMessage(chatInput.value);
+    });
+
+    chatInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        sendMessage(chatInput.value);
+      }
+    });
+
+    // Quick questions
+    document.querySelectorAll('.quick-question').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const question = (e.target as HTMLElement).textContent || '';
+        chatInput.value = question;
+        sendMessage(question);
+      });
+    });
+  </script>
+</MainLayout>

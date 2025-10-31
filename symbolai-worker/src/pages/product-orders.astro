@@ -1,0 +1,607 @@
+---
+import MainLayout from '@/layouts/MainLayout.astro';
+
+// Check authentication
+const cookieHeader = Astro.request.headers.get('Cookie');
+if (!cookieHeader?.includes('session=')) {
+  return Astro.redirect('/auth/login');
+}
+---
+
+<MainLayout title="طلبات المنتجات - SymbolAI">
+  <div class="space-y-6">
+    <div>
+      <h1 class="text-3xl font-bold">طلبات المنتجات</h1>
+      <p class="text-muted-foreground mt-2">إدارة طلبات المنتجات مع نظام الموافقات</p>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="grid gap-4 md:grid-cols-6 mb-6">
+      <div class="rounded-lg border bg-card p-4">
+        <h3 class="text-sm font-medium text-muted-foreground">إجمالي الطلبات</h3>
+        <p class="text-2xl font-bold mt-2" id="stats-total">0</p>
+      </div>
+      <div class="rounded-lg border bg-gray-100 p-4">
+        <h3 class="text-sm font-medium text-gray-600">مسودات</h3>
+        <p class="text-2xl font-bold mt-2 text-gray-600" id="stats-draft">0</p>
+      </div>
+      <div class="rounded-lg border bg-yellow-50 p-4">
+        <h3 class="text-sm font-medium text-yellow-700">معلقة</h3>
+        <p class="text-2xl font-bold mt-2 text-yellow-600" id="stats-pending">0</p>
+      </div>
+      <div class="rounded-lg border bg-green-50 p-4">
+        <h3 class="text-sm font-medium text-green-700">موافق عليها</h3>
+        <p class="text-2xl font-bold mt-2 text-green-600" id="stats-approved">0</p>
+      </div>
+      <div class="rounded-lg border bg-red-50 p-4">
+        <h3 class="text-sm font-medium text-red-700">مرفوضة</h3>
+        <p class="text-2xl font-bold mt-2 text-red-600" id="stats-rejected">0</p>
+      </div>
+      <div class="rounded-lg border bg-blue-50 p-4">
+        <h3 class="text-sm font-medium text-blue-700">مكتملة</h3>
+        <p class="text-2xl font-bold mt-2 text-blue-600" id="stats-completed">0</p>
+      </div>
+    </div>
+
+    <!-- Filters and Add Button -->
+    <div class="rounded-lg border bg-card p-6">
+      <div class="flex items-center justify-between mb-4 flex-wrap gap-4">
+        <div class="flex gap-3 flex-wrap">
+          <select id="status-filter" class="rounded-md border px-3 py-2 text-sm">
+            <option value="">جميع الحالات</option>
+            <option value="draft">مسودات</option>
+            <option value="pending">معلقة</option>
+            <option value="approved">موافق عليها</option>
+            <option value="rejected">مرفوضة</option>
+            <option value="completed">مكتملة</option>
+          </select>
+          <input
+            type="text"
+            id="employee-search"
+            placeholder="بحث باسم الموظف..."
+            class="rounded-md border px-3 py-2 text-sm"
+          />
+        </div>
+        <button
+          id="add-order-btn"
+          class="bg-primary text-white px-4 py-2 rounded-md hover:bg-primary/90 text-sm font-medium"
+        >
+          + طلب جديد
+        </button>
+      </div>
+
+      <!-- Orders Table -->
+      <div class="overflow-x-auto">
+        <table class="w-full">
+          <thead>
+            <tr class="border-b">
+              <th class="text-right p-3 font-medium">رقم الطلب</th>
+              <th class="text-right p-3 font-medium">الموظف</th>
+              <th class="text-right p-3 font-medium">عدد المنتجات</th>
+              <th class="text-right p-3 font-medium">الإجمالي</th>
+              <th class="text-right p-3 font-medium">الحالة</th>
+              <th class="text-right p-3 font-medium">التاريخ</th>
+              <th class="text-right p-3 font-medium">إجراءات</th>
+            </tr>
+          </thead>
+          <tbody id="orders-table-body">
+            <tr>
+              <td colspan="7" class="text-center p-8 text-muted-foreground">
+                جاري التحميل...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add/Edit Order Dialog -->
+  <dialog id="order-dialog" class="rounded-lg p-6 shadow-lg max-w-3xl w-full">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-xl font-semibold">طلب منتجات جديد</h3>
+      <button id="close-order-dialog" class="text-gray-500 hover:text-gray-700">✕</button>
+    </div>
+
+    <form id="order-form" class="space-y-4">
+      <div>
+        <label class="block text-sm font-medium mb-2">اسم الموظف *</label>
+        <input
+          type="text"
+          id="order-employee-name"
+          required
+          class="w-full rounded-md border px-3 py-2"
+          placeholder="أدخل اسم الموظف"
+        />
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium mb-2">المنتجات *</label>
+        <div id="products-container" class="space-y-3">
+          <!-- Dynamic product rows will be added here -->
+        </div>
+        <button
+          type="button"
+          id="add-product-btn"
+          class="mt-3 text-sm text-primary hover:underline"
+        >
+          + إضافة منتج
+        </button>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium mb-2">الإجمالي الكلي</label>
+        <div class="text-2xl font-bold text-primary" id="grand-total-display">0.00 ج.م</div>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium mb-2">ملاحظات</label>
+        <textarea
+          id="order-notes"
+          rows="3"
+          class="w-full rounded-md border px-3 py-2"
+          placeholder="ملاحظات إضافية..."
+        ></textarea>
+      </div>
+
+      <div class="flex gap-3 pt-4">
+        <button
+          type="button"
+          id="save-draft-btn"
+          class="flex-1 border border-primary text-primary px-4 py-2 rounded-md hover:bg-primary/10"
+        >
+          حفظ كمسودة
+        </button>
+        <button
+          type="submit"
+          class="flex-1 bg-primary text-white px-4 py-2 rounded-md hover:bg-primary/90"
+        >
+          إرسال للموافقة
+        </button>
+        <button
+          type="button"
+          id="cancel-order"
+          class="flex-1 border px-4 py-2 rounded-md hover:bg-gray-50"
+        >
+          إلغاء
+        </button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- View Order Details Dialog -->
+  <dialog id="view-order-dialog" class="rounded-lg p-6 shadow-lg max-w-2xl w-full">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-xl font-semibold">تفاصيل الطلب</h3>
+      <button id="close-view-dialog" class="text-gray-500 hover:text-gray-700">✕</button>
+    </div>
+
+    <div id="order-details-content" class="space-y-4">
+      <!-- Order details will be inserted here -->
+    </div>
+
+    <div id="order-actions" class="flex gap-3 pt-4 border-t mt-4">
+      <!-- Action buttons will be inserted here based on order status -->
+    </div>
+  </dialog>
+
+  <script>
+    interface Product {
+      name: string;
+      quantity: number;
+      price: number;
+      total?: number;
+    }
+
+    interface Order {
+      id: string;
+      branch_id: string;
+      employee_name: string;
+      products: Product[];
+      grand_total: number;
+      status: string;
+      is_draft: number;
+      notes?: string;
+      created_at: string;
+      updated_at?: string;
+    }
+
+    let orders: Order[] = [];
+    let currentProducts: Product[] = [{ name: '', quantity: 1, price: 0 }];
+
+    // Helper functions
+    function formatCurrency(amount: number): string {
+      return `${amount.toFixed(2)} ج.م`;
+    }
+
+    function formatDate(dateStr: string): string {
+      if (!dateStr) return '-';
+      return new Date(dateStr).toLocaleDateString('ar-EG');
+    }
+
+    function getStatusBadge(status: string, isDraft: number): string {
+      if (isDraft === 1) {
+        return '<span class="px-2 py-1 rounded text-xs bg-gray-100 text-gray-700">مسودة</span>';
+      }
+
+      const statusConfig: { [key: string]: { bg: string; text: string; label: string } } = {
+        'pending': { bg: 'bg-yellow-100', text: 'text-yellow-700', label: 'معلقة' },
+        'approved': { bg: 'bg-green-100', text: 'text-green-700', label: 'موافق عليها' },
+        'rejected': { bg: 'bg-red-100', text: 'text-red-700', label: 'مرفوضة' },
+        'completed': { bg: 'bg-blue-100', text: 'text-blue-700', label: 'مكتملة' }
+      };
+
+      const config = statusConfig[status] || { bg: 'bg-gray-100', text: 'text-gray-700', label: status };
+      return `<span class="px-2 py-1 rounded text-xs ${config.bg} ${config.text}">${config.label}</span>`;
+    }
+
+    // Load orders
+    async function loadOrders() {
+      const status = (document.getElementById('status-filter') as HTMLSelectElement).value;
+      const employeeSearch = (document.getElementById('employee-search') as HTMLInputElement).value;
+
+      try {
+        let url = '/api/orders/list?branchId=BR001';
+        if (status) url += `&status=${status}`;
+        if (employeeSearch) url += `&employeeName=${encodeURIComponent(employeeSearch)}`;
+
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (data.success) {
+          orders = data.orders;
+          updateStats(data.stats);
+          renderOrders(orders);
+        }
+      } catch (error) {
+        console.error('Error loading orders:', error);
+      }
+    }
+
+    function updateStats(stats: any) {
+      document.getElementById('stats-total')!.textContent = stats.total.toString();
+      document.getElementById('stats-draft')!.textContent = stats.draft.toString();
+      document.getElementById('stats-pending')!.textContent = stats.pending.toString();
+      document.getElementById('stats-approved')!.textContent = stats.approved.toString();
+      document.getElementById('stats-rejected')!.textContent = stats.rejected.toString();
+      document.getElementById('stats-completed')!.textContent = stats.completed.toString();
+    }
+
+    function renderOrders(orders: Order[]) {
+      const tbody = document.getElementById('orders-table-body')!;
+
+      if (orders.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="7" class="text-center p-8 text-muted-foreground">
+              لا توجد طلبات
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = orders.map(order => `
+        <tr class="border-b hover:bg-gray-50">
+          <td class="p-3 font-mono text-sm">${order.id.substring(0, 8)}</td>
+          <td class="p-3 font-medium">${order.employee_name}</td>
+          <td class="p-3 text-center">${order.products.length}</td>
+          <td class="p-3 text-primary font-semibold">${formatCurrency(order.grand_total)}</td>
+          <td class="p-3">${getStatusBadge(order.status, order.is_draft)}</td>
+          <td class="p-3 text-sm text-gray-500">${formatDate(order.created_at)}</td>
+          <td class="p-3">
+            <button
+              onclick="viewOrder('${order.id}')"
+              class="text-primary hover:underline text-sm"
+            >
+              عرض
+            </button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    // Filters
+    document.getElementById('status-filter')?.addEventListener('change', loadOrders);
+    document.getElementById('employee-search')?.addEventListener('input', () => {
+      clearTimeout((window as any).searchTimeout);
+      (window as any).searchTimeout = setTimeout(loadOrders, 300);
+    });
+
+    // Products management
+    function renderProductsForm() {
+      const container = document.getElementById('products-container')!;
+
+      container.innerHTML = currentProducts.map((product, index) => `
+        <div class="flex gap-2 items-start border rounded-md p-3">
+          <div class="flex-1">
+            <input
+              type="text"
+              placeholder="اسم المنتج"
+              value="${product.name}"
+              class="w-full rounded-md border px-3 py-2 text-sm"
+              data-index="${index}"
+              data-field="name"
+            />
+          </div>
+          <div class="w-24">
+            <input
+              type="number"
+              placeholder="الكمية"
+              value="${product.quantity}"
+              min="1"
+              class="w-full rounded-md border px-3 py-2 text-sm"
+              data-index="${index}"
+              data-field="quantity"
+            />
+          </div>
+          <div class="w-32">
+            <input
+              type="number"
+              placeholder="السعر"
+              value="${product.price}"
+              min="0"
+              step="0.01"
+              class="w-full rounded-md border px-3 py-2 text-sm"
+              data-index="${index}"
+              data-field="price"
+            />
+          </div>
+          <div class="w-32 text-sm font-medium pt-2">
+            ${formatCurrency((product.quantity || 0) * (product.price || 0))}
+          </div>
+          <button
+            type="button"
+            onclick="removeProduct(${index})"
+            class="text-red-600 hover:text-red-700 pt-2"
+            ${currentProducts.length === 1 ? 'disabled' : ''}
+          >
+            ✕
+          </button>
+        </div>
+      `).join('');
+
+      // Add event listeners
+      container.querySelectorAll('input').forEach(input => {
+        input.addEventListener('input', (e) => {
+          const target = e.target as HTMLInputElement;
+          const index = parseInt(target.dataset.index!);
+          const field = target.dataset.field as keyof Product;
+
+          if (field === 'name') {
+            currentProducts[index][field] = target.value;
+          } else {
+            currentProducts[index][field] = parseFloat(target.value) || 0;
+          }
+
+          updateGrandTotal();
+          renderProductsForm();
+        });
+      });
+
+      updateGrandTotal();
+    }
+
+    function updateGrandTotal() {
+      const total = currentProducts.reduce((sum, p) => sum + ((p.quantity || 0) * (p.price || 0)), 0);
+      document.getElementById('grand-total-display')!.textContent = formatCurrency(total);
+    }
+
+    (window as any).removeProduct = function(index: number) {
+      if (currentProducts.length > 1) {
+        currentProducts.splice(index, 1);
+        renderProductsForm();
+      }
+    };
+
+    document.getElementById('add-product-btn')?.addEventListener('click', () => {
+      currentProducts.push({ name: '', quantity: 1, price: 0 });
+      renderProductsForm();
+    });
+
+    // Order dialog
+    const orderDialog = document.getElementById('order-dialog') as HTMLDialogElement;
+    const orderForm = document.getElementById('order-form') as HTMLFormElement;
+
+    document.getElementById('add-order-btn')?.addEventListener('click', () => {
+      currentProducts = [{ name: '', quantity: 1, price: 0 }];
+      renderProductsForm();
+      orderDialog.showModal();
+    });
+
+    document.getElementById('close-order-dialog')?.addEventListener('click', () => {
+      orderDialog.close();
+      orderForm.reset();
+    });
+
+    document.getElementById('cancel-order')?.addEventListener('click', () => {
+      orderDialog.close();
+      orderForm.reset();
+    });
+
+    async function submitOrder(isDraft: boolean) {
+      const employeeName = (document.getElementById('order-employee-name') as HTMLInputElement).value;
+      const notes = (document.getElementById('order-notes') as HTMLTextAreaElement).value;
+
+      // Validate
+      if (!employeeName.trim()) {
+        alert('يرجى إدخال اسم الموظف');
+        return;
+      }
+
+      const validProducts = currentProducts.filter(p => p.name.trim() && p.quantity > 0);
+      if (validProducts.length === 0) {
+        alert('يرجى إضافة منتج واحد على الأقل');
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/orders/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            branchId: 'BR001',
+            employeeName,
+            products: validProducts,
+            notes,
+            isDraft
+          })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          orderDialog.close();
+          orderForm.reset();
+          loadOrders();
+          alert(isDraft ? 'تم حفظ المسودة بنجاح' : 'تم إرسال الطلب بنجاح');
+        } else {
+          alert(data.error || 'حدث خطأ');
+        }
+      } catch (error) {
+        console.error('Error creating order:', error);
+        alert('حدث خطأ أثناء إنشاء الطلب');
+      }
+    }
+
+    orderForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      submitOrder(false);
+    });
+
+    document.getElementById('save-draft-btn')?.addEventListener('click', () => {
+      submitOrder(true);
+    });
+
+    // View order dialog
+    const viewDialog = document.getElementById('view-order-dialog') as HTMLDialogElement;
+
+    (window as any).viewOrder = function(orderId: string) {
+      const order = orders.find(o => o.id === orderId);
+      if (!order) return;
+
+      const detailsContent = document.getElementById('order-details-content')!;
+      detailsContent.innerHTML = `
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <p class="text-sm text-gray-600">رقم الطلب</p>
+            <p class="font-medium">${order.id.substring(0, 8)}</p>
+          </div>
+          <div>
+            <p class="text-sm text-gray-600">اسم الموظف</p>
+            <p class="font-medium">${order.employee_name}</p>
+          </div>
+          <div>
+            <p class="text-sm text-gray-600">الحالة</p>
+            <div class="mt-1">${getStatusBadge(order.status, order.is_draft)}</div>
+          </div>
+          <div>
+            <p class="text-sm text-gray-600">التاريخ</p>
+            <p class="font-medium">${formatDate(order.created_at)}</p>
+          </div>
+        </div>
+
+        <div class="border-t pt-4">
+          <p class="font-medium mb-3">المنتجات:</p>
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b">
+                <th class="text-right p-2">المنتج</th>
+                <th class="text-center p-2">الكمية</th>
+                <th class="text-right p-2">السعر</th>
+                <th class="text-right p-2">الإجمالي</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${order.products.map(p => `
+                <tr class="border-b">
+                  <td class="p-2">${p.name}</td>
+                  <td class="text-center p-2">${p.quantity}</td>
+                  <td class="p-2">${formatCurrency(p.price)}</td>
+                  <td class="p-2 font-medium">${formatCurrency(p.quantity * p.price)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+            <tfoot>
+              <tr class="font-bold">
+                <td colspan="3" class="p-2 text-right">الإجمالي الكلي:</td>
+                <td class="p-2 text-primary text-lg">${formatCurrency(order.grand_total)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        ${order.notes ? `
+          <div class="border-t pt-4">
+            <p class="text-sm text-gray-600">ملاحظات:</p>
+            <p class="mt-1">${order.notes}</p>
+          </div>
+        ` : ''}
+      `;
+
+      // Render action buttons based on status
+      const actionsDiv = document.getElementById('order-actions')!;
+      const validTransitions: { [key: string]: Array<{ status: string; label: string; class: string }> } = {
+        'draft': [{ status: 'pending', label: 'إرسال للموافقة', class: 'bg-primary text-white' }],
+        'pending': [
+          { status: 'approved', label: 'موافقة', class: 'bg-green-600 text-white' },
+          { status: 'rejected', label: 'رفض', class: 'bg-red-600 text-white' }
+        ],
+        'approved': [{ status: 'completed', label: 'تمييز كمكتمل', class: 'bg-blue-600 text-white' }]
+      };
+
+      const transitions = validTransitions[order.status] || [];
+      actionsDiv.innerHTML = transitions.map(t => `
+        <button
+          onclick="updateOrderStatus('${order.id}', '${t.status}')"
+          class="flex-1 px-4 py-2 rounded-md hover:opacity-90 ${t.class}"
+        >
+          ${t.label}
+        </button>
+      `).join('') + `
+        <button
+          id="close-view-dialog-btn"
+          class="flex-1 border px-4 py-2 rounded-md hover:bg-gray-50"
+        >
+          إغلاق
+        </button>
+      `;
+
+      document.getElementById('close-view-dialog-btn')?.addEventListener('click', () => {
+        viewDialog.close();
+      });
+
+      viewDialog.showModal();
+    };
+
+    document.getElementById('close-view-dialog')?.addEventListener('click', () => {
+      viewDialog.close();
+    });
+
+    (window as any).updateOrderStatus = async function(orderId: string, newStatus: string) {
+      try {
+        const response = await fetch('/api/orders/update-status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId, newStatus })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          viewDialog.close();
+          loadOrders();
+          alert('تم تحديث حالة الطلب بنجاح');
+        } else {
+          alert(data.error || 'حدث خطأ أثناء تحديث الحالة');
+        }
+      } catch (error) {
+        console.error('Error updating order status:', error);
+        alert('حدث خطأ أثناء تحديث الحالة');
+      }
+    };
+
+    // Initial load
+    loadOrders();
+  </script>
+</MainLayout>

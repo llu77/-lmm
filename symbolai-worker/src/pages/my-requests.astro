@@ -1,0 +1,335 @@
+---
+import MainLayout from '@/layouts/MainLayout.astro';
+
+// Check authentication
+const cookieHeader = Astro.request.headers.get('Cookie');
+if (!cookieHeader?.includes('session=')) {
+  return Astro.redirect('/auth/login');
+}
+---
+
+<MainLayout title="طلباتي - SymbolAI">
+  <div class="space-y-6">
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-3xl font-bold">طلباتي</h1>
+        <p class="text-muted-foreground mt-2">قدم طلباتك وتابع حالتها</p>
+      </div>
+      <button
+        id="new-request-btn"
+        class="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors font-medium"
+      >
+        + طلب جديد
+      </button>
+    </div>
+
+    <!-- My Requests Table -->
+    <div class="rounded-lg border bg-card p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-xl font-semibold">سجل طلباتي</h3>
+        <select id="status-filter" class="rounded-md border px-3 py-2 text-sm">
+          <option value="all">جميع الحالات</option>
+          <option value="pending">معلق</option>
+          <option value="approved">موافق عليه</option>
+          <option value="rejected">مرفوض</option>
+        </select>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full">
+          <thead>
+            <tr class="border-b">
+              <th class="text-right p-3 font-medium">نوع الطلب</th>
+              <th class="text-right p-3 font-medium">تاريخ التقديم</th>
+              <th class="text-right p-3 font-medium">الحالة</th>
+              <th class="text-right p-3 font-medium">تاريخ الرد</th>
+              <th class="text-right p-3 font-medium">الرد</th>
+            </tr>
+          </thead>
+          <tbody id="requests-table-body">
+            <tr>
+              <td colspan="5" class="text-center p-8 text-muted-foreground">
+                جاري التحميل...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- New Request Dialog -->
+  <div id="request-dialog" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+    <div class="bg-white rounded-lg p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+      <h2 class="text-2xl font-bold mb-4">طلب جديد</h2>
+
+      <form id="request-form" class="space-y-4">
+        <div class="grid gap-4 md:grid-cols-2">
+          <div>
+            <label class="block text-sm font-medium mb-2">اسم الموظف *</label>
+            <input type="text" id="employee-name" required class="w-full rounded-md border px-3 py-2" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-2">الرقم القومي</label>
+            <input type="text" id="national-id" class="w-full rounded-md border px-3 py-2" />
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium mb-2">نوع الطلب *</label>
+          <select id="request-type" required class="w-full rounded-md border px-3 py-2">
+            <option value="">اختر نوع الطلب</option>
+            <option value="سلفة">سلفة</option>
+            <option value="إجازة">إجازة</option>
+            <option value="صرف متأخرات">صرف متأخرات</option>
+            <option value="استئذان">استئذان</option>
+            <option value="مخالفة">مخالفة</option>
+            <option value="استقالة">استقالة</option>
+          </select>
+        </div>
+
+        <!-- Dynamic Fields Container -->
+        <div id="dynamic-fields" class="space-y-4"></div>
+
+        <div class="flex gap-3 justify-end pt-4">
+          <button
+            type="button"
+            id="cancel-btn"
+            class="px-4 py-2 border rounded-md hover:bg-gray-50"
+          >
+            إلغاء
+          </button>
+          <button
+            type="submit"
+            id="submit-btn"
+            class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
+            تقديم الطلب
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    interface Request {
+      id: string;
+      request_type: string;
+      request_date: string;
+      status: string;
+      response_date?: string;
+      admin_response?: string;
+    }
+
+    // Dynamic field definitions
+    const REQUEST_FIELDS: { [key: string]: any[] } = {
+      'سلفة': [
+        { name: 'advanceAmount', label: 'المبلغ المطلوب (ج.م)', type: 'number', required: true },
+        { name: 'reason', label: 'السبب', type: 'textarea', required: false }
+      ],
+      'إجازة': [
+        { name: 'vacationStart', label: 'من تاريخ', type: 'date', required: true },
+        { name: 'vacationEnd', label: 'إلى تاريخ', type: 'date', required: true },
+        { name: 'reason', label: 'السبب', type: 'text', required: false }
+      ],
+      'صرف متأخرات': [
+        { name: 'duesAmount', label: 'المبلغ (ج.م)', type: 'number', required: true },
+        { name: 'reason', label: 'التفاصيل', type: 'textarea', required: true }
+      ],
+      'استئذان': [
+        { name: 'permissionDate', label: 'التاريخ', type: 'date', required: true },
+        { name: 'permissionTime', label: 'الوقت', type: 'time', required: true },
+        { name: 'reason', label: 'السبب', type: 'text', required: true }
+      ],
+      'مخالفة': [
+        { name: 'violationDate', label: 'تاريخ المخالفة', type: 'date', required: true },
+        { name: 'violationDescription', label: 'وصف المخالفة', type: 'textarea', required: true }
+      ],
+      'استقالة': [
+        { name: 'resignationDate', label: 'تاريخ الاستقالة', type: 'date', required: true },
+        { name: 'resignationReason', label: 'سبب الاستقالة', type: 'textarea', required: true }
+      ]
+    };
+
+    function formatDate(dateStr: string): string {
+      if (!dateStr) return '-';
+      return new Date(dateStr).toLocaleDateString('ar-EG');
+    }
+
+    function getStatusBadge(status: string): string {
+      const badges: { [key: string]: string } = {
+        'pending': '<span class="px-3 py-1 rounded text-sm bg-yellow-100 text-yellow-800">⏳ معلق</span>',
+        'approved': '<span class="px-3 py-1 rounded text-sm bg-green-100 text-green-800">✓ موافق عليه</span>',
+        'rejected': '<span class="px-3 py-1 rounded text-sm bg-red-100 text-red-800">✗ مرفوض</span>'
+      };
+      return badges[status] || status;
+    }
+
+    async function loadRequests() {
+      const statusFilter = (document.getElementById('status-filter') as HTMLSelectElement).value;
+
+      try {
+        const response = await fetch(`/api/requests/my?status=${statusFilter}`);
+        const data = await response.json();
+
+        if (data.success) {
+          renderRequests(data.requests);
+        } else {
+          alert(data.error || 'حدث خطأ');
+        }
+      } catch (error) {
+        alert('حدث خطأ في الاتصال');
+      }
+    }
+
+    function renderRequests(requests: Request[]) {
+      const tbody = document.getElementById('requests-table-body')!;
+
+      if (requests.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="5" class="text-center p-8 text-muted-foreground">
+              لم تقدم أي طلبات بعد
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = requests.map(req => `
+        <tr class="border-b hover:bg-gray-50">
+          <td class="p-3 font-medium">${req.request_type}</td>
+          <td class="p-3">${formatDate(req.request_date)}</td>
+          <td class="p-3">${getStatusBadge(req.status)}</td>
+          <td class="p-3">${formatDate(req.response_date)}</td>
+          <td class="p-3">
+            ${req.admin_response
+              ? `<span class="text-sm">${req.admin_response}</span>`
+              : '<span class="text-muted-foreground text-sm">-</span>'
+            }
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    // Dialog controls
+    const dialog = document.getElementById('request-dialog')!;
+    const form = document.getElementById('request-form') as HTMLFormElement;
+    const newRequestBtn = document.getElementById('new-request-btn')!;
+    const cancelBtn = document.getElementById('cancel-btn')!;
+    const requestTypeSelect = document.getElementById('request-type') as HTMLSelectElement;
+    const dynamicFieldsContainer = document.getElementById('dynamic-fields')!;
+
+    newRequestBtn.addEventListener('click', () => {
+      form.reset();
+      dynamicFieldsContainer.innerHTML = '';
+      dialog.classList.remove('hidden');
+    });
+
+    cancelBtn.addEventListener('click', () => {
+      dialog.classList.add('hidden');
+    });
+
+    // Render dynamic fields based on request type
+    requestTypeSelect.addEventListener('change', () => {
+      const type = requestTypeSelect.value;
+      dynamicFieldsContainer.innerHTML = '';
+
+      if (!type || !REQUEST_FIELDS[type]) return;
+
+      const fields = REQUEST_FIELDS[type];
+      fields.forEach(field => {
+        const div = document.createElement('div');
+
+        if (field.type === 'textarea') {
+          div.innerHTML = `
+            <label class="block text-sm font-medium mb-2">
+              ${field.label} ${field.required ? '*' : ''}
+            </label>
+            <textarea
+              id="${field.name}"
+              ${field.required ? 'required' : ''}
+              rows="3"
+              class="w-full rounded-md border px-3 py-2"
+            ></textarea>
+          `;
+        } else {
+          div.innerHTML = `
+            <label class="block text-sm font-medium mb-2">
+              ${field.label} ${field.required ? '*' : ''}
+            </label>
+            <input
+              type="${field.type}"
+              id="${field.name}"
+              ${field.required ? 'required' : ''}
+              ${field.type === 'number' ? 'step="0.01" min="0"' : ''}
+              class="w-full rounded-md border px-3 py-2"
+            />
+          `;
+        }
+
+        dynamicFieldsContainer.appendChild(div);
+      });
+    });
+
+    // Submit form
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const submitBtn = document.getElementById('submit-btn') as HTMLButtonElement;
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'جاري التقديم...';
+
+      const type = requestTypeSelect.value;
+      const employeeName = (document.getElementById('employee-name') as HTMLInputElement).value;
+      const nationalId = (document.getElementById('national-id') as HTMLInputElement).value;
+
+      // Collect dynamic field values
+      const requestData: any = {
+        branchId: 'BR001',
+        employeeName,
+        nationalId,
+        requestType: type
+      };
+
+      if (REQUEST_FIELDS[type]) {
+        REQUEST_FIELDS[type].forEach(field => {
+          const element = document.getElementById(field.name) as HTMLInputElement;
+          if (element && element.value) {
+            requestData[field.name] = element.value;
+          }
+        });
+      }
+
+      try {
+        const response = await fetch('/api/requests/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestData)
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          alert('تم تقديم الطلب بنجاح! سيتم مراجعته من قبل الإدارة.');
+          dialog.classList.add('hidden');
+          form.reset();
+          loadRequests();
+        } else {
+          alert(data.error || 'حدث خطأ');
+        }
+      } catch (error) {
+        alert('حدث خطأ في الاتصال');
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'تقديم الطلب';
+      }
+    });
+
+    // Status filter
+    document.getElementById('status-filter')?.addEventListener('change', loadRequests);
+
+    // Initial load
+    loadRequests();
+  </script>
+</MainLayout>

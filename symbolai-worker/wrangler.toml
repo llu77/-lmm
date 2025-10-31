@@ -1,0 +1,75 @@
+name = "symbolai-worker"
+compatibility_date = "2025-01-15"
+main = "./dist/_worker.js"
+compatibility_flags = ["nodejs_compat"]
+
+# D1 Database Binding
+[[d1_databases]]
+binding = "DB"
+database_name = "symbolai-financial-db"
+database_id = "3897ede2-ffc0-4fe8-8217-f9607c89bef2"
+
+# KV Namespace for Sessions
+[[kv_namespaces]]
+binding = "SESSIONS"
+id = "your_kv_namespace_id_here"
+
+# R2 Bucket for Payroll PDFs
+[[r2_buckets]]
+binding = "PAYROLL_PDFS"
+bucket_name = "symbolai-payrolls"
+
+# Workflows Binding
+[[workflows]]
+binding = "WORKFLOWS"
+name = "symbolai-workflows"
+class_name = "FinancialWorkflow"
+
+# Cloudflare AI Binding
+[ai]
+binding = "AI"
+
+# Environment Variables / Secrets
+[vars]
+ENVIRONMENT = "production"
+AI_GATEWAY_ACCOUNT_ID = "85b01d19439ca53d3cfa740d2621a2bd"
+AI_GATEWAY_NAME = "symbolai-gateway"
+
+# Email Configuration
+EMAIL_FROM = "info@symbolai.net"
+EMAIL_FROM_NAME = "SymbolAI"
+ADMIN_EMAIL = "admin@symbolai.net"
+
+# Secrets (set using: wrangler secret put SECRET_NAME)
+# ANTHROPIC_API_KEY
+# RESEND_API_KEY (get from: https://resend.com/api-keys)
+# RESEND_WEBHOOK_SECRET
+# ZAPIER_WEBHOOK_URL
+# SESSION_SECRET
+
+# Routes configuration
+routes = [
+  { pattern = "symbolai.net/*", zone_name = "symbolai.net" },
+  { pattern = "*.symbolai.net/*", zone_name = "symbolai.net" }
+]
+
+# Email Queue Configuration
+[[queues.producers]]
+queue = "email-queue"
+binding = "EMAIL_QUEUE"
+
+[[queues.consumers]]
+queue = "email-queue"
+max_batch_size = 10
+max_batch_timeout = 30
+max_retries = 3
+dead_letter_queue = "email-dlq"
+
+# Scheduled Tasks (Cron Triggers)
+[triggers]
+crons = [
+  "0 2 * * *",      # Daily backup at 2 AM
+  "0 9 25 * *",     # Payroll reminder on 25th at 9 AM
+  "0 10 * * 6",     # Bonus reminder every Saturday at 10 AM
+  "0 3 1 * *"       # Cleanup on 1st of month at 3 AM
+]
