@@ -1,0 +1,13 @@
+{
+  "name": "lmm-hr-system",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "cd symbolai-worker && npm install && npm run build && cd .. && cp -r symbolai-worker/dist .",
+    "dev": "cd symbolai-worker && npm run dev",
+    "preview": "cd symbolai-worker && npm run preview"
+  },
+  "workspaces": [
+    "symbolai-worker"
+  ]
+}
