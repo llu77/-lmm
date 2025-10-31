@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.20.0",
-    "@astrojs/cloudflare": "^11.3.2",
+    "@astrojs/cloudflare": "^12.6.10",
     "@astrojs/react": "^3.6.0",
     "@radix-ui/react-accordion": "^1.2.0",
     "@radix-ui/react-alert-dialog": "^1.1.0",
@@ -27,7 +27,7 @@
     "@radix-ui/react-slot": "^1.1.0",
     "@radix-ui/react-tabs": "^1.1.0",
     "@radix-ui/react-toast": "^1.2.0",
-    "astro": "^5.10.1",
+    "astro": "^5.15.3",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
     "date-fns": "^3.0.0",
