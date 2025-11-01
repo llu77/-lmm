@@ -19,3 +19,9 @@ wrangler.toml.backup
 symbolai-worker/dist/
 symbolai-worker/.astro/
 
+# ============================================
+# Dependencies
+# ============================================
+node_modules/
+symbolai-worker/node_modules/
+
