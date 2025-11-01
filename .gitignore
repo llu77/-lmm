@@ -1,0 +1,21 @@
+
+# ============================================
+# Cleanup - Backup directories
+# ============================================
+src-convex-backup/
+*.backup
+
+# ============================================
+# Cloudflare Worker
+# ============================================
+.env
+.dev.vars
+.wrangler/
+wrangler.toml.backup
+
+# ============================================
+# Build outputs
+# ============================================
+symbolai-worker/dist/
+symbolai-worker/.astro/
+
