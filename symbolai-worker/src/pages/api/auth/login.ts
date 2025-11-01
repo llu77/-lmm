@@ -1,9 +1,21 @@
 import type { APIRoute } from 'astro';
 import { createSession, createSessionCookie } from '@/lib/session';
 import { loadUserPermissions } from '@/lib/permissions';
+import { rateLimitMiddleware, RATE_LIMIT_PRESETS } from '@/lib/rate-limiter';
 
 export const POST: APIRoute = async ({ request, locals }) => {
   try {
+    // تطبيق Rate Limiting للحماية من Brute Force
+    const rateLimitResponse = await rateLimitMiddleware(
+      request,
+      locals.runtime.env.KV || locals.runtime.env.SESSIONS,
+      RATE_LIMIT_PRESETS.auth
+    );
+
+    if (rateLimitResponse) {
+      return rateLimitResponse;
+    }
+
     const { username, password } = await request.json();
 
     if (!username || !password) {
