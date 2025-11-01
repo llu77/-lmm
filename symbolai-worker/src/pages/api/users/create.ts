@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { requireAdminRole, logAudit, getClientIP } from '@/lib/permissions';
 import { generateId } from '@/lib/db';
+import { hashPassword, validatePasswordStrength } from '@/lib/password';
 
 export const POST: APIRoute = async ({ request, locals }) => {
   // Only admin can create users
@@ -29,6 +30,22 @@ export const POST: APIRoute = async ({ request, locals }) => {
     if (!username || !password || !role_id) {
       return new Response(
         JSON.stringify({ error: 'اسم المستخدم وكلمة المرور والدور مطلوبة' }),
+        {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
+    }
+
+    // Validate password strength
+    const passwordValidation = validatePasswordStrength(password);
+    if (!passwordValidation.valid) {
+      return new Response(
+        JSON.stringify({
+          error: 'كلمة المرور ضعيفة',
+          details: passwordValidation.errors,
+          score: passwordValidation.score
+        }),
         {
           status: 400,
           headers: { 'Content-Type': 'application/json' }
@@ -83,13 +100,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
       }
     }
 
-    // Hash password (simple for now - in production use bcrypt)
-    // For now, we'll use a simple SHA-256 hash
-    const encoder = new TextEncoder();
-    const data = encoder.encode(password);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const hashedPassword = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    // Hash password using secure PBKDF2 with 100k iterations
+    const hashedPassword = await hashPassword(password);
 
     // Create user
     const userId = generateId();

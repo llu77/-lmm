@@ -1,7 +1,10 @@
 /**
  * SymbolAI Email Templates
  * 14 Professional Arabic HTML Email Templates
+ * All variables are sanitized to prevent XSS attacks
  */
+
+import { sanitizeEmailTemplate } from './sanitize';
 
 export interface EmailTemplate {
   id: string;
