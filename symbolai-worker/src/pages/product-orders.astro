@@ -1,14 +1,28 @@
 ---
 import MainLayout from '@/layouts/MainLayout.astro';
+import { authenticateAstroPage, requirePermission, requireBranch } from '@/lib/astro-auth';
 
-// Check authentication
-const cookieHeader = Astro.request.headers.get('Cookie');
-if (!cookieHeader?.includes('session=')) {
-  return Astro.redirect('/auth/login');
-}
+// Authenticate and check permissions
+const authResult = await authenticateAstroPage(Astro);
+if (authResult instanceof Response) return authResult;
+
+// Check permission
+const permCheck = requirePermission(authResult, 'canManageOrders');
+if (permCheck) return permCheck;
+
+// Check branch
+const branchCheck = requireBranch(authResult);
+if (branchCheck) return branchCheck;
+
+const permissions = authResult.permissions;
 ---
 
 <MainLayout title="طلبات المنتجات - SymbolAI">
+  <!-- Pass authentication data to client-side scripts -->
+  <script is:inline define:vars={{ branchId: permissions.branchId }}>
+    window.userBranchId = branchId;
+  </script>
+
   <div class="space-y-6">
     <div>
       <h1 class="text-3xl font-bold">طلبات المنتجات</h1>
@@ -241,7 +255,7 @@ if (!cookieHeader?.includes('session=')) {
       const employeeSearch = (document.getElementById('employee-search') as HTMLInputElement).value;
 
       try {
-        let url = '/api/orders/list?branchId=BR001';
+        let url = `/api/orders/list?branchId=${window.userBranchId}`;
         if (status) url += `&status=${status}`;
         if (employeeSearch) url += `&employeeName=${encodeURIComponent(employeeSearch)}`;
 
@@ -440,7 +454,7 @@ if (!cookieHeader?.includes('session=')) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            branchId: 'BR001',
+            branchId: window.userBranchId,
             employeeName,
             products: validProducts,
             notes,

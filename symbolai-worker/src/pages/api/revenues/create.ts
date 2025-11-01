@@ -49,11 +49,15 @@ export const POST: APIRoute = async ({ request, locals }) => {
       return branchError;
     }
 
+    // Calculate total and match status
+    const calculatedTotal = (cash || 0) + (network || 0) + (budget || 0);
+    const isMatched = Math.abs(calculatedTotal - total) < 0.01;
+
     // Create revenue record
     const revenueId = generateId();
     await locals.runtime.env.DB.prepare(`
-      INSERT INTO revenues (id, branch_id, date, cash, network, budget, total, employees)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO revenues (id, branch_id, date, cash, network, budget, total, calculated_total, is_matched, employees)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       revenueId,
       branchId,
@@ -62,12 +66,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
       network || 0,
       budget || 0,
       total,
+      calculatedTotal,
+      isMatched ? 1 : 0,
       employees ? JSON.stringify(employees) : null
     ).run();
-
-    // Check if amounts match
-    const calculatedTotal = (cash || 0) + (network || 0) + (budget || 0);
-    const isMatched = Math.abs(calculatedTotal - total) < 0.01;
 
     // Create notification if mismatched
     if (!isMatched) {

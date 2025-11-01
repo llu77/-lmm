@@ -1,14 +1,26 @@
 ---
 import MainLayout from '@/layouts/MainLayout.astro';
+import { authenticateAstroPage, requirePermission, requireBranch } from '@/lib/astro-auth';
 
-// Check authentication
-const cookieHeader = Astro.request.headers.get('Cookie');
-if (!cookieHeader?.includes('session=')) {
-  return Astro.redirect('/auth/login');
-}
+// Authenticate and check permissions
+const authResult = await authenticateAstroPage(Astro);
+if (authResult instanceof Response) return authResult;
+
+const permCheck = requirePermission(authResult, 'canAddExpense');
+if (permCheck) return permCheck;
+
+const branchCheck = requireBranch(authResult);
+if (branchCheck) return branchCheck;
+
+const permissions = authResult.permissions;
 ---
 
 <MainLayout title="المصروفات - SymbolAI">
+  <!-- Pass authentication data to client-side scripts -->
+  <script is:inline define:vars={{ branchId: permissions.branchId }}>
+    window.userBranchId = branchId;
+  </script>
+
   <div class="space-y-6">
     <div class="flex items-center justify-between">
       <div>
@@ -409,7 +421,7 @@ if (!cookieHeader?.includes('session=')) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            branchId: 'BR001',
+            branchId: window.userBranchId,
             date,
             title,
             amount,

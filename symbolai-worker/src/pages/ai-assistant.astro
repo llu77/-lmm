@@ -1,11 +1,12 @@
 ---
 import MainLayout from '@/layouts/MainLayout.astro';
+import { authenticateAstroPage } from '@/lib/astro-auth';
 
-// Check authentication
-const cookieHeader = Astro.request.headers.get('Cookie');
-if (!cookieHeader?.includes('session=')) {
-  return Astro.redirect('/auth/login');
-}
+// Authenticate
+const authResult = await authenticateAstroPage(Astro);
+if (authResult instanceof Response) return authResult;
+
+const permissions = authResult.permissions;
 ---
 
 <MainLayout title="المساعد الذكي - SymbolAI">
