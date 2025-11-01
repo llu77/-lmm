@@ -6,13 +6,14 @@ import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
 import { SignInButton } from "@/components/ui/signin.tsx";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.tsx";
 import { Button } from "@/components/ui/button.tsx";
+import { Badge } from "@/components/ui/badge.tsx";
 import { Input } from "@/components/ui/input.tsx";
 import { Label } from "@/components/ui/label.tsx";
 import { Textarea } from "@/components/ui/textarea.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
-import { 
-  TrendingUpIcon, 
-  DollarSignIcon, 
+import {
+  TrendingUpIcon,
+  DollarSignIcon,
   CreditCardIcon,
   PiggyBankIcon,
   CalendarIcon,
@@ -26,6 +27,8 @@ import {
   AlertTriangleIcon,
   FileDownIcon,
   PrinterIcon,
+  Sparkles,
+  Activity,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useBranch } from "@/hooks/use-branch.ts";
@@ -77,26 +80,36 @@ export default function Revenues() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-blue-50 to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
       <Navbar />
       <main className="container mx-auto px-4 py-8">
         <Authenticated>
           <RevenuesContent branchId={branchId} branchName={branchName || ""} />
         </Authenticated>
         <Unauthenticated>
-          <Card className="mx-auto mt-8 max-w-md">
+          <Card className="mx-auto mt-8 max-w-md shadow-2xl border-none bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl">
             <CardHeader>
-              <CardTitle>يرجى تسجيل الدخول</CardTitle>
+              <CardTitle className="text-2xl font-bold text-center bg-gradient-to-br from-primary-600 to-secondary-600 bg-clip-text text-transparent">
+                يرجى تسجيل الدخول
+              </CardTitle>
             </CardHeader>
-            <CardContent>
-              <SignInButton />
+            <CardContent className="flex justify-center">
+              <div className="relative group">
+                <div className="absolute -inset-1 bg-gradient-to-r from-primary-500 via-secondary-500 to-info-500 rounded-xl blur opacity-30 group-hover:opacity-60 transition duration-300"></div>
+                <SignInButton />
+              </div>
             </CardContent>
           </Card>
         </Unauthenticated>
         <AuthLoading>
-          <div className="space-y-4">
-            <Skeleton className="h-32 w-full" />
-            <Skeleton className="h-64 w-full" />
+          <div className="space-y-6 animate-in fade-in duration-500">
+            <Skeleton className="h-32 w-full rounded-xl" />
+            <div className="grid gap-4 md:grid-cols-5">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Skeleton key={i} className="h-28 rounded-xl" />
+              ))}
+            </div>
+            <Skeleton className="h-96 w-full rounded-xl" />
           </div>
         </AuthLoading>
       </main>
@@ -303,62 +316,77 @@ function RevenuesContent({ branchId, branchName }: { branchId: string; branchNam
       <NotificationBanner branchId={branchId} />
 
       {/* Statistics Cards */}
-      <div className="grid gap-4 md:grid-cols-5">
-        <Card>
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-5">
+        <Card className="group relative overflow-hidden border-none shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
+          <div className="absolute inset-0 bg-gradient-to-br from-success-500 to-emerald-600 opacity-0 group-hover:opacity-5 transition-opacity duration-300"></div>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">إجمالي الإيرادات</CardTitle>
-            <TrendingUpIcon className="size-4 text-primary" />
+            <CardTitle className="text-sm font-semibold text-gray-700 dark:text-gray-300">إجمالي الإيرادات</CardTitle>
+            <div className="rounded-xl bg-success-50 dark:bg-success-900/20 p-2.5 transition-transform group-hover:scale-110 duration-300">
+              <TrendingUpIcon className="size-5 text-success-600 dark:text-success-400" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-2xl font-extrabold text-gray-900 dark:text-white">
               {stats ? `${stats.totalRevenue.toLocaleString()} ر.س` : <Skeleton className="h-8 w-24" />}
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="group relative overflow-hidden border-none shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
+          <div className="absolute inset-0 bg-gradient-to-br from-success-500 to-emerald-600 opacity-0 group-hover:opacity-5 transition-opacity duration-300"></div>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">إجمالي الكاش</CardTitle>
-            <DollarSignIcon className="size-4 text-green-600" />
+            <CardTitle className="text-sm font-semibold text-gray-700 dark:text-gray-300">إجمالي الكاش</CardTitle>
+            <div className="rounded-xl bg-success-50 dark:bg-success-900/20 p-2.5 transition-transform group-hover:scale-110 duration-300">
+              <DollarSignIcon className="size-5 text-success-600 dark:text-success-400" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-2xl font-extrabold text-gray-900 dark:text-white">
               {stats ? `${stats.totalCash.toLocaleString()} ر.س` : <Skeleton className="h-8 w-24" />}
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="group relative overflow-hidden border-none shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
+          <div className="absolute inset-0 bg-gradient-to-br from-info-500 to-blue-600 opacity-0 group-hover:opacity-5 transition-opacity duration-300"></div>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">إجمالي الشبكة</CardTitle>
-            <CreditCardIcon className="size-4 text-blue-600" />
+            <CardTitle className="text-sm font-semibold text-gray-700 dark:text-gray-300">إجمالي الشبكة</CardTitle>
+            <div className="rounded-xl bg-info-50 dark:bg-info-900/20 p-2.5 transition-transform group-hover:scale-110 duration-300">
+              <CreditCardIcon className="size-5 text-info-600 dark:text-info-400" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-2xl font-extrabold text-gray-900 dark:text-white">
               {stats ? `${stats.totalNetwork.toLocaleString()} ر.س` : <Skeleton className="h-8 w-24" />}
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="group relative overflow-hidden border-none shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
+          <div className="absolute inset-0 bg-gradient-to-br from-warning-500 to-amber-600 opacity-0 group-hover:opacity-5 transition-opacity duration-300"></div>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">إجمالي الموازنة</CardTitle>
-            <PiggyBankIcon className="size-4 text-orange-600" />
+            <CardTitle className="text-sm font-semibold text-gray-700 dark:text-gray-300">إجمالي الموازنة</CardTitle>
+            <div className="rounded-xl bg-warning-50 dark:bg-warning-900/20 p-2.5 transition-transform group-hover:scale-110 duration-300">
+              <PiggyBankIcon className="size-5 text-warning-600 dark:text-warning-400" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-2xl font-extrabold text-gray-900 dark:text-white">
               {stats ? `${stats.totalBudget.toLocaleString()} ر.س` : <Skeleton className="h-8 w-24" />}
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="group relative overflow-hidden border-none shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
+          <div className="absolute inset-0 bg-gradient-to-br from-secondary-500 to-pink-600 opacity-0 group-hover:opacity-5 transition-opacity duration-300"></div>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">إيرادات الشهر الحالي</CardTitle>
-            <CalendarIcon className="size-4 text-purple-600" />
+            <CardTitle className="text-sm font-semibold text-gray-700 dark:text-gray-300">إيرادات الشهر الحالي</CardTitle>
+            <div className="rounded-xl bg-secondary-50 dark:bg-secondary-900/20 p-2.5 transition-transform group-hover:scale-110 duration-300">
+              <CalendarIcon className="size-5 text-secondary-600 dark:text-secondary-400" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-2xl font-extrabold text-gray-900 dark:text-white">
               {stats ? `${stats.currentMonthTotal.toLocaleString()} ر.س` : <Skeleton className="h-8 w-24" />}
             </div>
           </CardContent>
@@ -367,19 +395,27 @@ function RevenuesContent({ branchId, branchName }: { branchId: string; branchNam
 
       {/* Add Revenue Form */}
       {!showForm && (
-        <Button onClick={() => setShowForm(true)} className="w-full">
-          <PlusIcon className="ml-2 size-4" />
-          إضافة إيراد جديد
-        </Button>
+        <div className="relative group">
+          <div className="absolute -inset-1 bg-gradient-to-r from-success-500 via-primary-500 to-info-500 rounded-xl blur opacity-20 group-hover:opacity-40 transition duration-300"></div>
+          <Button onClick={() => setShowForm(true)} className="relative w-full bg-success-500 hover:bg-success-600 text-white shadow-lg font-bold text-base py-6">
+            <PlusIcon className="ml-2 size-5" />
+            إضافة إيراد جديد
+          </Button>
+        </div>
       )}
 
       {showForm && (
-        <Card>
-          <CardHeader>
+        <Card className="border-none shadow-xl bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
+          <CardHeader className="bg-gradient-to-r from-success-50 to-primary-50 dark:from-success-900/20 dark:to-primary-900/20 border-b">
             <div className="flex items-center justify-between">
-              <CardTitle>إضافة إيراد جديد</CardTitle>
-              <Button variant="ghost" size="icon" onClick={() => setShowForm(false)}>
-                <XIcon className="size-4" />
+              <div className="flex items-center gap-3">
+                <div className="rounded-xl bg-success-500 p-2">
+                  <PlusIcon className="size-5 text-white" />
+                </div>
+                <CardTitle className="text-xl font-extrabold">إضافة إيراد جديد</CardTitle>
+              </div>
+              <Button variant="ghost" size="icon" onClick={() => setShowForm(false)} className="hover:bg-danger-100 dark:hover:bg-danger-900/30 hover:text-danger-600">
+                <XIcon className="size-5" />
               </Button>
             </div>
           </CardHeader>
