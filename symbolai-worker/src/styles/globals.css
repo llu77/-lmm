@@ -4,48 +4,92 @@
 
 @layer base {
   :root {
+    /* NativeBase v3.4 Inspired Color Variables */
     --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --foreground: 0 0% 9.02%;
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 0 0% 9.02%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
+    --popover-foreground: 0 0% 9.02%;
+
+    /* Primary: Cyan-500 (#06b6d4) */
+    --primary: 187.42 84.62% 43.14%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Secondary: Pink-500 (#ec4899) */
+    --secondary: 330.23 80.95% 59.22%;
+    --secondary-foreground: 0 0% 100%;
+
+    /* Success: Green-500 (#22c55e) */
+    --success: 142.06 70.56% 45.29%;
+    --success-foreground: 0 0% 100%;
+
+    /* Warning: Orange-500 (#f97316) */
+    --warning: 24.55 94.97% 53.14%;
+    --warning-foreground: 0 0% 100%;
+
+    /* Danger: Rose-500 (#f43f5e) */
+    --danger: 350.65 89.23% 60.2%;
+    --danger-foreground: 0 0% 100%;
+
+    /* Error: Red-500 (#ef4444) */
+    --destructive: 0 84.17% 60.2%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Muted: TrueGray */
+    --muted: 0 0% 96.08%;
+    --muted-foreground: 0 0% 45.1%;
+
+    /* Accent: Violet-500 (#8b5cf6) */
+    --accent: 258.32 89.47% 66.27%;
+    --accent-foreground: 0 0% 100%;
+
+    /* Info: LightBlue-500 (#0ea5e9) */
+    --info: 199.13 88.69% 48.43%;
+    --info-foreground: 0 0% 100%;
+
+    /* Border & Input */
+    --border: 0 0% 89.8%;
+    --input: 0 0% 89.8%;
+    --ring: 187.42 84.62% 43.14%;
+
+    /* Radius */
     --radius: 0.5rem;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    /* Dark mode colors using NativeBase dark palette */
+    --background: 240 5.88% 10%;
+    --foreground: 0 0% 98%;
+    --card: 240 5.26% 17.65%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 5.88% 10%;
+    --popover-foreground: 0 0% 98%;
+
+    /* Darker variants of primary colors */
+    --primary: 187.42 84.62% 43.14%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 330.23 80.95% 59.22%;
+    --secondary-foreground: 0 0% 100%;
+    --success: 142.06 70.56% 45.29%;
+    --success-foreground: 0 0% 100%;
+    --warning: 24.55 94.97% 53.14%;
+    --warning-foreground: 0 0% 100%;
+    --danger: 350.65 89.23% 60.2%;
+    --danger-foreground: 0 0% 100%;
     --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
+    --destructive-foreground: 0 0% 100%;
+
+    --muted: 240 3.7% 15.88%;
+    --muted-foreground: 240 5% 64.9%;
+    --accent: 258.32 89.47% 66.27%;
+    --accent-foreground: 0 0% 100%;
+    --info: 199.13 88.69% 48.43%;
+    --info-foreground: 0 0% 100%;
+
+    --border: 240 3.7% 15.88%;
+    --input: 240 3.7% 15.88%;
+    --ring: 187.42 84.62% 43.14%;
   }
 }
 
@@ -53,9 +97,84 @@
   * {
     @apply border-border;
   }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
     direction: rtl;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+
+  /* Arabic font optimization */
+  body[lang="ar"], body[dir="rtl"] {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans Arabic", "Helvetica Neue", Arial, sans-serif;
+  }
+}
+
+@layer components {
+  /* Utility classes for RTL support */
+  .text-start-rtl {
+    text-align: right;
+  }
+
+  [dir="ltr"] .text-start-rtl {
+    text-align: left;
+  }
+
+  /* Enhanced focus states */
+  .focus-ring {
+    @apply focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2;
+  }
+
+  /* Smooth transitions */
+  .transition-smooth {
+    @apply transition-all duration-200 ease-in-out;
+  }
+}
+
+@layer utilities {
+  /* Custom scrollbar for modern browsers */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: theme('colors.gray.400') theme('colors.gray.100');
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    @apply bg-gray-100;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    @apply bg-gray-400 rounded-full;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-500;
+  }
+
+  /* Dark mode scrollbar */
+  .dark .scrollbar-thin {
+    scrollbar-color: theme('colors.gray.600') theme('colors.gray.800');
+  }
+
+  .dark .scrollbar-thin::-webkit-scrollbar-track {
+    @apply bg-gray-800;
+  }
+
+  .dark .scrollbar-thin::-webkit-scrollbar-thumb {
+    @apply bg-gray-600;
+  }
+
+  .dark .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-500;
   }
 }
