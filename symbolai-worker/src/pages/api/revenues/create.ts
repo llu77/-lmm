@@ -2,6 +2,8 @@ import type { APIRoute } from 'astro';
 import { requireAuthWithPermissions, requirePermission, validateBranchAccess, logAudit, getClientIP } from '@/lib/permissions';
 import { generateId } from '@/lib/db';
 import { triggerRevenueMismatch } from '@/lib/email-triggers';
+import { rateLimitMiddleware, RATE_LIMIT_PRESETS } from '@/lib/rate-limiter';
+import { validateInput, createRevenueSchema } from '@/lib/validation-schemas';
 
 export const POST: APIRoute = async ({ request, locals }) => {
   // Check authentication with permissions
@@ -21,21 +23,25 @@ export const POST: APIRoute = async ({ request, locals }) => {
     return permError;
   }
 
-  try {
-    const {
-      branchId,
-      date,
-      cash,
-      network,
-      budget,
-      total,
-      employees
-    } = await request.json();
+  // Rate limiting
+  const rateLimitResponse = await rateLimitMiddleware(
+    request,
+    locals.runtime.env.KV || locals.runtime.env.SESSIONS,
+    RATE_LIMIT_PRESETS.financial_write
+  );
+  if (rateLimitResponse) return rateLimitResponse;
 
-    // Validation
-    if (!branchId || !date || total === undefined) {
+  try {
+    const body = await request.json();
+
+    // Validate input
+    const validationResult = validateInput(createRevenueSchema, body);
+    if (!validationResult.success) {
       return new Response(
-        JSON.stringify({ error: 'البيانات المطلوبة ناقصة' }),
+        JSON.stringify({
+          error: 'خطأ في البيانات المدخلة',
+          details: validationResult.error
+        }),
         {
           status: 400,
           headers: { 'Content-Type': 'application/json' }
@@ -43,15 +49,17 @@ export const POST: APIRoute = async ({ request, locals }) => {
       );
     }
 
+    const validatedData = validationResult.data;
+
     // Validate branch access
-    const branchError = validateBranchAccess(authResult, branchId);
+    const branchError = validateBranchAccess(authResult, validatedData.branchId);
     if (branchError) {
       return branchError;
     }
 
     // Calculate total and match status
-    const calculatedTotal = (cash || 0) + (network || 0) + (budget || 0);
-    const isMatched = Math.abs(calculatedTotal - total) < 0.01;
+    const calculatedTotal = (validatedData.cash || 0) + (validatedData.network || 0) + (validatedData.budget || 0);
+    const isMatched = Math.abs(calculatedTotal - validatedData.total) < 0.01;
 
     // Create revenue record
     const revenueId = generateId();
@@ -60,15 +68,15 @@ export const POST: APIRoute = async ({ request, locals }) => {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       revenueId,
-      branchId,
-      date,
-      cash || 0,
-      network || 0,
-      budget || 0,
-      total,
+      validatedData.branchId,
+      validatedData.date,
+      validatedData.cash || 0,
+      validatedData.network || 0,
+      validatedData.budget || 0,
+      validatedData.total,
       calculatedTotal,
       isMatched ? 1 : 0,
-      employees ? JSON.stringify(employees) : null
+      validatedData.employees ? JSON.stringify(validatedData.employees) : null
     ).run();
 
     // Create notification if mismatched
@@ -79,11 +87,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(
         notifId,
-        branchId,
+        validatedData.branchId,
         'revenue_mismatch',
         'high',
         'تحذير: إيراد غير متطابق',
-        `الإيراد بتاريخ ${date} غير متطابق. المجموع المدخل: ${total} ج.م، المحسوب: ${calculatedTotal} ج.م`,
+        `الإيراد بتاريخ ${validatedData.date} غير متطابق. المجموع المدخل: ${validatedData.total} ج.م، المحسوب: ${calculatedTotal} ج.م`,
         1,
         revenueId
       ).run();
@@ -92,14 +100,14 @@ export const POST: APIRoute = async ({ request, locals }) => {
       try {
         await triggerRevenueMismatch(locals.runtime.env, {
           revenueId,
-          date,
-          enteredTotal: total,
+          date: validatedData.date,
+          enteredTotal: validatedData.total,
           calculatedTotal,
-          difference: total - calculatedTotal,
-          cash: cash || 0,
-          network: network || 0,
-          budget: budget || 0,
-          branchId,
+          difference: validatedData.total - calculatedTotal,
+          cash: validatedData.cash || 0,
+          network: validatedData.network || 0,
+          budget: validatedData.budget || 0,
+          branchId: validatedData.branchId,
           userId: authResult.userId
         });
       } catch (emailError) {
@@ -115,7 +123,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       'create',
       'revenue',
       revenueId,
-      { branchId, date, total, cash, network, budget },
+      { branchId: validatedData.branchId, date: validatedData.date, total: validatedData.total, cash: validatedData.cash, network: validatedData.network, budget: validatedData.budget },
       getClientIP(request),
       request.headers.get('User-Agent') || undefined
     );

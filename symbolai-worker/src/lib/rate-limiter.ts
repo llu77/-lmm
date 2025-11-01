@@ -56,6 +56,78 @@ export const RATE_LIMIT_PRESETS = {
     maxRequests: 10,
     windowSeconds: 60 * 60, // 1 hour
     message: 'تم تجاوز عدد الطلبات المسموح بها لهذه العملية الحساسة'
+  },
+
+  // PHASE 2: NEW PRESETS FOR COMPREHENSIVE PROTECTION
+
+  // للعمليات المالية الحرجة (كشوف المرتبات، الحوافز)
+  financial_critical: {
+    maxRequests: 10,
+    windowSeconds: 60 * 60, // 1 hour
+    message: 'تم تجاوز عدد العمليات المالية الحرجة، يرجى الانتظار ساعة'
+  },
+
+  // للعمليات المالية العادية (الإيرادات، المصروفات)
+  financial_write: {
+    maxRequests: 100,
+    windowSeconds: 60 * 60, // 1 hour
+    message: 'تم تجاوز عدد العمليات المالية المسموح بها'
+  },
+
+  // لعمليات القراءة المالية
+  financial_read: {
+    maxRequests: 300,
+    windowSeconds: 60 * 60, // 1 hour
+    message: 'تم تجاوز عدد استعلامات البيانات المالية'
+  },
+
+  // للذكاء الاصطناعي المكلف (التحليل، MCP Chat)
+  ai_expensive: {
+    maxRequests: 10,
+    windowSeconds: 60 * 60, // 1 hour (limit AI costs)
+    message: 'تم تجاوز عدد طلبات الذكاء الاصطناعي، يرجى الانتظار ساعة'
+  },
+
+  // للذكاء الاصطناعي العادي (الدردشة)
+  ai_chat: {
+    maxRequests: 20,
+    windowSeconds: 60 * 60, // 1 hour
+    message: 'تم تجاوز عدد رسائل الدردشة مع الذكاء الاصطناعي'
+  },
+
+  // لعمليات الإدارة (إنشاء مستخدمين، إدارة الفروع)
+  admin_operations: {
+    maxRequests: 50,
+    windowSeconds: 60 * 60, // 1 hour
+    message: 'تم تجاوز عدد العمليات الإدارية المسموح بها'
+  },
+
+  // لإرسال البريد الإلكتروني
+  email_send: {
+    maxRequests: 20,
+    windowSeconds: 60 * 60, // 1 hour (prevent spam)
+    message: 'تم تجاوز عدد رسائل البريد الإلكتروني المسموح بها'
+  },
+
+  // لعمليات قاعدة البيانات المباشرة (MCP D1)
+  database_direct: {
+    maxRequests: 30,
+    windowSeconds: 60 * 60, // 1 hour
+    message: 'تم تجاوز عدد استعلامات قاعدة البيانات المباشرة'
+  },
+
+  // لعمليات الكتابة العادية
+  write_operations: {
+    maxRequests: 150,
+    windowSeconds: 60 * 60, // 1 hour
+    message: 'تم تجاوز عدد عمليات الكتابة المسموح بها'
+  },
+
+  // لعمليات القراءة العادية
+  read_operations: {
+    maxRequests: 500,
+    windowSeconds: 60 * 60, // 1 hour
+    message: 'تم تجاوز عدد عمليات القراءة المسموح بها'
   }
 };
 
