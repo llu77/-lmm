@@ -1,0 +1,23 @@
+<svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Jobfit Icon Only - للاستخدام في Favicon و Small Spaces -->
+  <rect width="120" height="120" rx="24" fill="#FF6B00"/>
+
+  <!-- JF Monogram -->
+  <path d="M35 30 L35 70 Q35 85 20 85 Q10 85 10 70"
+        stroke="white"
+        stroke-width="8"
+        stroke-linecap="round"
+        fill="none"/>
+
+  <path d="M50 30 L50 85 M50 30 L80 30 M50 57.5 L72 57.5"
+        stroke="white"
+        stroke-width="8"
+        stroke-linecap="round"/>
+
+  <!-- Community dots -->
+  <circle cx="92" cy="45" r="6" fill="white"/>
+  <circle cx="108" cy="45" r="6" fill="white"/>
+  <circle cx="100" cy="60" r="6" fill="white"/>
+  <line x1="92" y1="45" x2="100" y2="60" stroke="white" stroke-width="3"/>
+  <line x1="108" y1="45" x2="100" y2="60" stroke="white" stroke-width="3"/>
+</svg>

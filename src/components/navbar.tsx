@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button.tsx";
 import { Authenticated, Unauthenticated } from "convex/react";
 import { SignInButton } from "@/components/ui/signin.tsx";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet.tsx";
+import { Logo } from "@/components/ui/logo.tsx";
+import { BRAND } from "@/lib/brand-constants";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -90,14 +92,14 @@ export default function Navbar() {
       <div className="container flex h-16 items-center justify-between">
         {/* Logo and Brand */}
         <Link to="/dashboard" className="flex items-center gap-3 text-primary-foreground font-bold hover:opacity-90 transition-opacity">
-          <img 
-            src="https://cdn.hercules.app/file_X3jdTiCKmUjHC4szRS5CixU4" 
-            alt="Logo"
-            className="h-12 w-12 object-contain"
-            style={{ backgroundColor: 'transparent' }}
+          <Logo
+            variant="icon"
+            size="md"
+            alt={BRAND.name}
+            className="h-12 w-12"
           />
           <div className="flex flex-col gap-1">
-            <span className="text-2xl hidden sm:block">نظام الإدارة المالية</span>
+            <span className="text-2xl hidden sm:block">{BRAND.tagline}</span>
             <span className="text-lg sm:hidden">الإدارة المالية</span>
             {branchName && (
               <span className="rounded-full bg-primary-foreground px-3 py-0.5 text-xs font-bold text-primary shadow-md">
@@ -270,11 +272,11 @@ export default function Navbar() {
               <SheetContent side="right" className="w-72 overflow-y-auto">
                 <SheetHeader className="space-y-2 pb-4">
                   <SheetTitle className="flex items-center gap-2 text-right text-base font-bold">
-                    <img
-                      src="https://cdn.hercules.app/file_X3jdTiCKmUjHC4szRS5CixU4"
-                      alt="Logo"
-                      className="h-10 w-10 object-contain"
-                      style={{ backgroundColor: 'transparent' }}
+                    <Logo
+                      variant="icon"
+                      size="sm"
+                      alt={BRAND.name}
+                      className="h-10 w-10"
                     />
                     القائمة الرئيسية
                   </SheetTitle>

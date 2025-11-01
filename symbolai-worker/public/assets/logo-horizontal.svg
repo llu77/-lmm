@@ -1,0 +1,33 @@
+<svg width="300" height="80" viewBox="0 0 300 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Jobfit Horizontal Logo - للاستخدام في Headers -->
+
+  <!-- Icon part with background -->
+  <rect x="0" y="0" width="80" height="80" rx="12" fill="#FF6B00"/>
+
+  <!-- JF Monogram -->
+  <path d="M25 20 L25 50 Q25 60 15 60 Q8 60 8 50"
+        stroke="white"
+        stroke-width="6"
+        stroke-linecap="round"
+        fill="none"/>
+
+  <path d="M35 20 L35 60 M35 20 L55 20 M35 40 L50 40"
+        stroke="white"
+        stroke-width="6"
+        stroke-linecap="round"/>
+
+  <!-- Community dots -->
+  <circle cx="63" cy="30" r="4" fill="white"/>
+  <circle cx="73" cy="30" r="4" fill="white"/>
+  <circle cx="68" cy="42" r="4" fill="white"/>
+  <line x1="63" y1="30" x2="68" y2="42" stroke="white" stroke-width="2"/>
+  <line x1="73" y1="30" x2="68" y2="42" stroke="white" stroke-width="2"/>
+
+  <!-- Text part -->
+  <text x="100" y="45" font-family="system-ui, -apple-system, sans-serif" font-size="32" font-weight="700" fill="#2D2D2D">
+    JOBFIT
+  </text>
+  <text x="100" y="65" font-family="system-ui, -apple-system, sans-serif" font-size="16" font-weight="500" fill="#FF6B00">
+    Community Platform
+  </text>
+</svg>
