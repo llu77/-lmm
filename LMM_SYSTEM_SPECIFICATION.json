@@ -1,0 +1,1468 @@
+{
+  "project": {
+    "name": "lmm-financial-management-system",
+    "version": "2.0.0",
+    "description": "نظام إدارة مالية شامل مع دعم كامل للغة العربية واتجاه RTL، يشمل إدارة الرواتب والمصروفات والإيرادات وطلبات الموظفين",
+    "language": "typescript",
+    "framework": "react",
+    "routing": "react-router-dom",
+    "ui_framework": "nativebase-v3.4-inspired",
+    "styling": "tailwindcss",
+    "backend": "convex",
+    "min_node_version": "18.0.0",
+    "rtl_support": true,
+    "primary_language": "arabic"
+  },
+
+  "architecture": {
+    "pattern": "component-driven-architecture",
+    "state_management": "react-hooks + convex-queries",
+    "data_fetching": "convex-real-time-queries",
+    "authentication": "convex-auth-oauth",
+    "routing": "client-side-spa",
+
+    "directory_structure": {
+      "src/": {
+        "App.tsx": "Main router configuration",
+        "main.tsx": "React DOM entry point",
+        "index.css": "Global styles with Tailwind directives",
+
+        "pages/": {
+          "description": "Page-level route components",
+          "pattern": "page.tsx or Index.tsx",
+          "count": 15,
+          "authentication": "wrapped with Authenticated/Unauthenticated"
+        },
+
+        "components/": {
+          "ui/": "65+ reusable UI components",
+          "providers/": "Context providers (QueryClient, UpdateCurrentUser)",
+          "navbar.tsx": "Main navigation component",
+          "branch-selector.tsx": "Branch selection with security",
+          "error-boundary.tsx": "Error boundary wrapper"
+        },
+
+        "lib/": {
+          "utils.ts": "Utility functions (cn for class merging)",
+          "pdf-export.ts": "PDF generation utilities"
+        },
+
+        "convex/": {
+          "_generated/": "Auto-generated Convex API types",
+          "api.js": "Convex API endpoints"
+        }
+      }
+    },
+
+    "core_technologies": {
+      "react": "^18.3.0",
+      "react-router-dom": "Latest",
+      "convex": "Real-time database and auth",
+      "tailwindcss": "^3.4.0",
+      "typescript": "^5.3.0",
+      "react-hook-form": "^7.50.0",
+      "recharts": "^2.12.0",
+      "date-fns": "^3.0.0",
+      "lucide-react": "^0.344.0",
+      "sonner": "Toast notifications",
+      "jspdf": "^2.5.2",
+      "jspdf-autotable": "^3.8.0"
+    }
+  },
+
+  "design_system": {
+    "source": "NativeBase v3.4",
+    "implementation": "tailwindcss + css-variables",
+    "accessibility": "WCAG 3.0 APCA compliant",
+    "rtl": "full support",
+    "dark_mode": "enabled",
+
+    "color_palette": {
+      "primary": {
+        "name": "cyan",
+        "50": "#ecfeff",
+        "100": "#cffafe",
+        "200": "#a5f3fc",
+        "300": "#67e8f9",
+        "400": "#22d3ee",
+        "500": "#06b6d4",
+        "600": "#0891b2",
+        "700": "#0e7490",
+        "800": "#155e75",
+        "900": "#164e63",
+        "DEFAULT": "#06b6d4",
+        "foreground": "#ffffff",
+        "usage": "Primary actions, links, emphasis"
+      },
+
+      "secondary": {
+        "name": "pink",
+        "50": "#fdf2f8",
+        "100": "#fce7f3",
+        "200": "#fbcfe8",
+        "300": "#f9a8d4",
+        "400": "#f472b6",
+        "500": "#ec4899",
+        "600": "#db2777",
+        "700": "#be185d",
+        "800": "#9d174d",
+        "900": "#831843",
+        "DEFAULT": "#ec4899",
+        "foreground": "#ffffff",
+        "usage": "Secondary actions, highlights"
+      },
+
+      "success": {
+        "name": "green",
+        "500": "#22c55e",
+        "DEFAULT": "#22c55e",
+        "foreground": "#ffffff",
+        "usage": "Success states, confirmations"
+      },
+
+      "warning": {
+        "name": "orange",
+        "500": "#f97316",
+        "DEFAULT": "#f97316",
+        "foreground": "#ffffff",
+        "usage": "Warnings, alerts"
+      },
+
+      "danger": {
+        "name": "rose",
+        "500": "#f43f5e",
+        "DEFAULT": "#f43f5e",
+        "foreground": "#ffffff",
+        "usage": "Destructive actions, errors"
+      },
+
+      "error": {
+        "name": "red",
+        "500": "#ef4444",
+        "DEFAULT": "#ef4444",
+        "foreground": "#ffffff",
+        "usage": "Error messages"
+      },
+
+      "info": {
+        "name": "lightBlue",
+        "500": "#0ea5e9",
+        "DEFAULT": "#0ea5e9",
+        "foreground": "#ffffff",
+        "usage": "Informational messages"
+      },
+
+      "neutral": {
+        "name": "trueGray",
+        "50": "#fafafa",
+        "100": "#f5f5f5",
+        "200": "#e5e5e5",
+        "300": "#d4d4d4",
+        "400": "#a3a3a3",
+        "500": "#737373",
+        "600": "#525252",
+        "700": "#404040",
+        "800": "#262626",
+        "900": "#171717",
+        "usage": "Text, borders, backgrounds"
+      },
+
+      "additional_palettes": [
+        "rose", "pink", "fuchsia", "purple", "violet", "indigo", "blue",
+        "lightBlue", "cyan", "teal", "emerald", "green", "lime", "yellow",
+        "amber", "orange", "red", "warmGray", "trueGray", "gray",
+        "coolGray", "blueGray", "dark"
+      ]
+    },
+
+    "typography": {
+      "font_families": {
+        "sans": "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+        "arabic": "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans Arabic', 'Helvetica Neue', Arial, sans-serif",
+        "mono": "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace"
+      },
+
+      "font_sizes": {
+        "2xs": {"size": "0.625rem", "line_height": "1em"},
+        "xs": {"size": "0.75rem", "line_height": "1.125em"},
+        "sm": {"size": "0.875rem", "line_height": "1.25em"},
+        "md": {"size": "1rem", "line_height": "1.375em"},
+        "lg": {"size": "1.125rem", "line_height": "1.5em"},
+        "xl": {"size": "1.25rem", "line_height": "1.5em"},
+        "2xl": {"size": "1.5rem", "line_height": "1.75em"},
+        "3xl": {"size": "1.875rem", "line_height": "2em"},
+        "4xl": {"size": "2.25rem", "line_height": "2.5em"},
+        "5xl": {"size": "3rem", "line_height": "3em"},
+        "6xl": {"size": "3.75rem", "line_height": "3em"},
+        "7xl": {"size": "4.5rem", "line_height": "4em"},
+        "8xl": {"size": "6rem", "line_height": "4em"},
+        "9xl": {"size": "8rem", "line_height": "4em"}
+      },
+
+      "font_weights": {
+        "hairline": 100,
+        "thin": 200,
+        "light": 300,
+        "normal": 400,
+        "medium": 500,
+        "semibold": 600,
+        "bold": 700,
+        "extrabold": 800,
+        "black": 900
+      },
+
+      "letter_spacing": {
+        "xs": "-0.05em",
+        "sm": "-0.025em",
+        "md": "0",
+        "lg": "0.025em",
+        "xl": "0.05em",
+        "2xl": "0.1em"
+      }
+    },
+
+    "spacing": {
+      "scale": "4px base",
+      "values": {
+        "px": "1px",
+        "0": "0",
+        "0.5": "0.125rem",
+        "1": "0.25rem",
+        "1.5": "0.375rem",
+        "2": "0.5rem",
+        "2.5": "0.625rem",
+        "3": "0.75rem",
+        "3.5": "0.875rem",
+        "4": "1rem",
+        "5": "1.25rem",
+        "6": "1.5rem",
+        "7": "1.75rem",
+        "8": "2rem",
+        "9": "2.25rem",
+        "10": "2.5rem",
+        "12": "3rem",
+        "16": "4rem",
+        "20": "5rem",
+        "24": "6rem",
+        "32": "8rem",
+        "40": "10rem",
+        "48": "12rem",
+        "56": "14rem",
+        "64": "16rem",
+        "72": "18rem",
+        "80": "20rem",
+        "96": "24rem"
+      },
+      "percentages": ["1/2", "1/3", "2/3", "1/4", "3/4", "1/5", "2/5", "3/5", "4/5", "1/6", "5/6", "full"]
+    },
+
+    "border_radius": {
+      "none": "0",
+      "xs": "0.125rem",
+      "sm": "0.25rem",
+      "md": "0.375rem",
+      "lg": "0.5rem",
+      "xl": "0.75rem",
+      "2xl": "1rem",
+      "3xl": "1.5rem",
+      "full": "9999px"
+    },
+
+    "shadows": {
+      "xs": "0 1px 2px 0 rgba(0, 0, 0, 0.05)",
+      "sm": "0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1)",
+      "md": "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1)",
+      "lg": "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1)",
+      "xl": "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)",
+      "2xl": "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+      "inner": "inset 0 2px 4px 0 rgba(0, 0, 0, 0.05)"
+    },
+
+    "breakpoints": {
+      "sm": "640px",
+      "md": "768px",
+      "lg": "1024px",
+      "xl": "1280px",
+      "2xl": "1536px"
+    },
+
+    "transitions": {
+      "fast": "150ms cubic-bezier(0.4, 0, 0.2, 1)",
+      "base": "250ms cubic-bezier(0.4, 0, 0.2, 1)",
+      "slow": "350ms cubic-bezier(0.4, 0, 0.2, 1)",
+      "smooth": "500ms cubic-bezier(0.4, 0, 0.2, 1)"
+    }
+  },
+
+  "routes": {
+    "public_routes": [
+      {
+        "path": "/",
+        "component": "Index.tsx",
+        "name": "الصفحة الرئيسية",
+        "description": "Landing page with feature showcase",
+        "authentication": "redirects authenticated users to /dashboard",
+        "features": ["Platform icons", "Main heading", "Feature list", "CTA button", "Scrollbar illustrations"]
+      },
+      {
+        "path": "/auth/callback",
+        "component": "auth/Callback.tsx",
+        "name": "OAuth Callback",
+        "description": "Handles OAuth authentication callback",
+        "authentication": "public"
+      }
+    ],
+
+    "authenticated_routes": [
+      {
+        "path": "/dashboard",
+        "component": "dashboard/page.tsx",
+        "name": "لوحة التحكم",
+        "description": "Main dashboard with financial statistics and charts",
+        "icon": "LayoutDashboard",
+        "features": [
+          "Revenue/Expense summary cards",
+          "Monthly comparison charts (Recharts)",
+          "Recent transactions list",
+          "Quick stats (employees, branches, requests)"
+        ],
+        "data_queries": [
+          "api.revenues.list",
+          "api.expenses.list",
+          "api.employees.count"
+        ]
+      },
+
+      {
+        "path": "/revenues",
+        "component": "revenues/page.tsx",
+        "name": "الإيرادات",
+        "category": "Finance",
+        "icon": "TrendingUp",
+        "description": "Revenue tracking and management",
+        "features": [
+          "Create revenue entry with amount, payment method",
+          "List all revenues with date/amount/method",
+          "Edit existing revenue records",
+          "Delete revenue entries with confirmation",
+          "PDF export functionality",
+          "Payment methods: Cash (نقدي), Network (شبكة)"
+        ],
+        "form_fields": [
+          {"name": "amount", "type": "number", "label": "المبلغ", "required": true},
+          {"name": "description", "type": "textarea", "label": "الوصف", "required": false},
+          {"name": "paymentMethod", "type": "select", "options": ["نقدي", "شبكة"], "label": "طريقة الدفع", "required": true},
+          {"name": "date", "type": "date", "label": "التاريخ", "required": true}
+        ],
+        "table_columns": ["التاريخ", "المبلغ", "الوصف", "طريقة الدفع", "الإجراءات"]
+      },
+
+      {
+        "path": "/expenses",
+        "component": "expenses/page.tsx",
+        "name": "المصروفات",
+        "category": "Finance",
+        "icon": "TrendingDown",
+        "description": "Expense tracking and categorization",
+        "features": [
+          "Create expense with category selection",
+          "11 predefined expense categories",
+          "Track expenses by date and amount",
+          "Edit/Delete expense records",
+          "PDF export with categorization"
+        ],
+        "expense_categories": [
+          "كهرباء",
+          "ماء",
+          "بلدية",
+          "انترنت",
+          "اجور",
+          "رواتب",
+          "ايجار",
+          "ضيافة",
+          "صيانة",
+          "خامات",
+          "متفرقات"
+        ],
+        "form_fields": [
+          {"name": "amount", "type": "number", "label": "المبلغ", "required": true},
+          {"name": "category", "type": "select", "options": "expense_categories", "label": "الفئة", "required": true},
+          {"name": "description", "type": "textarea", "label": "الوصف", "required": false},
+          {"name": "date", "type": "date", "label": "التاريخ", "required": true}
+        ]
+      },
+
+      {
+        "path": "/bonus",
+        "component": "bonus/page.tsx",
+        "name": "المكافآت",
+        "category": "Finance",
+        "icon": "Gift",
+        "description": "Employee bonus calculation and approval",
+        "features": [
+          "Assign bonus to employees",
+          "Bonus amount entry",
+          "Bonus reason/notes",
+          "List all bonuses with employee info",
+          "Edit/Delete bonus records"
+        ],
+        "form_fields": [
+          {"name": "employeeId", "type": "select", "label": "الموظف", "required": true},
+          {"name": "amount", "type": "number", "label": "المبلغ", "required": true},
+          {"name": "reason", "type": "textarea", "label": "السبب", "required": false},
+          {"name": "date", "type": "date", "label": "التاريخ", "required": true}
+        ]
+      },
+
+      {
+        "path": "/employees",
+        "component": "employees/page.tsx",
+        "name": "إدارة الموظفين",
+        "category": "Employees",
+        "icon": "Users",
+        "description": "Employee management (CRUD operations)",
+        "features": [
+          "Create new employee profiles",
+          "Employee information: name, ID, branch, position",
+          "Salary and employment details",
+          "Edit employee records",
+          "Delete employees with cascade effects",
+          "Employee listing with search"
+        ],
+        "form_fields": [
+          {"name": "name", "type": "text", "label": "الاسم", "required": true},
+          {"name": "employeeId", "type": "text", "label": "رقم الموظف", "required": true},
+          {"name": "branchId", "type": "select", "label": "الفرع", "required": true},
+          {"name": "position", "type": "text", "label": "المسمى الوظيفي", "required": true},
+          {"name": "salary", "type": "number", "label": "الراتب", "required": true},
+          {"name": "hireDate", "type": "date", "label": "تاريخ التوظيف", "required": true}
+        ]
+      },
+
+      {
+        "path": "/advances-deductions",
+        "component": "advances-deductions/page.tsx",
+        "name": "السلف والخصومات",
+        "category": "Employees",
+        "icon": "Wallet",
+        "description": "Employee advances and salary deductions management",
+        "features": [
+          "Record employee advances (سلفة)",
+          "Record salary deductions (خصم)",
+          "Track advance repayment status",
+          "Monthly deduction tracking",
+          "List all advances/deductions by employee"
+        ],
+        "types": ["سلفة", "خصم"],
+        "form_fields": [
+          {"name": "employeeId", "type": "select", "label": "الموظف", "required": true},
+          {"name": "type", "type": "radio", "options": ["سلفة", "خصم"], "label": "النوع", "required": true},
+          {"name": "amount", "type": "number", "label": "المبلغ", "required": true},
+          {"name": "reason", "type": "textarea", "label": "السبب", "required": false},
+          {"name": "date", "type": "date", "label": "التاريخ", "required": true}
+        ]
+      },
+
+      {
+        "path": "/payroll",
+        "component": "payroll/page.tsx",
+        "name": "كشف الرواتب",
+        "category": "Employees",
+        "icon": "FileText",
+        "description": "Monthly payroll record generation and management",
+        "features": [
+          "Generate monthly payroll records",
+          "Select month and year",
+          "Auto-calculate net salary (salary + bonuses - advances - deductions)",
+          "View payroll history",
+          "PDF export for payroll sheets",
+          "Print payroll records"
+        ],
+        "calculations": {
+          "net_salary": "base_salary + bonuses - advances - deductions",
+          "components": ["base_salary", "bonuses", "advances", "deductions"]
+        },
+        "form_fields": [
+          {"name": "month", "type": "select", "options": ["1-12"], "label": "الشهر", "required": true},
+          {"name": "year", "type": "select", "options": "current and previous years", "label": "السنة", "required": true}
+        ]
+      },
+
+      {
+        "path": "/product-orders",
+        "component": "product-orders/page.tsx",
+        "name": "طلبات المنتجات",
+        "category": "Requests",
+        "icon": "Package",
+        "description": "Product ordering system with catalog and pricing",
+        "features": [
+          "50+ product catalog with prices",
+          "Multi-product selection",
+          "Quantity specification per product",
+          "Total price calculation",
+          "Order status tracking (pending, approved, rejected)",
+          "PDF export for orders"
+        ],
+        "product_categories": [
+          "مواد غذائية",
+          "مشروبات",
+          "مواد تنظيف",
+          "قرطاسية",
+          "أدوات مكتبية"
+        ],
+        "form_fields": [
+          {"name": "products", "type": "multi-select", "label": "المنتجات", "required": true},
+          {"name": "quantities", "type": "number[]", "label": "الكميات", "required": true},
+          {"name": "notes", "type": "textarea", "label": "ملاحظات", "required": false}
+        ],
+        "statuses": ["pending", "approved", "rejected"]
+      },
+
+      {
+        "path": "/employee-requests",
+        "component": "employee-requests/page.tsx",
+        "name": "طلبات الموظفين",
+        "category": "Requests",
+        "icon": "ClipboardList",
+        "description": "Employee request management system",
+        "features": [
+          "Create custom employee requests",
+          "Request types: vacation, leave, complaint, other",
+          "Attachment support",
+          "Request status tracking",
+          "Approval/Rejection workflow"
+        ],
+        "request_types": ["إجازة", "إذن خروج", "شكوى", "أخرى"],
+        "form_fields": [
+          {"name": "employeeId", "type": "select", "label": "الموظف", "required": true},
+          {"name": "type", "type": "select", "options": "request_types", "label": "نوع الطلب", "required": true},
+          {"name": "title", "type": "text", "label": "العنوان", "required": true},
+          {"name": "description", "type": "textarea", "label": "الوصف", "required": true},
+          {"name": "attachments", "type": "file[]", "label": "المرفقات", "required": false}
+        ]
+      },
+
+      {
+        "path": "/my-requests",
+        "component": "my-requests/page.tsx",
+        "name": "طلباتي",
+        "category": "Requests",
+        "icon": "FileCheck",
+        "description": "Personal request submission and tracking",
+        "features": [
+          "Submit personal requests",
+          "Track request status",
+          "View request history",
+          "Edit pending requests",
+          "Cancel requests"
+        ],
+        "filtered_by": "current_user_id"
+      },
+
+      {
+        "path": "/manage-requests",
+        "component": "manage-requests/page.tsx",
+        "name": "إدارة الطلبات",
+        "category": "Requests",
+        "icon": "Settings",
+        "description": "Request administration and approval workflow",
+        "features": [
+          "View all pending requests",
+          "Approve/Reject requests",
+          "Add approval notes",
+          "Request history tracking",
+          "Bulk actions"
+        ],
+        "actions": ["approve", "reject", "archive"],
+        "permissions": "admin or manager role required"
+      },
+
+      {
+        "path": "/ai-assistant",
+        "component": "ai-assistant/page.tsx",
+        "name": "المساعد الذكي",
+        "category": "System",
+        "icon": "Bot",
+        "description": "AI-powered tools for validation, patterns, content, and email generation",
+        "features": [
+          "Multi-tab interface",
+          "Data validation with AI reasoning",
+          "Pattern detection and analysis",
+          "Content generation",
+          "Email template creation",
+          "AI-powered insights"
+        ],
+        "tabs": [
+          {
+            "name": "Overview",
+            "description": "AI assistant introduction and capabilities"
+          },
+          {
+            "name": "Validator",
+            "description": "Data validation with reasoning chains",
+            "features": ["Input validation", "Error detection", "Suggestions"]
+          },
+          {
+            "name": "Patterns",
+            "description": "Pattern detection in data",
+            "features": ["Trend analysis", "Anomaly detection"]
+          },
+          {
+            "name": "Content",
+            "description": "AI content generation",
+            "features": ["Report writing", "Documentation", "Summaries"]
+          },
+          {
+            "name": "Email",
+            "description": "Email template generation",
+            "features": ["Professional emails", "Templates", "Personalization"]
+          }
+        ]
+      },
+
+      {
+        "path": "/system-support",
+        "component": "system-support/page.tsx",
+        "name": "الدعم الفني",
+        "category": "System",
+        "icon": "HelpCircle",
+        "description": "System support and utilities",
+        "features": [
+          "System documentation",
+          "Help guides",
+          "Support ticket submission",
+          "FAQ section",
+          "Contact information"
+        ]
+      },
+
+      {
+        "path": "/backups",
+        "component": "backups/page.tsx",
+        "name": "النسخ الاحتياطي",
+        "category": "System",
+        "icon": "Database",
+        "description": "Backup management system",
+        "features": [
+          "Create manual backups",
+          "Scheduled automatic backups",
+          "Backup history",
+          "Restore from backup",
+          "Export data"
+        ],
+        "backup_types": ["manual", "automatic"],
+        "backup_schedule": "daily, weekly, monthly"
+      }
+    ]
+  },
+
+  "components": {
+    "layout_components": [
+      {
+        "name": "Navbar",
+        "file": "components/navbar.tsx",
+        "type": "navigation",
+        "size": "18KB",
+        "description": "Sticky top navigation with RTL support and responsive design",
+        "features": [
+          "Desktop dropdown menus",
+          "Mobile hamburger menu with Sheet sidebar",
+          "User authentication state",
+          "Branch selector integration",
+          "Dynamic active route highlighting"
+        ],
+        "navigation_groups": [
+          {
+            "name": "Dashboard",
+            "icon": "LayoutDashboard",
+            "items": [
+              {"label": "لوحة التحكم", "href": "/dashboard", "icon": "LayoutDashboard"}
+            ]
+          },
+          {
+            "name": "Finance",
+            "icon": "DollarSign",
+            "items": [
+              {"label": "الإيرادات", "href": "/revenues", "icon": "TrendingUp"},
+              {"label": "المصروفات", "href": "/expenses", "icon": "TrendingDown"},
+              {"label": "المكافآت", "href": "/bonus", "icon": "Gift"}
+            ]
+          },
+          {
+            "name": "Employees",
+            "icon": "Users",
+            "items": [
+              {"label": "إدارة الموظفين", "href": "/employees", "icon": "Users"},
+              {"label": "السلف والخصومات", "href": "/advances-deductions", "icon": "Wallet"},
+              {"label": "كشف الرواتب", "href": "/payroll", "icon": "FileText"}
+            ]
+          },
+          {
+            "name": "Requests",
+            "icon": "ClipboardList",
+            "items": [
+              {"label": "طلبات المنتجات", "href": "/product-orders", "icon": "Package"},
+              {"label": "طلبات الموظفين", "href": "/employee-requests", "icon": "ClipboardList"},
+              {"label": "طلباتي", "href": "/my-requests", "icon": "FileCheck"},
+              {"label": "إدارة الطلبات", "href": "/manage-requests", "icon": "Settings"}
+            ]
+          },
+          {
+            "name": "System",
+            "icon": "Settings",
+            "items": [
+              {"label": "المساعد الذكي", "href": "/ai-assistant", "icon": "Bot"},
+              {"label": "الدعم الفني", "href": "/system-support", "icon": "HelpCircle"}
+            ]
+          }
+        ],
+        "responsive": {
+          "desktop": "Horizontal menu with dropdowns",
+          "mobile": "Hamburger icon → Sheet sidebar"
+        },
+        "styling": {
+          "position": "sticky top-0",
+          "background": "white",
+          "border_bottom": "1px solid border",
+          "z_index": 50,
+          "padding": "p-4"
+        }
+      },
+
+      {
+        "name": "BranchSelector",
+        "file": "components/branch-selector.tsx",
+        "type": "interactive",
+        "size": "8.9KB",
+        "description": "Multi-branch selection with security lock mechanism",
+        "features": [
+          "Two branches selection",
+          "Lock mechanism with time-based attempts",
+          "LocalStorage persistence",
+          "Real-time countdown timer",
+          "Security attempt tracking"
+        ],
+        "branches": [
+          {"id": "1010", "name": "فرع لبن"},
+          {"id": "2020", "name": "فرع طويق"}
+        ],
+        "security": {
+          "max_attempts": 5,
+          "lock_duration_3_attempts": "1 hour",
+          "lock_duration_5_attempts": "24 hours",
+          "storage_key": "branchLockData"
+        },
+        "ui": {
+          "normal_state": "Dialog with branch selection",
+          "locked_state": "Countdown timer with retry message",
+          "unlock_trigger": "Time expiration"
+        }
+      },
+
+      {
+        "name": "ErrorBoundary",
+        "file": "components/error-boundary.tsx",
+        "type": "utility",
+        "size": "5.1KB",
+        "description": "React error boundary with custom fallback UI",
+        "features": [
+          "Catch component errors",
+          "Development error details",
+          "Error recovery actions",
+          "Stack trace display"
+        ],
+        "components": [
+          "ErrorBoundary class component",
+          "ErrorFallback function component"
+        ],
+        "display_modes": {
+          "development": "Full error stack trace",
+          "production": "User-friendly error message"
+        }
+      }
+    ],
+
+    "ui_components": {
+      "form_inputs": [
+        {
+          "name": "Input",
+          "file": "components/ui/input.tsx",
+          "description": "Text input field with variants",
+          "variants": ["default", "filled", "outline"],
+          "states": ["idle", "focus", "disabled", "error"],
+          "rtl": true
+        },
+        {
+          "name": "Textarea",
+          "file": "components/ui/textarea.tsx",
+          "description": "Multi-line text input",
+          "features": ["Auto-resize", "Character count", "RTL support"]
+        },
+        {
+          "name": "Select",
+          "file": "components/ui/select.tsx",
+          "description": "Dropdown select with search",
+          "features": ["Search filter", "Multi-select", "Custom options"],
+          "components": ["Select", "SelectTrigger", "SelectContent", "SelectItem"]
+        },
+        {
+          "name": "Checkbox",
+          "file": "components/ui/checkbox.tsx",
+          "description": "Checkbox input with indeterminate state"
+        },
+        {
+          "name": "RadioGroup",
+          "file": "components/ui/radio-group.tsx",
+          "description": "Radio button group",
+          "components": ["RadioGroup", "RadioGroupItem"]
+        },
+        {
+          "name": "Switch",
+          "file": "components/ui/switch.tsx",
+          "description": "Toggle switch",
+          "size": "md, lg",
+          "animation": true
+        },
+        {
+          "name": "Slider",
+          "file": "components/ui/slider.tsx",
+          "description": "Range slider input"
+        },
+        {
+          "name": "Calendar",
+          "file": "components/ui/calendar.tsx",
+          "description": "Date picker calendar",
+          "features": ["Month navigation", "Year selection", "Date range"]
+        },
+        {
+          "name": "InputOTP",
+          "file": "components/ui/input-otp.tsx",
+          "description": "OTP verification input"
+        }
+      ],
+
+      "buttons": [
+        {
+          "name": "Button",
+          "file": "components/ui/button.tsx",
+          "description": "Base button component",
+          "variants": ["default", "destructive", "outline", "secondary", "ghost", "link"],
+          "sizes": ["sm", "md", "lg", "icon"],
+          "states": ["idle", "hover", "active", "disabled", "loading"]
+        },
+        {
+          "name": "ButtonGroup",
+          "file": "components/ui/button-group.tsx",
+          "description": "Segmented button group"
+        },
+        {
+          "name": "Toggle",
+          "file": "components/ui/toggle.tsx",
+          "description": "Toggle button"
+        },
+        {
+          "name": "ToggleGroup",
+          "file": "components/ui/toggle-group.tsx",
+          "description": "Toggle button group"
+        }
+      ],
+
+      "data_display": [
+        {
+          "name": "Table",
+          "file": "components/ui/table.tsx",
+          "description": "Data table with sorting and pagination",
+          "components": ["Table", "TableHeader", "TableBody", "TableRow", "TableHead", "TableCell", "TableFooter"],
+          "features": ["Sorting", "Filtering", "Pagination", "Row selection"]
+        },
+        {
+          "name": "Card",
+          "file": "components/ui/card.tsx",
+          "description": "Card container",
+          "components": ["Card", "CardHeader", "CardTitle", "CardDescription", "CardContent", "CardFooter"]
+        },
+        {
+          "name": "Badge",
+          "file": "components/ui/badge.tsx",
+          "description": "Status badge",
+          "variants": ["default", "secondary", "destructive", "outline", "success", "warning"]
+        },
+        {
+          "name": "Avatar",
+          "file": "components/ui/avatar.tsx",
+          "description": "User avatar with fallback",
+          "components": ["Avatar", "AvatarImage", "AvatarFallback"]
+        },
+        {
+          "name": "Empty",
+          "file": "components/ui/empty.tsx",
+          "description": "Empty state component",
+          "components": ["Empty", "EmptyHeader", "EmptyTitle", "EmptyDescription", "EmptyAction"]
+        },
+        {
+          "name": "Skeleton",
+          "file": "components/ui/skeleton.tsx",
+          "description": "Loading placeholder",
+          "variants": ["text", "circular", "rectangular"]
+        }
+      ],
+
+      "overlays": [
+        {
+          "name": "Dialog",
+          "file": "components/ui/dialog.tsx",
+          "description": "Modal dialog",
+          "components": ["Dialog", "DialogTrigger", "DialogContent", "DialogHeader", "DialogTitle", "DialogDescription", "DialogFooter"],
+          "features": ["Backdrop", "Close on escape", "Trap focus"]
+        },
+        {
+          "name": "AlertDialog",
+          "file": "components/ui/alert-dialog.tsx",
+          "description": "Confirmation dialog for destructive actions",
+          "components": ["AlertDialog", "AlertDialogTrigger", "AlertDialogContent", "AlertDialogHeader", "AlertDialogTitle", "AlertDialogDescription", "AlertDialogFooter", "AlertDialogAction", "AlertDialogCancel"]
+        },
+        {
+          "name": "Drawer",
+          "file": "components/ui/drawer.tsx",
+          "description": "Slide-out drawer panel"
+        },
+        {
+          "name": "Sheet",
+          "file": "components/ui/sheet.tsx",
+          "description": "Side sheet panel",
+          "sides": ["left", "right", "top", "bottom"]
+        },
+        {
+          "name": "Popover",
+          "file": "components/ui/popover.tsx",
+          "description": "Floating popover"
+        },
+        {
+          "name": "HoverCard",
+          "file": "components/ui/hover-card.tsx",
+          "description": "Card on hover"
+        },
+        {
+          "name": "Tooltip",
+          "file": "components/ui/tooltip.tsx",
+          "description": "Hover tooltip",
+          "components": ["TooltipProvider", "Tooltip", "TooltipTrigger", "TooltipContent"]
+        }
+      ],
+
+      "navigation": [
+        {
+          "name": "Tabs",
+          "file": "components/ui/tabs.tsx",
+          "description": "Tabbed content interface",
+          "components": ["Tabs", "TabsList", "TabsTrigger", "TabsContent"],
+          "orientation": ["horizontal", "vertical"]
+        },
+        {
+          "name": "Accordion",
+          "file": "components/ui/accordion.tsx",
+          "description": "Collapsible accordion sections",
+          "components": ["Accordion", "AccordionItem", "AccordionTrigger", "AccordionContent"],
+          "type": ["single", "multiple"]
+        },
+        {
+          "name": "Breadcrumb",
+          "file": "components/ui/breadcrumb.tsx",
+          "description": "Breadcrumb navigation"
+        },
+        {
+          "name": "NavigationMenu",
+          "file": "components/ui/navigation-menu.tsx",
+          "description": "Multi-level navigation menu"
+        },
+        {
+          "name": "Sidebar",
+          "file": "components/ui/sidebar.tsx",
+          "description": "Collapsible sidebar",
+          "features": ["useSidebar hook", "Toggle state", "Mobile responsive"]
+        },
+        {
+          "name": "Pagination",
+          "file": "components/ui/pagination.tsx",
+          "description": "Pagination controls"
+        }
+      ],
+
+      "feedback": [
+        {
+          "name": "Alert",
+          "file": "components/ui/alert.tsx",
+          "description": "Alert message box",
+          "variants": ["default", "destructive", "success", "warning", "info"]
+        },
+        {
+          "name": "Toast",
+          "file": "components/ui/toast.tsx",
+          "description": "Toast notifications using Sonner",
+          "positions": ["top-left", "top-center", "top-right", "bottom-left", "bottom-center", "bottom-right"],
+          "duration": "customizable",
+          "actions": ["success", "error", "loading", "dismiss"]
+        },
+        {
+          "name": "Spinner",
+          "file": "components/ui/spinner.tsx",
+          "description": "Loading spinner animation",
+          "sizes": ["sm", "md", "lg"]
+        },
+        {
+          "name": "Progress",
+          "file": "components/ui/progress.tsx",
+          "description": "Progress bar",
+          "variants": ["determinate", "indeterminate"]
+        },
+        {
+          "name": "ErrorState",
+          "file": "components/ui/error-state.tsx",
+          "description": "Error display component"
+        }
+      ],
+
+      "utilities": [
+        {
+          "name": "Separator",
+          "file": "components/ui/separator.tsx",
+          "description": "Visual divider",
+          "orientation": ["horizontal", "vertical"]
+        },
+        {
+          "name": "ScrollArea",
+          "file": "components/ui/scroll-area.tsx",
+          "description": "Custom scrollbar container"
+        },
+        {
+          "name": "Resizable",
+          "file": "components/ui/resizable.tsx",
+          "description": "Resizable panels"
+        },
+        {
+          "name": "AspectRatio",
+          "file": "components/ui/aspect-ratio.tsx",
+          "description": "Aspect ratio container"
+        },
+        {
+          "name": "Carousel",
+          "file": "components/ui/carousel.tsx",
+          "description": "Image carousel with slide navigation"
+        },
+        {
+          "name": "Command",
+          "file": "components/ui/command.tsx",
+          "description": "Command palette/search"
+        },
+        {
+          "name": "Kbd",
+          "file": "components/ui/kbd.tsx",
+          "description": "Keyboard key display"
+        },
+        {
+          "name": "Chart",
+          "file": "components/ui/chart.tsx",
+          "description": "Chart component via Recharts integration"
+        }
+      ]
+    }
+  },
+
+  "state_management": {
+    "pattern": "hooks + convex",
+
+    "data_fetching": {
+      "library": "convex",
+      "hooks": [
+        {
+          "name": "useQuery",
+          "description": "Real-time data fetching with automatic updates",
+          "example": "const revenues = useQuery(api.revenues.list, params)",
+          "return_type": "T | undefined",
+          "loading_state": "undefined when loading"
+        },
+        {
+          "name": "useMutation",
+          "description": "Data mutation operations",
+          "example": "const createRevenue = useMutation(api.revenues.create)",
+          "return_type": "async function"
+        },
+        {
+          "name": "useAction",
+          "description": "Server actions",
+          "example": "const processPayroll = useAction(api.payroll.generate)",
+          "return_type": "async function"
+        }
+      ]
+    },
+
+    "authentication": {
+      "provider": "Convex Auth",
+      "components": [
+        "Authenticated - Render when logged in",
+        "Unauthenticated - Render when logged out",
+        "AuthLoading - Render during auth check",
+        "SignInButton - OAuth login button"
+      ],
+      "oauth_providers": ["Google", "GitHub"],
+      "hooks": [
+        {
+          "name": "useUser",
+          "description": "Get current authenticated user",
+          "return_type": "User | undefined"
+        }
+      ]
+    },
+
+    "form_state": {
+      "library": "react-hook-form",
+      "validation": "zod",
+      "pattern": "Form + useForm hook",
+      "components": ["FormField", "FormItem", "FormLabel", "FormControl", "FormDescription", "FormMessage"]
+    },
+
+    "local_state": {
+      "useState": "Component-level state",
+      "useReducer": "Complex state logic",
+      "useRef": "DOM refs and values",
+      "useEffect": "Side effects",
+      "useMemo": "Memoized values",
+      "useCallback": "Memoized callbacks"
+    },
+
+    "client_state": {
+      "library": "react-query",
+      "provider": "QueryClientProvider",
+      "caching": true,
+      "refetch_on_window_focus": true
+    },
+
+    "persistence": {
+      "localStorage": {
+        "usage": "Branch lock data, user preferences",
+        "keys": ["branchLockData", "selectedBranch"]
+      }
+    }
+  },
+
+  "features": {
+    "multi_tenancy": {
+      "type": "branch-based",
+      "branches": [
+        {"id": "1010", "name": "فرع لبن"},
+        {"id": "2020", "name": "فرع طويق"}
+      ],
+      "security": {
+        "lock_mechanism": true,
+        "max_attempts": 5,
+        "lock_durations": {
+          "3_attempts": "1 hour",
+          "5_attempts": "24 hours"
+        }
+      },
+      "storage": "localStorage"
+    },
+
+    "financial_management": {
+      "revenues": {
+        "payment_methods": ["نقدي (Cash)", "شبكة (Network)"],
+        "tracking": "by date, amount, method",
+        "export": "PDF"
+      },
+      "expenses": {
+        "categories": 11,
+        "tracking": "by category, date, amount",
+        "export": "PDF"
+      },
+      "payroll": {
+        "calculation": "base_salary + bonuses - advances - deductions",
+        "period": "monthly",
+        "export": "PDF"
+      }
+    },
+
+    "employee_management": {
+      "crud": ["create", "read", "update", "delete"],
+      "fields": ["name", "employeeId", "branchId", "position", "salary", "hireDate"],
+      "bonus_system": true,
+      "advances_deductions": true
+    },
+
+    "request_system": {
+      "types": ["product_orders", "employee_requests", "custom"],
+      "workflow": ["submit", "pending", "approve", "reject"],
+      "product_catalog": "50+ items with prices",
+      "permissions": "role-based"
+    },
+
+    "ai_assistant": {
+      "capabilities": [
+        "Data validation with reasoning",
+        "Pattern detection",
+        "Content generation",
+        "Email template creation"
+      ],
+      "interface": "Multi-tab dashboard"
+    },
+
+    "reporting": {
+      "exports": ["PDF", "Print"],
+      "reports": [
+        "Revenue statements",
+        "Expense reports",
+        "Payroll sheets",
+        "Product orders",
+        "Employee lists"
+      ],
+      "library": "jsPDF + jspdf-autotable"
+    },
+
+    "date_handling": {
+      "library": "date-fns",
+      "locale": "ar",
+      "format": "d MMM yyyy",
+      "examples": "15 نوفمبر 2025"
+    },
+
+    "notifications": {
+      "library": "sonner",
+      "types": ["success", "error", "loading", "info"],
+      "positions": "customizable",
+      "duration": "auto-dismiss"
+    }
+  },
+
+  "responsive_design": {
+    "approach": "mobile-first",
+    "breakpoints": {
+      "sm": "640px",
+      "md": "768px",
+      "lg": "1024px",
+      "xl": "1280px",
+      "2xl": "1536px"
+    },
+
+    "patterns": {
+      "navigation": {
+        "mobile": "Sheet sidebar with hamburger icon",
+        "desktop": "Horizontal menu with dropdowns"
+      },
+      "grids": {
+        "mobile": "grid-cols-1",
+        "tablet": "md:grid-cols-2",
+        "desktop": "lg:grid-cols-3 or lg:grid-cols-4"
+      },
+      "typography": {
+        "responsive_sizes": "text-sm md:text-md lg:text-lg"
+      },
+      "spacing": {
+        "responsive_padding": "p-4 md:p-6 lg:p-8"
+      }
+    },
+
+    "mobile_considerations": {
+      "touch_targets": "min 44px",
+      "hamburger_menu": true,
+      "swipe_gestures": "for drawers and sheets",
+      "viewport_meta": "width=device-width, initial-scale=1"
+    }
+  },
+
+  "rtl_support": {
+    "enabled": true,
+    "direction": "rtl",
+    "language": "arabic",
+
+    "tailwind_utilities": {
+      "padding_inline": ["ps-*", "pe-*"],
+      "margin_inline": ["ms-*", "me-*"],
+      "text_align": ["text-start", "text-end"],
+      "float": ["float-start", "float-end"]
+    },
+
+    "font_stack": {
+      "arabic": "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans Arabic', 'Helvetica Neue', Arial, sans-serif",
+      "fallback": "sans-serif"
+    },
+
+    "ui_adaptations": {
+      "icons": "mirrored where appropriate",
+      "navigation": "right-to-left flow",
+      "forms": "right-aligned labels",
+      "modals": "RTL layout"
+    }
+  },
+
+  "accessibility": {
+    "standards": "WCAG 3.0 APCA",
+    "color_contrast": "minimum 4.5:1",
+
+    "features": [
+      "Semantic HTML",
+      "ARIA labels",
+      "Keyboard navigation",
+      "Focus management",
+      "Screen reader support",
+      "Skip links",
+      "Error announcements"
+    ],
+
+    "keyboard_navigation": {
+      "tab": "Focus next element",
+      "shift_tab": "Focus previous element",
+      "enter": "Activate button/link",
+      "space": "Toggle checkbox/switch",
+      "escape": "Close modal/dialog",
+      "arrow_keys": "Navigate menus/lists"
+    },
+
+    "screen_reader": {
+      "announcements": "Via toast notifications",
+      "live_regions": "For dynamic content",
+      "landmarks": "nav, main, aside, footer"
+    }
+  },
+
+  "performance": {
+    "optimization": [
+      "Code splitting via React.lazy",
+      "Memoization with useMemo/useCallback",
+      "Virtual scrolling for large lists",
+      "Image lazy loading",
+      "Bundle size optimization"
+    ],
+
+    "caching": {
+      "react_query": "Client-side data caching",
+      "convex": "Real-time subscription optimization"
+    },
+
+    "build": {
+      "bundler": "Vite",
+      "minification": true,
+      "tree_shaking": true,
+      "css_purging": "Tailwind PurgeCSS"
+    }
+  },
+
+  "testing": {
+    "framework": "not yet implemented",
+    "recommended": {
+      "unit": "Vitest or Jest",
+      "integration": "React Testing Library",
+      "e2e": "Playwright or Cypress",
+      "visual_regression": "Chromatic or Percy"
+    },
+
+    "test_cases": [
+      "Component rendering",
+      "Form validation",
+      "API integration",
+      "Authentication flow",
+      "Navigation",
+      "Responsive design",
+      "RTL layout",
+      "Accessibility"
+    ]
+  },
+
+  "deployment": {
+    "platform": "Vercel (recommended) or Cloudflare Pages",
+    "build_command": "npm run build",
+    "output_directory": "dist",
+
+    "environment_variables": [
+      "VITE_CONVEX_URL",
+      "VITE_CONVEX_DEPLOY_KEY"
+    ],
+
+    "cdn": {
+      "static_assets": "Optimized and cached",
+      "images": "Auto-optimized"
+    }
+  },
+
+  "documentation": {
+    "files": [
+      {
+        "name": "DESIGN_SYSTEM.md",
+        "description": "Complete design system documentation",
+        "sections": ["Colors", "Typography", "Spacing", "Components", "Examples"]
+      },
+      {
+        "name": "FIGMA_UNLIMITED_IMPLEMENTATION.md",
+        "description": "Implementation guide and summary",
+        "sections": ["Features", "Architecture", "Usage", "Metrics"]
+      },
+      {
+        "name": "README.md",
+        "description": "Project overview and setup instructions",
+        "status": "to be created"
+      }
+    ],
+
+    "code_documentation": {
+      "style": "JSDoc comments",
+      "prop_types": "TypeScript interfaces",
+      "examples": "Inline code examples in comments"
+    }
+  },
+
+  "future_enhancements": [
+    "Storybook integration for component documentation",
+    "Unit and integration tests",
+    "Advanced reporting dashboard",
+    "Mobile app version (React Native)",
+    "Offline support with Service Workers",
+    "Multi-language support (Arabic + English)",
+    "Advanced analytics and insights",
+    "Role-based access control (RBAC)",
+    "Audit logging",
+    "Data export to Excel/CSV",
+    "Email notifications",
+    "SMS notifications",
+    "Webhooks integration",
+    "API documentation with Swagger",
+    "GraphQL API alternative"
+  ],
+
+  "code_style": {
+    "formatter": "Prettier",
+    "linter": "ESLint",
+    "naming_conventions": {
+      "components": "PascalCase",
+      "functions": "camelCase",
+      "constants": "UPPER_SNAKE_CASE",
+      "files": "kebab-case or PascalCase for components"
+    },
+    "import_order": [
+      "React imports",
+      "Third-party libraries",
+      "Local components",
+      "Utilities and helpers",
+      "Types and interfaces",
+      "Styles"
+    ]
+  },
+
+  "git_workflow": {
+    "branching_strategy": "feature branches",
+    "branch_naming": "claude/feature-name-sessionId",
+    "commit_style": "Conventional Commits",
+    "pr_process": "Required for production merges"
+  },
+
+  "statistics": {
+    "total_pages": 15,
+    "ui_components": 65,
+    "layout_components": 4,
+    "routes": 17,
+    "lines_of_code": "~17,143",
+    "design_tokens": {
+      "colors": "200+",
+      "spacing_units": "30+",
+      "font_sizes": 14,
+      "font_weights": 10
+    }
+  }
+}
