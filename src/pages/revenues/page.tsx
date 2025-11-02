@@ -30,7 +30,6 @@ import { toast } from "sonner";
 import { useBranch } from "@/hooks/use-branch";
 import { BranchSelector } from "@/components/branch-selector.tsx";
 import Navbar from "@/components/navbar.tsx";
-import { generateRevenuesPDF } from "@/lib/pdf-export";
 import { NotificationBanner } from "@/components/notification-banner.tsx";
 import {
   Select,
