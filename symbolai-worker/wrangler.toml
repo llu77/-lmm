@@ -38,6 +38,17 @@ class_name = "FinancialWorkflow"
 [ai]
 binding = "AI"
 
+# Cloudflare Agents (Durable Objects for MCP)
+[[durable_objects.bindings]]
+name = "CloudflareMCPAgent"
+class_name = "CloudflareMCPAgent"
+script_name = "symbolai-worker"
+
+# Agent migrations (for Durable Objects)
+[[migrations]]
+tag = "v1"
+new_classes = ["CloudflareMCPAgent"]
+
 # Environment Variables / Secrets
 [vars]
 ENVIRONMENT = "production"
