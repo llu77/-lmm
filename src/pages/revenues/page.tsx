@@ -25,8 +25,6 @@ import {
   AlertTriangleIcon,
   FileDownIcon,
   PrinterIcon,
-  Sparkles,
-  Activity,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useBranch } from "@/hooks/use-branch";
