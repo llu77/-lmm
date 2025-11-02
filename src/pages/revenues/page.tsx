@@ -120,7 +120,6 @@ function RevenuesContent({ branchId, branchName }: { branchId: string; branchNam
   
   // TODO: Replace with API calls to Cloudflare backend
   const [stats] = useState<any>(undefined);
-  const [revenues, setRevenues] = useState<any>(undefined);
 
   useEffect(() => {
     // TODO: Fetch revenue stats and list from Cloudflare API
