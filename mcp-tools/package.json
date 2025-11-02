@@ -1,0 +1,17 @@
+{
+  "name": "cloudflare-mcp-tools",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Cloudflare MCP Client Tools",
+  "scripts": {
+    "list-tools": "node list-mcp-tools.mjs",
+    "query-d1": "node query-d1.mjs",
+    "query-builds": "node query-builds.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.18.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0"
+  }
+}
