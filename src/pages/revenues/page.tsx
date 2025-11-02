@@ -1,9 +1,7 @@
 import { useState, useEffect } from "react";
-import { useMutation, useQuery, useAction } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
-import type { Id } from "@/convex/_generated/dataModel.d.ts";
-import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
+import { Authenticated, Unauthenticated, AuthLoading } from "@/hooks/use-auth";
 import { SignInButton } from "@/components/ui/signin.tsx";
+import { apiClient } from "@/lib/api-client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
@@ -31,10 +29,10 @@ import {
   Activity,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useBranch } from "@/hooks/use-branch.ts";
+import { useBranch } from "@/hooks/use-branch";
 import { BranchSelector } from "@/components/branch-selector.tsx";
 import Navbar from "@/components/navbar.tsx";
-import { generateRevenuesPDF } from "@/lib/pdf-export.ts";
+import { generateRevenuesPDF } from "@/lib/pdf-export";
 import { NotificationBanner } from "@/components/notification-banner.tsx";
 import {
   Select,
@@ -123,18 +121,15 @@ function RevenuesContent({ branchId, branchName }: { branchId: string; branchNam
   const [currentYear, setCurrentYear] = useState(now.getFullYear());
   const [showForm, setShowForm] = useState(false);
   
-  const stats = useQuery(api.revenues.getStats, { branchId });
-  const revenues = useQuery(api.revenues.list, { 
-    branchId,
-    month: currentMonth,
-    year: currentYear,
-  });
-  
-  const createRevenue = useMutation(api.revenues.create);
-  const removeRevenue = useMutation(api.revenues.remove);
-  const validateData = useAction(api.ai.validateRevenueData);
-  const triggerPdfGenerated = useAction(api.zapier.sendToZapier);
-  const generatePDFco = useAction(api.pdfAgent.generateRevenueReportPDF);
+  // TODO: Replace with API calls to Cloudflare backend
+  const [stats, setStats] = useState<any>(undefined);
+  const [revenues, setRevenues] = useState<any>(undefined);
+
+  useEffect(() => {
+    // TODO: Fetch revenue stats and list from Cloudflare API
+    // fetch(`/api/revenues/stats?branchId=${branchId}`).then(res => res.json()).then(setStats);
+    // fetch(`/api/revenues/list?branchId=${branchId}&month=${currentMonth}&year=${currentYear}`).then(res => res.json()).then(setRevenues);
+  }, [branchId, currentMonth, currentYear]);
 
   const [date, setDate] = useState<string>(
     new Date(currentYear, currentMonth, new Date().getDate()).toISOString().split("T")[0]
@@ -144,7 +139,7 @@ function RevenuesContent({ branchId, branchName }: { branchId: string; branchNam
   const [budget, setBudget] = useState<string>("");
   const [mismatchReason, setMismatchReason] = useState<string>("");
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [deleteId, setDeleteId] = useState<Id<"revenues"> | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const cashNum = parseFloat(cash) || 0;
   const networkNum = parseFloat(network) || 0;
@@ -210,7 +205,8 @@ function RevenuesContent({ branchId, branchName }: { branchId: string; branchNam
     }
 
     try {
-      await createRevenue({
+      // TODO: Replace with API call to Cloudflare backend
+      await apiClient.post('/api/revenues/create', {
         date: new Date(date).getTime(),
         cash: cashNum,
         network: networkNum,
@@ -222,41 +218,9 @@ function RevenuesContent({ branchId, branchName }: { branchId: string; branchNam
       });
 
       toast.success("تم إضافة الإيراد بنجاح");
-      
-      // 🤖 AI Data Validator Agent - التحقق الذكي من البيانات
-      try {
-        const historicalData = (revenues || []).map((r: { date: number; total?: number; isMatched?: boolean }) => ({
-          date: r.date,
-          total: r.total || 0,
-          isMatched: r.isMatched || false,
-        }));
 
-        // Run validation in background (don't block user)
-        validateData({
-          revenue: {
-            date: new Date(date).getTime(),
-            cash: cashNum,
-            network: networkNum,
-            budget: budgetNum,
-            total: cashNum + networkNum,
-            calculatedTotal: cashNum + networkNum,
-            isMatched,
-            employees: validEmployees.length > 0 ? validEmployees : undefined,
-          },
-          branchId,
-          branchName,
-          historicalData,
-        }).then((result) => {
-          if (result.notification?.shouldCreate) {
-            toast.info("🤖 AI: تم إنشاء تنبيه ذكي", { duration: 3000 });
-          }
-        }).catch((err) => {
-          console.error("AI Validator error:", err);
-        });
-      } catch (aiError) {
-        // AI validation failed silently, don't affect user flow
-        console.error("AI validation error:", aiError);
-      }
+      // TODO: Re-implement AI Data Validator with new backend
+      // await apiClient.post('/api/ai/validate-revenue', { ... });
       
       // Reset form
       setCash("");
@@ -276,7 +240,8 @@ function RevenuesContent({ branchId, branchName }: { branchId: string; branchNam
     if (!deleteId) return;
 
     try {
-      await removeRevenue({ id: deleteId });
+      // TODO: Replace with API call to Cloudflare backend
+      await apiClient.post('/api/revenues/remove', { id: deleteId });
       toast.success("تم حذف الإيراد بنجاح");
       setDeleteId(null);
     } catch (error: any) {
@@ -608,11 +573,11 @@ function RevenuesContent({ branchId, branchName }: { branchId: string; branchNam
                     const totalBudget = revenues.reduce((sum: number, r: { budget?: number }) => sum + (r.budget || 0), 0);
                     const grandTotal = revenues.reduce((sum: number, r: { total?: number }) => sum + (r.total || 0), 0);
 
-                    // Generate PDF with PDF.co
+                    // TODO: Generate PDF with new backend
                     try {
-                      toast.info("🔄 جاري إنشاء التقرير عبر PDF.co...");
-                      
-                      const result = await generatePDFco({
+                      toast.info("🔄 جاري إنشاء التقرير...");
+
+                      const result = await apiClient.post('/api/pdf/generate-revenue-report', {
                         branchId: branchId,
                         branchName: branchName,
                         startDate: new Date(currentYear, currentMonth, 1).getTime(),
@@ -629,38 +594,18 @@ function RevenuesContent({ branchId, branchName }: { branchId: string; branchNam
                       });
 
                       if (result.success && result.pdfUrl) {
-                        // Open PDF in new tab
                         window.open(result.pdfUrl, '_blank');
-                        toast.success("✅ تم إنشاء التقرير بنجاح! (PDF.co)");
-                        
-                        // Trigger Zapier webhook
-                        try {
-                          await triggerPdfGenerated({
-                            eventType: "pdf_generated",
-                            payload: {
-                              type: "revenue_report_export",
-                              pdfUrl: result.pdfUrl,
-                              fileName: result.fileName,
-                              branchName,
-                              month: currentMonth + 1,
-                              year: currentYear,
-                              totalCash,
-                              totalNetwork,
-                              totalBudget,
-                              grandTotal,
-                              recordCount: revenues.length,
-                            },
-                          });
-                        } catch (zapierError) {
-                          console.error("Zapier webhook failed:", zapierError);
-                        }
+                        toast.success("✅ تم إنشاء التقرير بنجاح!");
+
+                        // TODO: Trigger Zapier webhook with new backend
+                        // await apiClient.post('/api/zapier/webhook', { ... });
                       } else {
                         throw new Error(result.error || "Failed to generate PDF");
                       }
                     } catch (error) {
                       const errorMessage = error instanceof Error ? error.message : "فشل إنشاء التقرير";
                       toast.error(`⚠️ ${errorMessage}`, { duration: 6000 });
-                      console.error("PDF.co error:", error);
+                      console.error("PDF error:", error);
                     }
                   }}
                 >
@@ -687,11 +632,11 @@ function RevenuesContent({ branchId, branchName }: { branchId: string; branchNam
                     const totalBudget = revenues.reduce((sum: number, r: { budget?: number }) => sum + (r.budget || 0), 0);
                     const grandTotal = revenues.reduce((sum: number, r: { total?: number }) => sum + (r.total || 0), 0);
 
-                    // Generate PDF with PDF.co for printing
+                    // TODO: Generate PDF for printing with new backend
                     try {
                       toast.info("🔄 جاري إنشاء التقرير للطباعة...");
-                      
-                      const result = await generatePDFco({
+
+                      const result = await apiClient.post('/api/pdf/generate-revenue-report', {
                         branchId: branchId,
                         branchName: branchName,
                         startDate: new Date(currentYear, currentMonth, 1).getTime(),
@@ -708,11 +653,9 @@ function RevenuesContent({ branchId, branchName }: { branchId: string; branchNam
                       });
 
                       if (result.success && result.pdfUrl) {
-                        // Open in new tab for printing
                         const printWindow = window.open(result.pdfUrl, '_blank');
                         if (printWindow) {
                           printWindow.focus();
-                          // Wait a bit then trigger print dialog
                           setTimeout(() => {
                             try {
                               printWindow.print();
@@ -722,35 +665,16 @@ function RevenuesContent({ branchId, branchName }: { branchId: string; branchNam
                           }, 1000);
                         }
                         toast.success("✅ تم فتح التقرير للطباعة!");
-                        
-                        // Trigger Zapier webhook
-                        try {
-                          await triggerPdfGenerated({
-                            eventType: "pdf_generated",
-                            payload: {
-                              type: "revenue_report_print",
-                              pdfUrl: result.pdfUrl,
-                              fileName: result.fileName,
-                              branchName,
-                              month: currentMonth + 1,
-                              year: currentYear,
-                              totalCash,
-                              totalNetwork,
-                              totalBudget,
-                              grandTotal,
-                              recordCount: revenues.length,
-                            },
-                          });
-                        } catch (zapierError) {
-                          console.error("Zapier webhook failed:", zapierError);
-                        }
+
+                        // TODO: Trigger Zapier webhook with new backend
+                        // await apiClient.post('/api/zapier/webhook', { ... });
                       } else {
                         throw new Error(result.error || "Failed to generate PDF");
                       }
                     } catch (error) {
                       const errorMessage = error instanceof Error ? error.message : "فشل إنشاء التقرير";
                       toast.error(`⚠️ ${errorMessage}`, { duration: 6000 });
-                      console.error("PDF.co error:", error);
+                      console.error("PDF error:", error);
                     }
                   }}
                 >
@@ -788,7 +712,7 @@ function RevenuesContent({ branchId, branchName }: { branchId: string; branchNam
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {revenues.map((revenue: { _id: Id<"revenues">; date: number; cash?: number; network?: number; budget?: number; total?: number; employees?: { name: string; revenue: number }[]; isMatched?: boolean; mismatchReason?: string }) => (
+                  {revenues.map((revenue: { _id: string; date: number; cash?: number; network?: number; budget?: number; total?: number; employees?: { name: string; revenue: number }[]; isMatched?: boolean; mismatchReason?: string }) => (
                     <TableRow key={revenue._id}>
                       <TableCell className="font-medium">
                         {new Date(revenue.date).toLocaleDateString("en-GB", {

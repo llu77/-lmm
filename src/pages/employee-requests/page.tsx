@@ -1,16 +1,15 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
-import { useBranch } from "@/hooks/use-branch.ts";
-import { BranchSelector } from "@/components/branch-selector.tsx";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
-import { Button } from "@/components/ui/button.tsx";
-import { Input } from "@/components/ui/input.tsx";
-import { Label } from "@/components/ui/label.tsx";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select.tsx";
-import { Textarea } from "@/components/ui/textarea.tsx";
+import { apiClient } from "@/lib/api-client";
+import { useBranch } from "@/hooks/use-branch";
+import { BranchSelector } from "@/components/branch-selector";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import Navbar from "@/components/navbar.tsx";
+import Navbar from "@/components/navbar";
 import { FileTextIcon, CalendarIcon, DollarSignIcon, ClockIcon, AlertCircleIcon, LogOutIcon } from "lucide-react";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
@@ -62,8 +61,6 @@ export default function EmployeeRequests() {
   
   // Resignation fields
   const [nationalId, setNationalId] = useState("");
-
-  const createRequest = useMutation(api.employeeRequests.create);
 
   if (!branchId) {
     return <BranchSelector onBranchSelected={selectBranch} />;
@@ -177,8 +174,9 @@ export default function EmployeeRequests() {
         }
       }
 
-      await createRequest({ ...baseData, ...specificData });
-      
+      // TODO: Create API endpoint /api/employee-requests/create
+      await apiClient.post('/api/employee-requests/create', { ...baseData, ...specificData });
+
       toast.success("تم إرسال الطلب بنجاح");
       
       // Reset form

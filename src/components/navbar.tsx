@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button.tsx";
-import { Authenticated, Unauthenticated } from "convex/react";
+import { Authenticated, Unauthenticated } from "@/hooks/use-auth";
 import { SignInButton } from "@/components/ui/signin.tsx";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet.tsx";
 import {
@@ -31,8 +31,8 @@ import {
   WalletIcon,
   BoxIcon
 } from "lucide-react";
-import { useAuth } from "@/hooks/use-auth.ts";
-import { useBranch } from "@/hooks/use-branch.ts";
+import { useAuth } from "@/hooks/use-auth";
+import { useBranch } from "@/hooks/use-branch";
 
 export default function Navbar() {
   const location = useLocation();

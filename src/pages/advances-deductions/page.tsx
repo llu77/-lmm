@@ -1,8 +1,6 @@
-import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api";
-import type { Doc, Id } from "@/convex/_generated/dataModel";
-import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
+import { useState, useEffect } from "react";
+import { Authenticated, Unauthenticated, AuthLoading } from "@/hooks/use-auth";
+import { apiClient } from "@/lib/api-client";
 import { SignInButton } from "@/components/ui/signin";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -51,31 +49,59 @@ export default function AdvancesDeductionsPage() {
   );
 }
 
-type Advance = Doc<"advances">;
-type Deduction = Doc<"deductions">;
-type Employee = Doc<"employees">;
+interface Advance {
+  _id: string;
+  employeeName: string;
+  amount: number;
+  month: number;
+  year: number;
+  description?: string;
+}
+
+interface Deduction {
+  _id: string;
+  employeeName: string;
+  amount: number;
+  reason: string;
+  month: number;
+  year: number;
+  description?: string;
+}
+
+interface Employee {
+  _id: string;
+  employeeName: string;
+}
 
 function AdvancesDeductionsContent() {
   const { branchId, branchName } = useBranch();
   const currentDate = new Date();
   const [selectedMonth, setSelectedMonth] = useState<number>(currentDate.getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState<number>(currentDate.getFullYear());
+  const [advances, setAdvances] = useState<Advance[] | undefined>(undefined);
+  const [deductions, setDeductions] = useState<Deduction[] | undefined>(undefined);
+  const [employees, setEmployees] = useState<Employee[] | undefined>(undefined);
 
-  const advances = useQuery(api.advances.listAdvances, {
-    branchId: branchId ?? undefined,
-    month: selectedMonth,
-    year: selectedYear,
-  }) as Advance[] | undefined;
+  useEffect(() => {
+    if (!branchId) {
+      setAdvances(undefined);
+      setDeductions(undefined);
+      return;
+    }
+    // TODO: Create API endpoint /api/advances/list
+    // fetch(`/api/advances/list?branchId=${branchId}&month=${selectedMonth}&year=${selectedYear}`).then(r => r.json()).then(setAdvances);
+    // TODO: Create API endpoint /api/deductions/list
+    // fetch(`/api/deductions/list?branchId=${branchId}&month=${selectedMonth}&year=${selectedYear}`).then(r => r.json()).then(setDeductions);
+  }, [branchId, selectedMonth, selectedYear]);
 
-  const deductions = useQuery(api.deductions.listDeductions, {
-    branchId: branchId ?? undefined,
-    month: selectedMonth,
-    year: selectedYear,
-  }) as Deduction[] | undefined;
-
-  const employees = useQuery(api.employees.getActiveEmployees, {
-    branchId: branchId ?? undefined,
-  }) as Employee[] | undefined;
+  useEffect(() => {
+    if (!branchId) {
+      setEmployees(undefined);
+      return;
+    }
+    // TODO: Create API endpoint /api/employees/active
+    // fetch(`/api/employees/active?branchId=${branchId}`).then(r => r.json()).then(setEmployees);
+  }, [branchId]);
 
   // Calculate totals
   const totalAdvances = (advances ?? []).reduce((sum: number, advance: Advance) => sum + advance.amount, 0);
@@ -318,7 +344,7 @@ function AddAdvanceDialog({
 }: {
   branchId: string | null;
   branchName: string | null;
-  employees: Array<{ _id: Id<"employees">; employeeName: string }>;
+  employees: Array<{ _id: string; employeeName: string }>;
   month: number;
   year: number;
 }) {
@@ -326,7 +352,6 @@ function AddAdvanceDialog({
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>("");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
-  const createAdvance = useMutation(api.advances.createAdvance);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -350,7 +375,8 @@ function AddAdvanceDialog({
         return;
       }
 
-      await createAdvance({
+      // TODO: Create API endpoint /api/advances/create
+      await apiClient.post('/api/advances/create', {
         branchId,
         branchName,
         employeeId: employee._id,
@@ -434,11 +460,10 @@ function AddAdvanceDialog({
 }
 
 // Edit Advance Dialog
-function EditAdvanceDialog({ advance }: { advance: { _id: Id<"advances">; amount: number; description?: string } }) {
+function EditAdvanceDialog({ advance }: { advance: { _id: string; amount: number; description?: string } }) {
   const [open, setOpen] = useState(false);
   const [amount, setAmount] = useState(advance.amount.toString());
   const [description, setDescription] = useState(advance.description || "");
-  const updateAdvance = useMutation(api.advances.updateAdvance);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -448,7 +473,8 @@ function EditAdvanceDialog({ advance }: { advance: { _id: Id<"advances">; amount
     }
 
     try {
-      await updateAdvance({
+      // TODO: Create API endpoint /api/advances/update
+      await apiClient.post('/api/advances/update', {
         advanceId: advance._id,
         amount: parseFloat(amount),
         description: description || undefined,
@@ -505,12 +531,11 @@ function EditAdvanceDialog({ advance }: { advance: { _id: Id<"advances">; amount
 }
 
 // Delete Advance Dialog
-function DeleteAdvanceDialog({ advanceId, employeeName }: { advanceId: Id<"advances">; employeeName: string }) {
-  const deleteAdvance = useMutation(api.advances.deleteAdvance);
-
+function DeleteAdvanceDialog({ advanceId, employeeName }: { advanceId: string; employeeName: string }) {
   const handleDelete = async () => {
     try {
-      await deleteAdvance({ advanceId });
+      // TODO: Create API endpoint /api/advances/delete
+      await apiClient.post('/api/advances/delete', { advanceId });
       toast.success("تم حذف السلفة بنجاح");
     } catch (error) {
       toast.error("فشل حذف السلفة");
@@ -551,7 +576,7 @@ function AddDeductionDialog({
 }: {
   branchId: string | null;
   branchName: string | null;
-  employees: Array<{ _id: Id<"employees">; employeeName: string }>;
+  employees: Array<{ _id: string; employeeName: string }>;
   month: number;
   year: number;
 }) {
@@ -560,7 +585,6 @@ function AddDeductionDialog({
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
   const [description, setDescription] = useState("");
-  const createDeduction = useMutation(api.deductions.createDeduction);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -588,7 +612,8 @@ function AddDeductionDialog({
         return;
       }
 
-      await createDeduction({
+      // TODO: Create API endpoint /api/deductions/create
+      await apiClient.post('/api/deductions/create', {
         branchId,
         branchName,
         employeeId: employee._id,
@@ -682,12 +707,11 @@ function AddDeductionDialog({
 }
 
 // Edit Deduction Dialog
-function EditDeductionDialog({ deduction }: { deduction: { _id: Id<"deductions">; amount: number; reason: string; description?: string } }) {
+function EditDeductionDialog({ deduction }: { deduction: { _id: string; amount: number; reason: string; description?: string } }) {
   const [open, setOpen] = useState(false);
   const [amount, setAmount] = useState(deduction.amount.toString());
   const [reason, setReason] = useState(deduction.reason);
   const [description, setDescription] = useState(deduction.description || "");
-  const updateDeduction = useMutation(api.deductions.updateDeduction);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -701,7 +725,8 @@ function EditDeductionDialog({ deduction }: { deduction: { _id: Id<"deductions">
     }
 
     try {
-      await updateDeduction({
+      // TODO: Create API endpoint /api/deductions/update
+      await apiClient.post('/api/deductions/update', {
         deductionId: deduction._id,
         amount: parseFloat(amount),
         reason,
@@ -766,12 +791,11 @@ function EditDeductionDialog({ deduction }: { deduction: { _id: Id<"deductions">
 }
 
 // Delete Deduction Dialog
-function DeleteDeductionDialog({ deductionId, employeeName }: { deductionId: Id<"deductions">; employeeName: string }) {
-  const deleteDeduction = useMutation(api.deductions.deleteDeduction);
-
+function DeleteDeductionDialog({ deductionId, employeeName }: { deductionId: string; employeeName: string }) {
   const handleDelete = async () => {
     try {
-      await deleteDeduction({ deductionId });
+      // TODO: Create API endpoint /api/deductions/delete
+      await apiClient.post('/api/deductions/delete', { deductionId });
       toast.success("تم حذف الخصم بنجاح");
     } catch (error) {
       toast.error("فشل حذف الخصم");

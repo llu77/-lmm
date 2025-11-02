@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
-import { api } from "@/convex/_generated/api.js";
-import { useConvexAuth, useMutation } from "convex/react";
+import { useAuth } from "@/hooks/use-auth";
+import { apiClient } from "@/lib/api-client";
 import { Spinner } from "../ui/spinner";
 
 // This will automatically run and store the user
 function useUpdateCurrentUserEffect() {
-  const { isAuthenticated } = useConvexAuth();
-  const updateCurrentUser = useMutation(api.users.updateCurrentUser);
+  const { isAuthenticated } = useAuth();
   const [isCreatingUser, setIsCreatingUser] = useState(false);
   const [userCreated, setUserCreated] = useState(false);
 
@@ -18,14 +17,15 @@ function useUpdateCurrentUserEffect() {
     async function createUser() {
       setIsCreatingUser(true);
       try {
-        await updateCurrentUser();
+        // TODO: Create API endpoint /api/users/update-current
+        await apiClient.post('/api/users/update-current', {});
         setUserCreated(true);
       } finally {
         setIsCreatingUser(false);
       }
     }
     createUser();
-  }, [isAuthenticated, updateCurrentUser]);
+  }, [isAuthenticated]);
 
   return { isCreatingUser, userCreated };
 }
@@ -44,7 +44,7 @@ export function UpdateCurrentUserProvider({
 }: {
   children: React.ReactNode;
 }) {
-  const { isAuthenticated } = useConvexAuth();
+  const { isAuthenticated } = useAuth();
   const { isCreatingUser, userCreated } = useUpdateCurrentUserEffect();
 
   // State 1: User unauthenticated - render children

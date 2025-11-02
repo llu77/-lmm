@@ -1,24 +1,44 @@
-import { useState } from "react";
-import { useQuery, useMutation, useAction } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
-import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
-import { SignInButton } from "@/components/ui/signin.tsx";
-import Navbar from "@/components/navbar.tsx";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
-import { Button } from "@/components/ui/button.tsx";
-import { Input } from "@/components/ui/input.tsx";
-import { Label } from "@/components/ui/label.tsx";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table.tsx";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog.tsx";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog.tsx";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select.tsx";
-import { Skeleton } from "@/components/ui/skeleton.tsx";
-import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from "@/components/ui/empty.tsx";
+import { useState, useEffect } from "react";
+import { Authenticated, Unauthenticated, AuthLoading } from "@/hooks/use-auth";
+import { apiClient } from "@/lib/api-client";
+import { SignInButton } from "@/components/ui/signin";
+import Navbar from "@/components/navbar";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from "@/components/ui/empty";
 import { toast } from "sonner";
-import { useBranch } from "@/hooks/use-branch.ts";
-import { BranchSelector } from "@/components/branch-selector.tsx";
+import { useBranch } from "@/hooks/use-branch";
+import { BranchSelector } from "@/components/branch-selector";
 import { PlusIcon, ReceiptIcon, TrashIcon, DownloadIcon, PrinterIcon, FileTextIcon } from "lucide-react";
-import type { Doc, Id } from "@/convex/_generated/dataModel";
+
+interface PayrollEmployee {
+  employeeName: string;
+  baseSalary: number;
+  supervisorAllowance: number;
+  incentives: number;
+  totalAdvances: number;
+  totalDeductions: number;
+  netSalary: number;
+}
+
+interface PayrollRecordDoc {
+  _id: string;
+  branchName: string;
+  supervisorName?: string;
+  month: number;
+  year: number;
+  generatedAt: number;
+  totalNetSalary: number;
+  emailSent: boolean;
+  employees: PayrollEmployee[];
+}
 
 export default function PayrollPage() {
   return (
@@ -48,22 +68,21 @@ export default function PayrollPage() {
   );
 }
 
-type PayrollRecordDoc = Doc<"payrollRecords">;
-
 function PayrollPageContent() {
   const { branchId, branchName, selectBranch } = useBranch();
   const [showGenerateDialog, setShowGenerateDialog] = useState(false);
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
+  const [payrollRecords, setPayrollRecords] = useState<PayrollRecordDoc[] | undefined>(undefined);
 
-  const payrollRecords = useQuery(api.payroll.listPayrollRecords, {
-    branchId: branchId || undefined,
-    month,
-    year,
-  }) as PayrollRecordDoc[] | undefined;
-
-  const generatePayroll = useMutation(api.payroll.generatePayroll);
-  const deletePayroll = useMutation(api.payroll.deletePayroll);
+  useEffect(() => {
+    if (!branchId) {
+      setPayrollRecords(undefined);
+      return;
+    }
+    // TODO: Create API endpoint /api/payroll/list
+    // fetch(`/api/payroll/list?branchId=${branchId}&month=${month}&year=${year}`).then(r => r.json()).then(setPayrollRecords);
+  }, [branchId, month, year]);
 
   const handleGenerate = async (supervisorName?: string) => {
     if (!branchId || !branchName) {
@@ -73,7 +92,8 @@ function PayrollPageContent() {
 
     try {
       toast.loading("جاري إنشاء مسير الرواتب...");
-      await generatePayroll({
+      // TODO: Create API endpoint /api/payroll/generate
+      await apiClient.post('/api/payroll/generate', {
         branchId,
         branchName,
         supervisorName,
@@ -90,9 +110,10 @@ function PayrollPageContent() {
     }
   };
 
-  const handleDelete = async (id: Id<"payrollRecords">) => {
+  const handleDelete = async (id: string) => {
     try {
-      await deletePayroll({ payrollId: id });
+      // TODO: Create API endpoint /api/payroll/delete
+      await apiClient.post('/api/payroll/delete', { payrollId: id });
       toast.success("تم حذف مسير الرواتب");
     } catch (error) {
       toast.error("فشل حذف مسير الرواتب");
@@ -401,13 +422,12 @@ function PayrollDetailsDialog({ record }: { record: PayrollRecordDoc }) {
   );
 }
 
-function PDFExportButton({ payrollId }: { payrollId: Id<"payrollRecords"> }) {
-  const generatePDF = useAction(api.pdfAgent.generatePayrollPDF);
-
+function PDFExportButton({ payrollId }: { payrollId: string }) {
   const handleExport = async () => {
     try {
       toast.loading("🔄 جاري إنشاء PDF عبر PDF.co...");
-      const result = await generatePDF({ payrollId });
+      // TODO: Create API endpoint /api/pdf/generate-payroll
+      const result = await apiClient.post('/api/pdf/generate-payroll', { payrollId });
       toast.dismiss();
       if (result.success && result.url) {
         window.open(result.url, "_blank");

@@ -1,12 +1,10 @@
-import { useState } from "react";
-import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
-import type { Doc, Id } from "@/convex/_generated/dataModel";
+import { useState, useEffect } from "react";
+import { Authenticated, Unauthenticated, AuthLoading } from "@/hooks/use-auth";
+import { apiClient } from "@/lib/api-client";
 import Navbar from "@/components/navbar.tsx";
 import { SignInButton } from "@/components/ui/signin.tsx";
 import { BranchSelector } from "@/components/branch-selector.tsx";
-import { useBranch } from "@/hooks/use-branch.ts";
+import { useBranch } from "@/hooks/use-branch";
 import { Button } from "@/components/ui/button.tsx";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
@@ -28,7 +26,7 @@ import {
   FileDownIcon,
   PrinterIcon,
 } from "lucide-react";
-import { generateExpensesPDF } from "@/lib/pdf-export.ts";
+import { generateExpensesPDF } from "@/lib/pdf-export";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
@@ -47,7 +45,17 @@ const EXPENSE_CATEGORIES = [
   "أخرى",
 ];
 
-type ExpenseDoc = Doc<"expenses">;
+type ExpenseDoc = {
+  _id: string;
+  title: string;
+  category: string;
+  amount: number;
+  date: number;
+  description?: string;
+  branchId: string;
+  branchName: string;
+};
+
 type ExpenseStats = {
   totalExpenses: number;
   totalCount: number;
@@ -68,21 +76,18 @@ function ExpensesContent() {
   const [description, setDescription] = useState("");
   const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
 
-  const expenses = useQuery(
-    api.expenses.list,
-    isSelected
-      ? {
-          branchId: branchId!,
-          category: selectedCategory === "all" ? undefined : selectedCategory,
-        }
-      : "skip",
-  ) as ExpenseDoc[] | undefined;
-  const stats = useQuery(
-    api.expenses.getStats,
-    isSelected ? { branchId: branchId! } : "skip",
-  ) as ExpenseStats | undefined;
-  const createExpense = useMutation(api.expenses.create);
-  const removeExpense = useMutation(api.expenses.remove);
+  // TODO: Replace with API calls to Cloudflare backend
+  const [expenses, setExpenses] = useState<ExpenseDoc[] | undefined>(undefined);
+  const [stats, setStats] = useState<ExpenseStats | undefined>(undefined);
+
+  useEffect(() => {
+    if (isSelected) {
+      // TODO: Fetch expenses list from Cloudflare API
+      // const category = selectedCategory === "all" ? undefined : selectedCategory;
+      // fetch(`/api/expenses/list?branchId=${branchId}&category=${category}`).then(res => res.json()).then(setExpenses);
+      // fetch(`/api/expenses/stats?branchId=${branchId}`).then(res => res.json()).then(setStats);
+    }
+  }, [isSelected, branchId, selectedCategory]);
 
   const expensesList: ExpenseDoc[] = expenses ?? [];
 
@@ -110,7 +115,8 @@ function ExpensesContent() {
     }
 
     try {
-      await createExpense({
+      // TODO: Replace with API call to Cloudflare backend
+      await apiClient.post('/api/expenses/create', {
         title: title.trim(),
         amount: amountNum,
         category,
@@ -130,9 +136,10 @@ function ExpensesContent() {
     }
   };
 
-  const handleDeleteExpense = async (id: Id<"expenses">) => {
+  const handleDeleteExpense = async (id: string) => {
     try {
-      await removeExpense({ id });
+      // TODO: Replace with API call to Cloudflare backend
+      await apiClient.post('/api/expenses/remove', { id });
       toast.success("تم حذف المصروف بنجاح");
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "حدث خطأ أثناء حذف المصروف";

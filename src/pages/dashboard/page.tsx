@@ -1,7 +1,5 @@
-import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
-import { useQuery } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
-import type { Doc } from "@/convex/_generated/dataModel";
+import { useState, useEffect } from "react";
+import { Authenticated, Unauthenticated, AuthLoading } from "@/hooks/use-auth";
 import Navbar from "@/components/navbar.tsx";
 import { SignInButton } from "@/components/ui/signin.tsx";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
@@ -108,9 +106,18 @@ function StatsCard({
 }
 
 function DashboardContent() {
-  const stats = useQuery(api.dashboard.getStats) as DashboardStats | undefined;
-  const chartData = useQuery(api.dashboard.getChartData) as DashboardChartPoint[] | undefined;
-  const recentActivity = useQuery(api.dashboard.getRecentActivity) as DashboardRecentActivity | undefined;
+  // TODO: Replace with API calls to Cloudflare backend
+  // Example: const { data: stats } = useQuery('/api/dashboard/stats');
+  const [stats, setStats] = useState<DashboardStats | undefined>(undefined);
+  const [chartData, setChartData] = useState<DashboardChartPoint[] | undefined>(undefined);
+  const [recentActivity, setRecentActivity] = useState<DashboardRecentActivity | undefined>(undefined);
+
+  useEffect(() => {
+    // TODO: Fetch dashboard stats from Cloudflare API
+    // fetch('/api/dashboard/stats').then(res => res.json()).then(setStats);
+    // fetch('/api/dashboard/chart-data').then(res => res.json()).then(setChartData);
+    // fetch('/api/dashboard/recent-activity').then(res => res.json()).then(setRecentActivity);
+  }, []);
 
   if (stats === undefined || chartData === undefined || recentActivity === undefined) {
     return (

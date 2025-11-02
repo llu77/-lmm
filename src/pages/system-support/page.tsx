@@ -1,20 +1,18 @@
 import { useState, useEffect } from "react";
-import { useAction, useQuery, useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
-import type { Doc } from "@/convex/_generated/dataModel";
-import { Authenticated, Unauthenticated } from "convex/react";
-import { SignInButton } from "@/components/ui/signin.tsx";
-import Navbar from "@/components/navbar.tsx";
-import { Button } from "@/components/ui/button.tsx";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.tsx";
-import { Input } from "@/components/ui/input.tsx";
-import { Label } from "@/components/ui/label.tsx";
-import { Textarea } from "@/components/ui/textarea.tsx";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select.tsx";
-import { Badge } from "@/components/ui/badge.tsx";
-import { Separator } from "@/components/ui/separator.tsx";
-import { Switch } from "@/components/ui/switch.tsx";
+import { Authenticated, Unauthenticated } from "@/hooks/use-auth";
+import { apiClient } from "@/lib/api-client";
+import { SignInButton } from "@/components/ui/signin";
+import Navbar from "@/components/navbar";
+import { Button } from "@/components/ui/button.";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.";
+import { Input } from "@/components/ui/input.";
+import { Label } from "@/components/ui/label.";
+import { Textarea } from "@/components/ui/textarea.";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select.";
+import { Badge } from "@/components/ui/badge.";
+import { Separator } from "@/components/ui/separator.";
+import { Switch } from "@/components/ui/switch.";
 import { toast } from "sonner";
 import {
   MailIcon,
@@ -45,11 +43,12 @@ type EmailSettingsDoc = ReturnType<typeof useQuery<typeof api.emailSettings.getA
 type EmailLogDoc = Doc<"emailLogs">;
 
 function SettingsTabContent() {
-  const settings = useQuery(api.emailSettings.getAllSettings);
-  const updateSenderSettings = useMutation(api.emailSettings.updateSenderSettings);
-  const updateDefaultRecipients = useMutation(api.emailSettings.updateDefaultRecipients);
-  const updateDailySchedule = useMutation(api.emailSettings.updateDailySchedule);
-  const updateMonthlySchedule = useMutation(api.emailSettings.updateMonthlySchedule);
+  const [settings, setSettings] = useState<any>(undefined);
+  useEffect(() => { // TODO: fetch("/api/email-settings/all").then(r => r.json()).then(setSettings); }, []);
+  // TODO: API endpoint /api/email-settings/updatesendersettings
+  // TODO: API endpoint /api/email-settings/updatedefaultrecipients
+  // TODO: API endpoint /api/email-settings/updatedailyschedule
+  // TODO: API endpoint /api/email-settings/updatemonthlyschedule
 
   const [senderName, setSenderName] = useState("");
   const [senderEmail, setSenderEmail] = useState("");
@@ -118,7 +117,7 @@ function SettingsTabContent() {
 
     setSaving(true);
     try {
-      await updateSenderSettings({ senderName, senderEmail });
+      await apiClient.post("/api/email-settings/sendersettings", { senderName, senderEmail });
       toast.success("✅ تم حفظ إعدادات المرسل");
     } catch (error) {
       toast.error("فشل حفظ الإعدادات");
@@ -148,7 +147,7 @@ function SettingsTabContent() {
   const handleSaveRecipients = async () => {
     setSaving(true);
     try {
-      await updateDefaultRecipients({ recipients });
+      await apiClient.post("/api/email-settings/defaultrecipients", { recipients });
       toast.success("✅ تم حفظ المستلمين الافتراضيين");
     } catch (error) {
       toast.error("فشل حفظ المستلمين");
@@ -166,7 +165,7 @@ function SettingsTabContent() {
 
     setSaving(true);
     try {
-      await updateDailySchedule({
+      await apiClient.post("/api/email-settings/dailyschedule", {
         enabled: dailyEnabled,
         time: dailyTime,
         templateId: dailyTemplate,
@@ -190,7 +189,7 @@ function SettingsTabContent() {
 
     setSaving(true);
     try {
-      await updateMonthlySchedule({
+      await apiClient.post("/api/email-settings/monthlyschedule", {
         enabled: monthlyEnabled,
         day: monthlyDay,
         time: monthlyTime,
