@@ -118,7 +118,7 @@ ORDER BY id;
 
 ```bash
 cd /home/user/-lmm
-npx wrangler d1 execute DB --remote --file=admin-1761952472067.sql
+npx wrangler d1 execute DB --remote --file=admin-<timestamp>.sql
 ```
 
 **What this does:**
