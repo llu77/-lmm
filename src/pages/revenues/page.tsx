@@ -119,7 +119,7 @@ function RevenuesContent({ branchId, branchName }: { branchId: string; branchNam
   const [showForm, setShowForm] = useState(false);
   
   // TODO: Replace with API calls to Cloudflare backend
-  const [stats, setStats] = useState<any>(undefined);
+  const [stats] = useState<any>(undefined);
   const [revenues, setRevenues] = useState<any>(undefined);
 
   useEffect(() => {
