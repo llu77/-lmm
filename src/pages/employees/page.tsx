@@ -1,24 +1,22 @@
-import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
-import type { Doc } from "@/convex/_generated/dataModel";
-import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
-import { SignInButton } from "@/components/ui/signin.tsx";
-import Navbar from "@/components/navbar.tsx";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
-import { Button } from "@/components/ui/button.tsx";
-import { Input } from "@/components/ui/input.tsx";
-import { Label } from "@/components/ui/label.tsx";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table.tsx";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog.tsx";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog.tsx";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.tsx";
-import { Badge } from "@/components/ui/badge.tsx";
-import { Skeleton } from "@/components/ui/skeleton.tsx";
-import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from "@/components/ui/empty.tsx";
+import { useState, useEffect } from "react";
+import { Authenticated, Unauthenticated, AuthLoading } from "@/hooks/use-auth";
+import { apiClient } from "@/lib/api-client";
+import { SignInButton } from "@/components/ui/signin";
+import Navbar from "@/components/navbar";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from "@/components/ui/empty";
 import { toast } from "sonner";
-import { useBranch } from "@/hooks/use-branch.ts";
-import { BranchSelector } from "@/components/branch-selector.tsx";
+import { useBranch } from "@/hooks/use-branch";
+import { BranchSelector } from "@/components/branch-selector";
 import {
   UsersIcon,
   PlusIcon,
@@ -31,7 +29,17 @@ import {
   CalendarIcon,
   IdCardIcon
 } from "lucide-react";
-import type { Id } from "@/convex/_generated/dataModel";
+
+interface EmployeeDoc {
+  _id: string;
+  employeeName: string;
+  nationalId?: string;
+  idExpiryDate?: number;
+  baseSalary: number;
+  supervisorAllowance: number;
+  incentives: number;
+  isActive: boolean;
+}
 
 export default function EmployeesPage() {
   return (
@@ -61,22 +69,25 @@ export default function EmployeesPage() {
   );
 }
 
-type EmployeeDoc = Doc<"employees">;
-
 function EmployeesPageContent() {
   const { branchId, branchName, selectBranch } = useBranch();
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">("active");
+  const [employees, setEmployees] = useState<EmployeeDoc[] | undefined>(undefined);
 
-  const employees = useQuery(api.employees.listEmployees, {
-    branchId: branchId || undefined,
-  }) as EmployeeDoc[] | undefined;
+  useEffect(() => {
+    if (!branchId) {
+      setEmployees(undefined);
+      return;
+    }
+    // TODO: Create API endpoint /api/employees/list
+    // fetch(`/api/employees/list?branchId=${branchId}`).then(r => r.json()).then(setEmployees);
+  }, [branchId]);
 
-  const deleteEmployee = useMutation(api.employees.deleteEmployee);
-
-  const handleDelete = async (id: Id<"employees">) => {
+  const handleDelete = async (id: string) => {
     try {
-      await deleteEmployee({ employeeId: id });
+      // TODO: Create API endpoint /api/employees/delete
+      await apiClient.post('/api/employees/delete', { employeeId: id });
       toast.success("تم حذف الموظف بنجاح");
     } catch (error) {
       toast.error("فشل حذف الموظف");
@@ -324,8 +335,6 @@ function AddEmployeeDialog({ branchId, branchName }: { branchId: string; branchN
     incentives: "",
   });
 
-  const createEmployee = useMutation(api.employees.createEmployee);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -335,7 +344,8 @@ function AddEmployeeDialog({ branchId, branchName }: { branchId: string; branchN
     }
 
     try {
-      await createEmployee({
+      // TODO: Create API endpoint /api/employees/create
+      await apiClient.post('/api/employees/create', {
         branchId,
         branchName,
         employeeName: formData.employeeName,
@@ -451,16 +461,7 @@ function AddEmployeeDialog({ branchId, branchName }: { branchId: string; branchN
   );
 }
 
-function EditEmployeeDialog({ employee }: { employee: {
-  _id: Id<"employees">;
-  employeeName: string;
-  nationalId?: string;
-  idExpiryDate?: number;
-  baseSalary: number;
-  supervisorAllowance: number;
-  incentives: number;
-  isActive: boolean;
-} }) {
+function EditEmployeeDialog({ employee }: { employee: EmployeeDoc }) {
   const [open, setOpen] = useState(false);
   const [formData, setFormData] = useState({
     employeeName: employee.employeeName,
@@ -472,13 +473,12 @@ function EditEmployeeDialog({ employee }: { employee: {
     isActive: employee.isActive,
   });
 
-  const updateEmployee = useMutation(api.employees.updateEmployee);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     try {
-      await updateEmployee({
+      // TODO: Create API endpoint /api/employees/update
+      await apiClient.post('/api/employees/update', {
         employeeId: employee._id,
         employeeName: formData.employeeName,
         nationalId: formData.nationalId || undefined,

@@ -1,14 +1,13 @@
-import { useState } from "react";
-import { useAction, useQuery, useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
-import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
-import { SignInButton } from "@/components/ui/signin.tsx";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card.tsx";
-import { Button } from "@/components/ui/button.tsx";
-import { Textarea } from "@/components/ui/textarea.tsx";
-import { Skeleton } from "@/components/ui/skeleton.tsx";
-import { Input } from "@/components/ui/input.tsx";
-import { Label } from "@/components/ui/label.tsx";
+import { useState, useEffect } from "react";
+import { Authenticated, Unauthenticated, AuthLoading } from "@/hooks/use-auth";
+import { apiClient } from "@/lib/api-client";
+import { SignInButton } from "@/components/ui/signin";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   BrainIcon,
   SparklesIcon,
@@ -118,8 +117,10 @@ function AIAssistantContent({ branchId, branchName }: { branchId: string; branch
 // ============================================================================
 
 function OverviewTab({ branchId, branchName }: { branchId: string; branchName: string }) {
-  const notifications = useQuery(api.notifications.getActiveBranch, { branchId });
-  const unreadCount = useQuery(api.notifications.getUnreadCount, { branchId });
+  // TODO: Create API endpoint /api/notifications/active
+  const [notifications] = useState<any>(undefined);
+  useEffect(() => { if (branchId) { } }, [branchId]);
+  const [unreadCount] = useState<number | undefined>(undefined);
 
   return (
     <div className="space-y-6">
@@ -308,12 +309,12 @@ function ValidatorTab({ branchId, branchName }: { branchId: string; branchName: 
 function PatternsTab({ branchId, branchName }: { branchId: string; branchName: string }) {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
-  const analyzePatterns = useAction(api.ai.analyzeRevenuePatterns);
+  // TODO: Create API action /api/ai/analyze-revenue
 
   const handleAnalyze = async () => {
     setLoading(true);
     try {
-      const analysis = await analyzePatterns({ branchId, branchName });
+      const analysis = await apiClient.post("/api/ai/analyze-revenue",{ branchId, branchName });
       setResult(analysis);
       toast.success("تم تحليل الأنماط بنجاح");
     } catch (error) {
@@ -385,7 +386,7 @@ function ContentTab({ branchId, branchName }: { branchId: string; branchName: st
   const [purpose, setPurpose] = useState("");
   const [data, setData] = useState("");
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
-  const generateContent = useAction(api.ai.generateSmartContent);
+  // TODO: Create API action /api/ai/generate-content
 
   const handleGenerate = async () => {
     if (!purpose || !data) {
@@ -395,7 +396,7 @@ function ContentTab({ branchId, branchName }: { branchId: string; branchName: st
 
     setLoading(true);
     try {
-      const content = await generateContent({
+      const content = await apiClient.post("/api/ai/generate-content",{
         contentType,
         context: { branchName, data, purpose },
       });
@@ -485,7 +486,7 @@ function EmailTab({ branchId, branchName }: { branchId: string; branchName: stri
   const [emails, setEmails] = useState("");
   const [emailType, setEmailType] = useState("alert");
   const [data, setData] = useState("");
-  const sendEmail = useAction(api.ai.sendSmartEmail);
+  // TODO: Create API action /api/ai/send-email
 
   const handleSend = async () => {
     if (!emails || !data) {
@@ -495,7 +496,7 @@ function EmailTab({ branchId, branchName }: { branchId: string; branchName: stri
 
     setLoading(true);
     try {
-      await sendEmail({
+      await apiClient.post("/api/ai/send-email",{
         to: emails.split(",").map(e => e.trim()),
         branchName,
         emailType,

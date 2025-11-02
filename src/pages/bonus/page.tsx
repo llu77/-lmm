@@ -1,14 +1,12 @@
-import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
-import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
-import type { Doc } from "@/convex/_generated/dataModel";
+import { useState, useEffect } from "react";
+import { Authenticated, Unauthenticated, AuthLoading } from "@/hooks/use-auth";
+import { apiClient } from "@/lib/api-client";
 import { SignInButton } from "@/components/ui/signin.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
-import { useBranch } from "@/hooks/use-branch.ts";
+import { useBranch } from "@/hooks/use-branch";
 import { BranchSelector } from "@/components/branch-selector.tsx";
 import Navbar from "@/components/navbar.tsx";
 import { CheckCircle2, XCircle, CalendarIcon, TrendingUpIcon, CoinsIcon, UsersIcon } from "lucide-react";
@@ -33,21 +31,41 @@ type WeekBonusResponse = {
   year: number;
 };
 
-type BonusRecord = Doc<"bonusRecords">;
+type BonusRecord = {
+  _id: string;
+  branchId: string;
+  branchName: string;
+  week: number;
+  month: number;
+  year: number;
+  weekLabel: string;
+  startDate: number;
+  endDate: number;
+  totalBonusPaid: number;
+  employeeBonuses: Array<{
+    employeeName: string;
+    totalRevenue: number;
+    bonusAmount: number;
+    isEligible: boolean;
+  }>;
+  approvedAt: number;
+};
 
 function BonusPageInner() {
   const { branchId, branchName, selectBranch } = useBranch();
   const [isApproving, setIsApproving] = useState(false);
 
-  const currentWeekData = useQuery(
-    api.bonus.getCurrentWeekRevenues,
-    branchId ? { branchId } : "skip",
-  ) as WeekBonusResponse | undefined;
-  const bonusRecords = useQuery(
-    api.bonus.getBonusRecords,
-    branchId ? { branchId } : "skip",
-  ) as BonusRecord[] | undefined;
-  const approveBonus = useMutation(api.bonus.approveBonus);
+  // TODO: Replace with API calls to Cloudflare backend
+  const [currentWeekData] = useState<WeekBonusResponse | undefined>(undefined);
+  const [bonusRecords] = useState<BonusRecord[] | undefined>(undefined);
+
+  useEffect(() => {
+    if (branchId) {
+      // TODO: Fetch current week data and bonus records from Cloudflare API
+      // fetch(`/api/bonus/current-week?branchId=${branchId}`).then(res => res.json()).then(setCurrentWeekData);
+      // fetch(`/api/bonus/records?branchId=${branchId}`).then(res => res.json()).then(setBonusRecords);
+    }
+  }, [branchId]);
 
   if (!branchId || !branchName) {
     return <BranchSelector onBranchSelected={selectBranch} />;
@@ -63,7 +81,8 @@ function BonusPageInner() {
 
     setIsApproving(true);
     try {
-      await approveBonus({ branchId, branchName });
+      // TODO: Replace with API call to Cloudflare backend
+      await apiClient.post('/api/bonus/approve', { branchId, branchName });
       toast.success("تم اعتماد البونص بنجاح");
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "حدث خطأ أثناء اعتماد البونص";

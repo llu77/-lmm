@@ -1,25 +1,55 @@
-import { useQuery, useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
-import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
-import { SignInButton } from "@/components/ui/signin.tsx";
-import { Skeleton } from "@/components/ui/skeleton.tsx";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
-import { Badge } from "@/components/ui/badge.tsx";
-import { Button } from "@/components/ui/button.tsx";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog.tsx";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.tsx";
-import { Textarea } from "@/components/ui/textarea.tsx";
+import { Authenticated, Unauthenticated, AuthLoading } from "@/hooks/use-auth";
+import { apiClient } from "@/lib/api-client";
+import { SignInButton } from "@/components/ui/signin";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import { ClipboardListIcon, CheckCircleIcon, XCircleIcon, ClockIcon, EyeIcon, PackageIcon } from "lucide-react";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 import { useState, useEffect } from "react";
-import { useBranch } from "@/hooks/use-branch.ts";
-import { BranchSelector } from "@/components/branch-selector.tsx";
+import { useBranch } from "@/hooks/use-branch";
+import { BranchSelector } from "@/components/branch-selector";
 import { toast } from "sonner";
-import type { Doc, Id } from "@/convex/_generated/dataModel";
 
-type Request = Doc<"employeeRequests">;
-type ProductOrder = Doc<"productOrders">;
+interface Request {
+  _id: string;
+  _creationTime: number;
+  employeeName: string;
+  requestType: string;
+  status: string;
+  requestDate: number;
+  advanceAmount?: number;
+  vacationDate?: number;
+  duesAmount?: number;
+  permissionDate?: number;
+  permissionStartTime?: string;
+  permissionEndTime?: string;
+  permissionHours?: number;
+  violationDate?: number;
+  objectionReason?: string;
+  objectionDetails?: string;
+  nationalId?: string;
+  resignationText?: string;
+  adminResponse?: string;
+  responseDate?: number;
+}
+
+interface ProductOrder {
+  _id: string;
+  orderName?: string;
+  products: Array<{ productName: string; quantity: number; price: number; total: number }>;
+  grandTotal: number;
+  status: string;
+  employeeName: string;
+  branchName: string;
+  notes?: string;
+  _creationTime: number;
+}
 
 export default function ManageRequestsPage() {
   const { branchId, branchName, isSelected, selectBranch } = useBranch();
@@ -57,10 +87,8 @@ export default function ManageRequestsPage() {
 }
 
 function ManageRequestsContent({ branchId, branchName }: { branchId: string; branchName: string }) {
-  const requests = useQuery(api.employeeRequests.getAllRequests, {}) as Request[] | undefined;
-  const productOrders = useQuery(api.productOrders.getOrders, { branchId }) as ProductOrder[] | undefined;
-  const updateStatus = useMutation(api.employeeRequests.updateStatus);
-  const updateProductOrderStatus = useMutation(api.productOrders.updateStatus);
+  const [requests] = useState<Request[] | undefined>(undefined);
+  const [productOrders, setProductOrders] = useState<ProductOrder[] | undefined>(undefined);
   const [selectedRequest, setSelectedRequest] = useState<Request | null>(null);
   const [selectedProductOrder, setSelectedProductOrder] = useState<ProductOrder | null>(null);
   const [showReviewDialog, setShowReviewDialog] = useState(false);
@@ -70,8 +98,18 @@ function ManageRequestsContent({ branchId, branchName }: { branchId: string; bra
   const [activeTab, setActiveTab] = useState<"employee" | "product">("employee");
 
   useEffect(() => {
-    console.log("📋 All Requests Data:", { requests, count: requests?.length });
-  }, [requests]);
+    // TODO: Create API endpoint /api/employee-requests/all
+    // fetch('/api/employee-requests/all').then(r => r.json()).then(setRequests);
+  }, []);
+
+  useEffect(() => {
+    if (!branchId) {
+      setProductOrders(undefined);
+      return;
+    }
+    // TODO: Create API endpoint /api/product-orders/list
+    // fetch(`/api/product-orders/list?branchId=${branchId}`).then(r => r.json()).then(setProductOrders);
+  }, [branchId]);
 
   if (requests === undefined || productOrders === undefined) {
     return (
@@ -94,7 +132,8 @@ function ManageRequestsContent({ branchId, branchName }: { branchId: string; bra
 
     try {
       const status = action === "approve" ? "مقبول" : "مرفوض";
-      await updateStatus({
+      // TODO: Create API endpoint /api/employee-requests/update-status
+      await apiClient.post('/api/employee-requests/update-status', {
         requestId: selectedRequest._id,
         status,
         adminResponse: adminResponse.trim() || undefined,
@@ -382,7 +421,8 @@ function ManageRequestsContent({ branchId, branchName }: { branchId: string; bra
                                   size="sm"
                                   onClick={async () => {
                                     try {
-                                      await updateProductOrderStatus({
+                                      // TODO: Create API endpoint /api/product-orders/update-status
+                                      await apiClient.post('/api/product-orders/update-status', {
                                         orderId: order._id,
                                         status: "approved",
                                       });
@@ -400,7 +440,8 @@ function ManageRequestsContent({ branchId, branchName }: { branchId: string; bra
                                   variant="destructive"
                                   onClick={async () => {
                                     try {
-                                      await updateProductOrderStatus({
+                                      // TODO: Create API endpoint /api/product-orders/update-status
+                                      await apiClient.post('/api/product-orders/update-status', {
                                         orderId: order._id,
                                         status: "rejected",
                                       });

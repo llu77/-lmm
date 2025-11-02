@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button.tsx";
-import { Authenticated, Unauthenticated } from "convex/react";
+import { Authenticated, Unauthenticated } from "@/hooks/use-auth";
 import { SignInButton } from "@/components/ui/signin.tsx";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet.tsx";
 import {
@@ -31,8 +31,8 @@ import {
   WalletIcon,
   BoxIcon
 } from "lucide-react";
-import { useAuth } from "@/hooks/use-auth.ts";
-import { useBranch } from "@/hooks/use-branch.ts";
+import { useAuth } from "@/hooks/use-auth";
+import { useBranch } from "@/hooks/use-branch";
 
 export default function Navbar() {
   const location = useLocation();
@@ -86,21 +86,25 @@ export default function Navbar() {
   };
 
   return (
-    <nav className="sticky top-0 z-50 w-full border-b bg-primary shadow-md">
+    <nav className="sticky top-0 z-50 w-full border-b border-primary-600/20 bg-gradient-to-r from-primary-600 via-primary-500 to-secondary-600 shadow-xl backdrop-blur-sm">
       <div className="container flex h-16 items-center justify-between">
         {/* Logo and Brand */}
-        <Link to="/dashboard" className="flex items-center gap-3 text-primary-foreground font-bold hover:opacity-90 transition-opacity">
-          <img 
-            src="https://cdn.hercules.app/file_X3jdTiCKmUjHC4szRS5CixU4" 
-            alt="Logo"
-            className="h-12 w-12 object-contain"
-            style={{ backgroundColor: 'transparent' }}
-          />
+        <Link to="/dashboard" className="group flex items-center gap-3 text-white font-bold hover:scale-105 transition-transform duration-300">
+          <div className="relative">
+            {/* Glow effect */}
+            <div className="absolute inset-0 bg-white/20 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            <img
+              src="https://cdn.hercules.app/file_X3jdTiCKmUjHC4szRS5CixU4"
+              alt="Logo"
+              className="relative h-12 w-12 object-contain transition-transform group-hover:rotate-12 duration-300"
+              style={{ backgroundColor: 'transparent' }}
+            />
+          </div>
           <div className="flex flex-col gap-1">
-            <span className="text-2xl hidden sm:block">نظام الإدارة المالية</span>
-            <span className="text-lg sm:hidden">الإدارة المالية</span>
+            <span className="text-2xl hidden sm:block drop-shadow-lg">نظام الإدارة المالية</span>
+            <span className="text-lg sm:hidden drop-shadow-lg">الإدارة المالية</span>
             {branchName && (
-              <span className="rounded-full bg-primary-foreground px-3 py-0.5 text-xs font-bold text-primary shadow-md">
+              <span className="rounded-full bg-white px-3 py-1 text-xs font-extrabold text-primary-600 shadow-lg ring-2 ring-white/30">
                 {branchName}
               </span>
             )}
@@ -116,8 +120,8 @@ export default function Navbar() {
               size="sm"
               asChild
               className={location.pathname === navGroups.dashboard.path
-                ? "font-bold text-sm"
-                : "text-primary-foreground hover:bg-primary-foreground/20 font-semibold text-sm"
+                ? "font-bold text-sm bg-white text-primary-600 hover:bg-white/90 shadow-lg"
+                : "text-white hover:bg-white/20 font-semibold text-sm transition-all duration-300 hover:shadow-md"
               }
             >
               <Link to={navGroups.dashboard.path}>
@@ -133,8 +137,8 @@ export default function Navbar() {
                   variant={isGroupActive(navGroups.finance.items) ? "secondary" : "ghost"}
                   size="sm"
                   className={isGroupActive(navGroups.finance.items)
-                    ? "font-bold text-sm"
-                    : "text-primary-foreground hover:bg-primary-foreground/20 font-semibold text-sm"
+                    ? "font-bold text-sm bg-white text-primary-600 hover:bg-white/90 shadow-lg"
+                    : "text-white hover:bg-white/20 font-semibold text-sm transition-all duration-300 hover:shadow-md"
                   }
                 >
                   <navGroups.finance.icon className="size-4 ml-2" />
@@ -161,8 +165,8 @@ export default function Navbar() {
                   variant={isGroupActive(navGroups.employees.items) ? "secondary" : "ghost"}
                   size="sm"
                   className={isGroupActive(navGroups.employees.items)
-                    ? "font-bold text-sm"
-                    : "text-primary-foreground hover:bg-primary-foreground/20 font-semibold text-sm"
+                    ? "font-bold text-sm bg-white text-primary-600 hover:bg-white/90 shadow-lg"
+                    : "text-white hover:bg-white/20 font-semibold text-sm transition-all duration-300 hover:shadow-md"
                   }
                 >
                   <navGroups.employees.icon className="size-4 ml-2" />
@@ -189,8 +193,8 @@ export default function Navbar() {
                   variant={isGroupActive(navGroups.requests.items) ? "secondary" : "ghost"}
                   size="sm"
                   className={isGroupActive(navGroups.requests.items)
-                    ? "font-bold text-sm"
-                    : "text-primary-foreground hover:bg-primary-foreground/20 font-semibold text-sm"
+                    ? "font-bold text-sm bg-white text-primary-600 hover:bg-white/90 shadow-lg"
+                    : "text-white hover:bg-white/20 font-semibold text-sm transition-all duration-300 hover:shadow-md"
                   }
                 >
                   <navGroups.requests.icon className="size-4 ml-2" />
@@ -217,8 +221,8 @@ export default function Navbar() {
                   variant={isGroupActive(navGroups.system.items) ? "secondary" : "ghost"}
                   size="sm"
                   className={isGroupActive(navGroups.system.items)
-                    ? "font-bold text-sm"
-                    : "text-primary-foreground hover:bg-primary-foreground/20 font-semibold text-sm"
+                    ? "font-bold text-sm bg-white text-primary-600 hover:bg-white/90 shadow-lg"
+                    : "text-white hover:bg-white/20 font-semibold text-sm transition-all duration-300 hover:shadow-md"
                   }
                 >
                   <navGroups.system.icon className="size-4 ml-2" />
@@ -249,7 +253,7 @@ export default function Navbar() {
                 variant="ghost"
                 size="sm"
                 onClick={() => signoutRedirect()}
-                className="text-primary-foreground hover:bg-primary-foreground/20 font-semibold text-sm"
+                className="text-white hover:bg-danger-500 hover:text-white font-semibold text-sm transition-all duration-300 hover:shadow-lg"
               >
                 <LogOutIcon className="size-4 ml-2" />
                 تسجيل الخروج
@@ -262,24 +266,29 @@ export default function Navbar() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="lg:hidden text-primary-foreground hover:bg-primary-foreground/20"
+                  className="lg:hidden text-white hover:bg-white/20 transition-all duration-300"
                 >
                   <MenuIcon className="size-6" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="right" className="w-72 overflow-y-auto">
-                <SheetHeader className="space-y-2 pb-4">
-                  <SheetTitle className="flex items-center gap-2 text-right text-base font-bold">
-                    <img
-                      src="https://cdn.hercules.app/file_X3jdTiCKmUjHC4szRS5CixU4"
-                      alt="Logo"
-                      className="h-10 w-10 object-contain"
-                      style={{ backgroundColor: 'transparent' }}
-                    />
-                    القائمة الرئيسية
+              <SheetContent side="right" className="w-80 overflow-y-auto bg-gradient-to-br from-gray-50 to-white dark:from-gray-900 dark:to-gray-800 border-l border-primary-200 dark:border-primary-800">
+                <SheetHeader className="space-y-3 pb-6 border-b border-gray-200 dark:border-gray-700">
+                  <SheetTitle className="flex items-center gap-3 text-right text-lg font-extrabold">
+                    <div className="relative">
+                      <div className="absolute inset-0 bg-primary-500/20 blur-lg rounded-full"></div>
+                      <img
+                        src="https://cdn.hercules.app/file_X3jdTiCKmUjHC4szRS5CixU4"
+                        alt="Logo"
+                        className="relative h-12 w-12 object-contain"
+                        style={{ backgroundColor: 'transparent' }}
+                      />
+                    </div>
+                    <span className="bg-gradient-to-br from-primary-600 to-secondary-600 bg-clip-text text-transparent">
+                      القائمة الرئيسية
+                    </span>
                   </SheetTitle>
                   {branchName && (
-                    <div className="rounded-full bg-primary px-3 py-1 text-center text-xs font-bold text-primary-foreground shadow-md">
+                    <div className="rounded-full bg-gradient-to-r from-primary-500 to-secondary-500 px-4 py-2 text-center text-sm font-extrabold text-white shadow-lg">
                       {branchName}
                     </div>
                   )}

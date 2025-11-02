@@ -1,15 +1,14 @@
-import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
-import { useMutation, useQuery } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
-import Navbar from "@/components/navbar.tsx";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
-import { Button } from "@/components/ui/button.tsx";
-import { Skeleton } from "@/components/ui/skeleton.tsx";
-import { SignInButton } from "@/components/ui/signin.tsx";
+import { Authenticated, Unauthenticated, AuthLoading } from "@/hooks/use-auth";
+import { apiClient } from "@/lib/api-client";
+import Navbar from "@/components/navbar";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { SignInButton } from "@/components/ui/signin";
 import { toast } from "sonner";
 import { DatabaseBackupIcon, DownloadIcon, AlertTriangleIcon, CheckCircle2Icon, ClockIcon } from "lucide-react";
 import { format } from "date-fns";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,23 +18,34 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog.tsx";
-import type { Id } from "@/convex/_generated/dataModel.d.ts";
+} from "@/components/ui/alert-dialog";
+
+interface Backup {
+  _id: string;
+  _creationTime: number;
+  reason?: string;
+  [key: string]: any;
+}
 
 function BackupsPageInner() {
-  const backups = useQuery(api.backup.public.getBackups, {});
-  const stats = useQuery(api.backup.public.getBackupStats, {});
-  const createBackup = useMutation(api.backup.public.createBackup);
-  const restoreBackup = useMutation(api.backup.public.restoreBackup);
-  
+  const [backups] = useState<Backup[] | undefined>(undefined);
+  const [stats] = useState<any>(undefined);
   const [isCreating, setIsCreating] = useState(false);
   const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
-  const [selectedBackupId, setSelectedBackupId] = useState<Id<"backups"> | null>(null);
+  const [selectedBackupId, setSelectedBackupId] = useState<string | null>(null);
+
+  useEffect(() => {
+    // TODO: Create API endpoint /api/backups/list
+    // fetch('/api/backups/list').then(r => r.json()).then(setBackups);
+    // TODO: Create API endpoint /api/backups/stats
+    // fetch('/api/backups/stats').then(r => r.json()).then(setStats);
+  }, []);
 
   const handleCreateBackup = async () => {
     try {
       setIsCreating(true);
-      await createBackup({ reason: "نسخة احتياطية يدوية من صفحة الإدارة" });
+      // TODO: Create API endpoint /api/backups/create
+      await apiClient.post('/api/backups/create', { reason: "نسخة احتياطية يدوية من صفحة الإدارة" });
       toast.success("تم بدء عملية النسخ الاحتياطي بنجاح");
     } catch (error) {
       toast.error("فشل في إنشاء النسخة الاحتياطية");
@@ -49,7 +59,8 @@ function BackupsPageInner() {
     if (!selectedBackupId) return;
     
     try {
-      await restoreBackup({ backupId: selectedBackupId });
+      // TODO: Create API endpoint /api/backups/restore
+      await apiClient.post('/api/backups/restore', { backupId: selectedBackupId });
       toast.success("تم بدء عملية استعادة البيانات");
       setRestoreDialogOpen(false);
       setSelectedBackupId(null);

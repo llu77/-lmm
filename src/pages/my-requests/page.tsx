@@ -1,23 +1,20 @@
-import { useQuery } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
-import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
-import { SignInButton } from "@/components/ui/signin.tsx";
-import { Skeleton } from "@/components/ui/skeleton.tsx";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
-import { Badge } from "@/components/ui/badge.tsx";
-import { Button } from "@/components/ui/button.tsx";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog.tsx";
+import { Authenticated, Unauthenticated, AuthLoading } from "@/hooks/use-auth";
+import { SignInButton } from "@/components/ui/signin";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ClipboardListIcon, CheckCircleIcon, XCircleIcon, ClockIcon, EyeIcon, ArrowLeftIcon } from "lucide-react";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
-import { useState } from "react";
-import { useBranch } from "@/hooks/use-branch.ts";
-import { BranchSelector } from "@/components/branch-selector.tsx";
+import { useState, useEffect } from "react";
+import { useBranch } from "@/hooks/use-branch";
+import { BranchSelector } from "@/components/branch-selector";
 import { useNavigate } from "react-router-dom";
-import type { Id } from "@/convex/_generated/dataModel.d.ts";
 
 interface Request {
-  _id: Id<"employeeRequests">;
+  _id: string;
   _creationTime: number;
   employeeName: string;
   requestType: string;
@@ -77,12 +74,18 @@ export default function MyRequestsPage() {
 
 function MyRequestsContent({ branchId, branchName }: { branchId: string; branchName: string }) {
   const [selectedEmployee, setSelectedEmployee] = useState("");
-  const requests = useQuery(
-    api.employeeRequests.getMyRequests,
-    selectedEmployee ? { branchId, employeeName: selectedEmployee } : "skip"
-  );
+  const [requests, setRequests] = useState<Request[] | undefined>(undefined);
   const [selectedRequest, setSelectedRequest] = useState<Request | null>(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!selectedEmployee || !branchId) {
+      setRequests(undefined);
+      return;
+    }
+    // TODO: Create API endpoint /api/employee-requests/my-requests
+    // fetch(`/api/employee-requests/my-requests?branchId=${branchId}&employeeName=${selectedEmployee}`).then(r => r.json()).then(setRequests);
+  }, [branchId, selectedEmployee]);
 
   if (requests === undefined) {
     return (

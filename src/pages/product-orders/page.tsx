@@ -1,24 +1,32 @@
 import { useState, useEffect } from "react";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
-import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
-import { useBranch } from "@/hooks/use-branch.ts";
-import { BranchSelector } from "@/components/branch-selector.tsx";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
-import { Button } from "@/components/ui/button.tsx";
-import { Input } from "@/components/ui/input.tsx";
-import { Label } from "@/components/ui/label.tsx";
-import { Skeleton } from "@/components/ui/skeleton.tsx";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select.tsx";
-import { Textarea } from "@/components/ui/textarea.tsx";
+import { Authenticated, Unauthenticated, AuthLoading } from "@/hooks/use-auth";
+import { apiClient } from "@/lib/api-client";
+import { useBranch } from "@/hooks/use-branch";
+import { BranchSelector } from "@/components/branch-selector";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { PlusIcon, TrashIcon, SaveIcon, SendIcon, PackageIcon, PrinterIcon, ArrowLeftIcon } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
-import type { Id } from "@/convex/_generated/dataModel";
-import { printProductOrderPDF } from "@/lib/pdf-export.ts";
-import type { Doc } from "@/convex/_generated/dataModel";
+import { printProductOrderPDF } from "@/lib/pdf-export";
 
-type ProductOrderDraft = Doc<"productOrders">;
+interface ProductOrderDraft {
+  _id: string;
+  orderName?: string;
+  products: Product[];
+  grandTotal: number;
+  isDraft: boolean;
+  employeeName: string;
+  branchName: string;
+  notes?: string;
+  status: string;
+  _creationTime: number;
+}
 
 // قائمة المنتجات الكاملة مع الأسعار (SAR)
 const PRODUCTS_WITH_PRICES: Record<string, number> = {
@@ -140,18 +148,26 @@ function ProductOrdersContent({ branchId, branchName }: { branchId: string; bran
   }]);
   const [notes, setNotes] = useState("");
   const [showDrafts, setShowDrafts] = useState(false);
+  const [drafts, setDrafts] = useState<ProductOrderDraft[] | undefined>(undefined);
+  const [orders, setOrders] = useState<ProductOrderDraft[] | undefined>(undefined);
 
-  const drafts = useQuery(
-    api.productOrders.getDrafts,
-    employeeName ? { branchId, employeeName } : "skip"
-  );
-  const orders = useQuery(
-    api.productOrders.getOrders,
-    branchId ? { branchId } : "skip"
-  );
-  const createOrder = useMutation(api.productOrders.createOrder);
-  const updateOrder = useMutation(api.productOrders.updateOrder);
-  const deleteDraft = useMutation(api.productOrders.deleteDraft);
+  useEffect(() => {
+    if (!employeeName || !branchId) {
+      setDrafts(undefined);
+      return;
+    }
+    // TODO: Create API endpoint /api/product-orders/drafts
+    // fetch(`/api/product-orders/drafts?branchId=${branchId}&employeeName=${employeeName}`).then(r => r.json()).then(setDrafts);
+  }, [branchId, employeeName]);
+
+  useEffect(() => {
+    if (!branchId) {
+      setOrders(undefined);
+      return;
+    }
+    // TODO: Create API endpoint /api/product-orders/list
+    // fetch(`/api/product-orders/list?branchId=${branchId}`).then(r => r.json()).then(setOrders);
+  }, [branchId]);
 
   const employees = EMPLOYEES[branchId as keyof typeof EMPLOYEES] || [];
 
@@ -206,7 +222,8 @@ function ProductOrdersContent({ branchId, branchName }: { branchId: string; bran
     }
 
     try {
-      await createOrder({
+      // TODO: Create API endpoint /api/product-orders/create
+      await apiClient.post('/api/product-orders/create', {
         orderName,
         products,
         grandTotal,
@@ -236,7 +253,8 @@ function ProductOrdersContent({ branchId, branchName }: { branchId: string; bran
     }
 
     try {
-      await createOrder({
+      // TODO: Create API endpoint /api/product-orders/create
+      await apiClient.post('/api/product-orders/create', {
         orderName,
         products,
         grandTotal,
@@ -263,9 +281,10 @@ function ProductOrdersContent({ branchId, branchName }: { branchId: string; bran
     toast.success("تم تحميل المسودة");
   };
 
-  const handleDeleteDraft = async (draftId: Id<"productOrders">) => {
+  const handleDeleteDraft = async (draftId: string) => {
     try {
-      await deleteDraft({ orderId: draftId });
+      // TODO: Create API endpoint /api/product-orders/delete
+      await apiClient.post('/api/product-orders/delete', { orderId: draftId });
       toast.success("تم حذف المسودة");
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "فشل حذف المسودة";
@@ -280,17 +299,7 @@ function ProductOrdersContent({ branchId, branchName }: { branchId: string; bran
     setNotes("");
   };
 
-  const handlePrint = async (order: {
-    _id: Id<"productOrders">;
-    orderName?: string;
-    products: Array<{ productName: string; quantity: number; price: number; total: number }>;
-    grandTotal: number;
-    status: string;
-    employeeName: string;
-    branchName: string;
-    notes?: string;
-    _creationTime: number;
-  }) => {
+  const handlePrint = async (order: ProductOrderDraft) => {
     try {
       await printProductOrderPDF(order);
     } catch (error) {

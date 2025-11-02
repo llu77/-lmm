@@ -9,6 +9,11 @@
       "command": "npx",
       "args": ["-y", "@cloudflare/mcp-server-cloudflare"],
       "disabled": false
+    },
+    "figma": {
+      "command": "npx",
+      "args": ["-y", "@figma/mcp-server-figma"],
+      "disabled": false
     }
   }
 }
