@@ -1,0 +1,134 @@
+---
+/**
+ * MCP Agent Dashboard
+ *
+ * Modern React-based interface for interacting with the CloudflareMCPAgent.
+ * Uses the Agents framework for real-time state synchronization.
+ */
+
+import { getSession } from '@/lib/session';
+import { loadUserPermissions } from '@/lib/permissions';
+import MCPAgentClient from '@/components/MCPAgentClient';
+
+const sessionCookie = Astro.cookies.get('session')?.value;
+
+if (!sessionCookie) {
+  return Astro.redirect('/auth/login');
+}
+
+const session = await getSession(Astro.locals.runtime.env.SESSIONS, sessionCookie);
+
+if (!session) {
+  return Astro.redirect('/auth/login');
+}
+
+// Load permissions
+const enhancedSession = await loadUserPermissions(Astro.locals.runtime.env.DB, session.userId);
+
+// Check if admin
+if (enhancedSession.role !== 'Admin') {
+  return new Response('Forbidden: Admin access required', { status: 403 });
+}
+
+// Get MCP OAuth token for this user
+const mcpTokenData = await Astro.locals.runtime.env.SESSIONS.get(`mcp_token:${session.userId}`);
+let authToken: string | undefined;
+
+if (mcpTokenData) {
+  const mcpData = JSON.parse(mcpTokenData);
+  authToken = mcpData.accessToken;
+}
+
+// Generate agent ID based on user
+const agentId = `user-${session.userId}`;
+---
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>وكيل MCP - SymbolAI</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        padding: 20px;
+      }
+
+      .container {
+        max-width: 1400px;
+        margin: 0 auto;
+      }
+
+      .header {
+        background: white;
+        border-radius: 12px;
+        padding: 24px;
+        margin-bottom: 24px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+
+      .header h1 {
+        color: #1a202c;
+        font-size: 28px;
+        margin-bottom: 8px;
+      }
+
+      .header p {
+        color: #718096;
+        font-size: 14px;
+      }
+
+      .back-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: #667eea;
+        text-decoration: none;
+        font-size: 14px;
+        margin-bottom: 16px;
+        transition: color 0.2s;
+      }
+
+      .back-link:hover {
+        color: #5a67d8;
+      }
+
+      .react-container {
+        background: white;
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <!-- Header -->
+      <div class="header">
+        <a href="/dashboard" class="back-link">
+          ← العودة إلى لوحة التحكم
+        </a>
+        <h1>🤖 وكيل Cloudflare MCP</h1>
+        <p>إدارة متقدمة للبنية التحتية مع مزامنة الحالة في الوقت الفعلي</p>
+      </div>
+
+      <!-- React Component Container -->
+      <div class="react-container">
+        <MCPAgentClient
+          client:load
+          agentId={agentId}
+          authToken={authToken}
+        />
+      </div>
+    </div>
+  </body>
+</html>

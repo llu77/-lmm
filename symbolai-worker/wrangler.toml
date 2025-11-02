@@ -34,6 +34,18 @@ binding = "WORKFLOWS"
 name = "symbolai-workflows"
 class_name = "FinancialWorkflow"
 
+# D1 Database Migration Workflow
+[[workflows]]
+binding = "D1_MIGRATION_WORKFLOW"
+name = "d1-migration-workflow"
+class_name = "D1MigrationWorkflow"
+
+# KV Batch Operations Workflow
+[[workflows]]
+binding = "KV_BATCH_WORKFLOW"
+name = "kv-batch-workflow"
+class_name = "KVBatchWorkflow"
+
 # Cloudflare AI Binding
 [ai]
 binding = "AI"
