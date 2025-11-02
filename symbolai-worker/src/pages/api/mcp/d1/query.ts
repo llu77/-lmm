@@ -40,6 +40,21 @@ export const POST: APIRoute = async ({ request, locals, clientAddress }) => {
       );
     }
 
+    // 2.5. Validate database ID format (UUID)
+    if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(databaseId)) {
+      return new Response(
+        JSON.stringify({
+          error: 'Invalid database ID format (expected UUID)',
+        }),
+        {
+          status: 400,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+    }
+
     // 3. Validate SQL query
     const validation = validateSQL(sql);
     if (!validation.valid) {

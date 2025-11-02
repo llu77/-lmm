@@ -40,6 +40,37 @@ export const POST: APIRoute = async ({ request, locals }) => {
       );
     }
 
+    // 2.5. Validate input formats
+    // API token should be a reasonable length string (Cloudflare tokens are typically 40+ chars)
+    if (typeof apiToken !== 'string' || apiToken.length < 10 || apiToken.length > 500) {
+      return new Response(
+        JSON.stringify({
+          error: 'Invalid API token format',
+        }),
+        {
+          status: 400,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+    }
+
+    // Account ID should be a hex string (32 chars)
+    if (!/^[a-f0-9]{32}$/i.test(accountId)) {
+      return new Response(
+        JSON.stringify({
+          error: 'Invalid account ID format (expected 32-character hex string)',
+        }),
+        {
+          status: 400,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+    }
+
     // 3. Verify OAuth state (CSRF protection)
     if (state) {
       const stateKey = `mcp_oauth_state:${authResult.userId}`;

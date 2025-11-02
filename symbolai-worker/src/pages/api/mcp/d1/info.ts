@@ -39,6 +39,21 @@ export const GET: APIRoute = async ({ request, url, locals }) => {
       );
     }
 
+    // Validate database ID format (UUID)
+    if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(databaseId)) {
+      return new Response(
+        JSON.stringify({
+          error: 'Invalid database ID format (expected UUID)',
+        }),
+        {
+          status: 400,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+    }
+
     // 3. Create authenticated MCP client
     const mcpClient = await createAuthenticatedMCPClient(
       locals.runtime.env.SESSIONS,
