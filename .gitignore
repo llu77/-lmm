@@ -6,6 +6,10 @@ ADMIN_CREDENTIALS_*.txt
 node_modules/
 package-lock.json
 
+# Astro build artifacts
+.astro/
+dist/
+
 # Temporary files
 *.log
 .DS_Store
