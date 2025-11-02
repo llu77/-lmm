@@ -1,0 +1,11 @@
+# Admin credentials - DO NOT COMMIT
+admin-*.sql
+ADMIN_CREDENTIALS_*.txt
+
+# Node modules
+node_modules/
+package-lock.json
+
+# Temporary files
+*.log
+.DS_Store
