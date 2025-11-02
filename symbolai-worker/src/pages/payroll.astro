@@ -1,28 +1,14 @@
 ---
 import MainLayout from '@/layouts/MainLayout.astro';
-import { authenticateAstroPage, requirePermission, requireBranch } from '@/lib/astro-auth';
 
-// Authenticate and check permissions
-const authResult = await authenticateAstroPage(Astro);
-if (authResult instanceof Response) return authResult;
-
-// Check permission
-const permCheck = requirePermission(authResult, 'canGeneratePayroll');
-if (permCheck) return permCheck;
-
-// Check branch
-const branchCheck = requireBranch(authResult);
-if (branchCheck) return branchCheck;
-
-const permissions = authResult.permissions;
+// Check authentication
+const cookieHeader = Astro.request.headers.get('Cookie');
+if (!cookieHeader?.includes('session=')) {
+  return Astro.redirect('/auth/login');
+}
 ---
 
 <MainLayout title="الرواتب - SymbolAI">
-  <!-- Pass authentication data to client-side scripts -->
-  <script is:inline define:vars={{ branchId: permissions.branchId }}>
-    window.userBranchId = branchId;
-  </script>
-
   <div class="space-y-6">
     <div>
       <h1 class="text-3xl font-bold">إدارة الرواتب</h1>
@@ -276,7 +262,7 @@ const permissions = authResult.permissions;
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            branchId: window.userBranchId,
+            branchId: 'BR001',
             month,
             year
           })
@@ -362,7 +348,7 @@ const permissions = authResult.permissions;
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            branchId: window.userBranchId,
+            branchId: 'BR001',
             month: currentMonth,
             year: currentYear,
             payrollData: currentPayrollData,
@@ -394,7 +380,7 @@ const permissions = authResult.permissions;
       const year = (document.getElementById('history-year') as HTMLSelectElement).value;
 
       try {
-        let url = `/api/payroll/list?branchId=${window.userBranchId}`;
+        let url = '/api/payroll/list?branchId=BR001';
         if (month) url += `&month=${month}`;
         if (year) url += `&year=${year}`;
 
@@ -447,7 +433,7 @@ const permissions = authResult.permissions;
 
     (window as any).viewPayrollDetails = async function(payrollId: string) {
       try {
-        const response = await fetch(`/api/payroll/list?branchId=${window.userBranchId}`);
+        const response = await fetch(`/api/payroll/list?branchId=BR001`);
         const data = await response.json();
 
         if (data.success) {

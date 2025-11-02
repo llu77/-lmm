@@ -1,20 +1,11 @@
 ---
 import MainLayout from '@/layouts/MainLayout.astro';
-import { authenticateAstroPage, requirePermission, requireBranch } from '@/lib/astro-auth';
 
-// Authenticate and check permissions
-const authResult = await authenticateAstroPage(Astro);
-if (authResult instanceof Response) return authResult;
-
-// Check permission
-const permCheck = requirePermission(authResult, 'canManageRequests');
-if (permCheck) return permCheck;
-
-// Check branch
-const branchCheck = requireBranch(authResult);
-if (branchCheck) return branchCheck;
-
-const permissions = authResult.permissions;
+// Check authentication
+const cookieHeader = Astro.request.headers.get('Cookie');
+if (!cookieHeader?.includes('session=')) {
+  return Astro.redirect('/auth/login');
+}
 ---
 
 <MainLayout title="طلبات الموظفين - SymbolAI">

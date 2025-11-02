@@ -4,7 +4,6 @@
  */
 
 import { generateId } from './db';
-import { sanitizeEmailTemplate, sanitizeInput } from './sanitize';
 
 export interface EmailParams {
   to: string | string[];
@@ -465,21 +464,22 @@ export async function renderTemplate(
     return null;
   }
 
-  // Sanitize HTML template with variables (XSS protection)
-  const html = sanitizeEmailTemplate(template.htmlTemplate, variables);
-
-  // Replace variables in subject (text only, no HTML)
+  // Replace variables in subject
   let subject = template.subject;
   for (const [key, value] of Object.entries(variables)) {
-    const sanitizedValue = sanitizeInput(String(value), { textOnly: true, maxLength: 200 });
-    subject = subject.replace(new RegExp(`{{${key}}}`, 'g'), sanitizedValue);
+    subject = subject.replace(new RegExp(`{{${key}}}`, 'g'), String(value));
   }
 
-  // Replace variables in text (text only, no HTML)
+  // Replace variables in HTML
+  let html = template.htmlTemplate;
+  for (const [key, value] of Object.entries(variables)) {
+    html = html.replace(new RegExp(`{{${key}}}`, 'g'), String(value));
+  }
+
+  // Replace variables in text
   let text = template.textTemplate;
   for (const [key, value] of Object.entries(variables)) {
-    const sanitizedValue = sanitizeInput(String(value), { textOnly: true });
-    text = text.replace(new RegExp(`{{${key}}}`, 'g'), sanitizedValue);
+    text = text.replace(new RegExp(`{{${key}}}`, 'g'), String(value));
   }
 
   return { html, text, subject };
