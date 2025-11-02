@@ -22,5 +22,6 @@ export function useBranch() {
     branchId,
     branchName,
     selectBranch,
+    isSelected: branchId !== null,
   };
 }
