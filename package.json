@@ -1,13 +1,7 @@
 {
-  "name": "lmm-hr-system",
-  "version": "1.0.0",
-  "private": true,
-  "scripts": {
-    "build": "cd symbolai-worker && npm install && npm run build",
-    "dev": "cd symbolai-worker && npm run dev",
-    "preview": "cd symbolai-worker && npm run preview"
-  },
-  "workspaces": [
-    "symbolai-worker"
-  ]
+  "dependencies": {
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "@astrojs/react": "^4.4.1"
+  }
 }
