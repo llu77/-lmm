@@ -12,6 +12,14 @@ import type { APIRoute } from 'astro';
 import { requireAdminRole } from '@/lib/permissions';
 import { createAuthenticatedMCPClient } from '@/lib/mcp-client';
 
+// CORS Headers for MCP Clients (Claude Desktop, Cursor, Windsurf, etc.)
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Account-ID',
+  'Access-Control-Max-Age': '86400', // 24 hours
+};
+
 // MCP Protocol Types
 interface MCPMessage {
   jsonrpc: '2.0';
@@ -110,10 +118,11 @@ export const GET: APIRoute = async ({ request, locals }) => {
       },
     });
 
-    // 4. Return SSE response
+    // 4. Return SSE response with CORS headers
     return new Response(stream, {
       status: 200,
       headers: {
+        ...CORS_HEADERS,
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
@@ -129,10 +138,25 @@ export const GET: APIRoute = async ({ request, locals }) => {
       }),
       {
         status: 500,
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          ...CORS_HEADERS,
+          'Content-Type': 'application/json',
+        },
       }
     );
   }
+};
+
+/**
+ * OPTIONS Endpoint for CORS Preflight
+ *
+ * Handles CORS preflight requests from browsers.
+ */
+export const OPTIONS: APIRoute = async ({ request }) => {
+  return new Response(null, {
+    status: 204,
+    headers: CORS_HEADERS,
+  });
 };
 
 /**
@@ -167,7 +191,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
           },
           id: message.id,
         }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
+        {
+          status: 400,
+          headers: {
+            ...CORS_HEADERS,
+            'Content-Type': 'application/json',
+          },
+        }
       );
     }
 
@@ -187,7 +217,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
           },
           id: message.id,
         }),
-        { status: 401, headers: { 'Content-Type': 'application/json' } }
+        {
+          status: 401,
+          headers: {
+            ...CORS_HEADERS,
+            'Content-Type': 'application/json',
+          },
+        }
       );
     }
 
@@ -196,7 +232,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
     return new Response(JSON.stringify(response), {
       status: 200,
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        ...CORS_HEADERS,
+        'Content-Type': 'application/json',
+      },
     });
   } catch (error) {
     console.error('MCP POST error:', error);
@@ -211,7 +250,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
         },
         id: null,
       }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
+      {
+        status: 500,
+        headers: {
+          ...CORS_HEADERS,
+          'Content-Type': 'application/json',
+        },
+      }
     );
   }
 };

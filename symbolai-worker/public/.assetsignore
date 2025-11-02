@@ -1,0 +1,7 @@
+# Cloudflare Workers Assets Ignore
+# These files should not be served as static assets
+
+_worker.js
+_routes.json
+_worker.js/
+*.map

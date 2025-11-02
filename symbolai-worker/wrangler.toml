@@ -1,7 +1,16 @@
 name = "symbolai-worker"
+main = "./dist/_worker.js/index.js"
 compatibility_date = "2025-01-15"
-main = "./dist/_worker.js"
 compatibility_flags = ["nodejs_compat"]
+
+# Static Assets
+[assets]
+binding = "ASSETS"
+directory = "./dist"
+
+# Observability (Logging & Analytics)
+[observability]
+enabled = true
 
 # D1 Database Binding
 [[d1_databases]]
