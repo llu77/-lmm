@@ -118,9 +118,9 @@ function AIAssistantContent({ branchId, branchName }: { branchId: string; branch
 
 function OverviewTab({ branchId, branchName }: { branchId: string; branchName: string }) {
   // TODO: Create API endpoint /api/notifications/active
-  const [notifications, setNotifications] = useState<any>(undefined);
+  const [notifications] = useState<any>(undefined);
   useEffect(() => { if (branchId) { } }, [branchId]);
-  const [unreadCount, setUnreadCount] = useState<number | undefined>(undefined);
+  const [unreadCount] = useState<number | undefined>(undefined);
 
   return (
     <div className="space-y-6">

@@ -87,7 +87,7 @@ export default function ManageRequestsPage() {
 }
 
 function ManageRequestsContent({ branchId, branchName }: { branchId: string; branchName: string }) {
-  const [requests, setRequests] = useState<Request[] | undefined>(undefined);
+  const [requests] = useState<Request[] | undefined>(undefined);
   const [productOrders, setProductOrders] = useState<ProductOrder[] | undefined>(undefined);
   const [selectedRequest, setSelectedRequest] = useState<Request | null>(null);
   const [selectedProductOrder, setSelectedProductOrder] = useState<ProductOrder | null>(null);

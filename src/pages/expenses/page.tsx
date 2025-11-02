@@ -77,8 +77,8 @@ function ExpensesContent() {
   const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
 
   // TODO: Replace with API calls to Cloudflare backend
-  const [expenses, setExpenses] = useState<ExpenseDoc[] | undefined>(undefined);
-  const [stats, setStats] = useState<ExpenseStats | undefined>(undefined);
+  const [expenses] = useState<ExpenseDoc[] | undefined>(undefined);
+  const [stats] = useState<ExpenseStats | undefined>(undefined);
 
   useEffect(() => {
     if (isSelected) {
