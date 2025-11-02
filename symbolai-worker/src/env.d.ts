@@ -59,22 +59,47 @@ interface RuntimeEnv {
 }
 
 /**
- * Astro Locals with Cloudflare Runtime
+ * User Type (from database)
+ */
+type User = {
+  id: number;
+  username: string;
+  email: string;
+  role_id: number;
+  branch_id: number;
+  is_active: boolean;
+};
+
+/**
+ * Astro Locals with Cloudflare Runtime and Middleware
+ *
+ * Properties set by middleware and available in all pages/API routes.
  */
 declare namespace App {
   interface Locals {
+    // Cloudflare Runtime (set by adapter)
     runtime: {
       env: RuntimeEnv;
       cf: CfProperties;
       ctx: ExecutionContext;
     };
-    user?: {
-      id: number;
-      username: string;
-      email: string;
-      role_id: number;
-      branch_id: number;
+
+    // Authentication (set by middleware)
+    user: User | null;
+    isAuthenticated: boolean;
+    userId?: number;
+    sessionId?: string;
+
+    // MCP Integration (set by MCP auth endpoints)
+    mcpToken?: {
+      accessToken: string;
+      expiresAt: number;
+      accountId?: string;
     };
+
+    // Optional: Request metadata
+    requestId?: string;
+    startTime?: number;
   }
 }
 
