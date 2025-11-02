@@ -584,7 +584,11 @@ export class MCPClient {
 
 // ==================== Token Management ====================
 
-interface MCPTokenData {
+/**
+ * MCP Token Data Structure
+ * Stored in KV for authenticated MCP sessions
+ */
+export interface MCPTokenData {
   accessToken: string;
   refreshToken?: string;
   expiresAt: number;
