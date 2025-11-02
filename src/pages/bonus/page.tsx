@@ -56,8 +56,8 @@ function BonusPageInner() {
   const [isApproving, setIsApproving] = useState(false);
 
   // TODO: Replace with API calls to Cloudflare backend
-  const [currentWeekData, setCurrentWeekData] = useState<WeekBonusResponse | undefined>(undefined);
-  const [bonusRecords, setBonusRecords] = useState<BonusRecord[] | undefined>(undefined);
+  const [currentWeekData] = useState<WeekBonusResponse | undefined>(undefined);
+  const [bonusRecords] = useState<BonusRecord[] | undefined>(undefined);
 
   useEffect(() => {
     if (branchId) {

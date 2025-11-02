@@ -28,8 +28,8 @@ interface Backup {
 }
 
 function BackupsPageInner() {
-  const [backups, setBackups] = useState<Backup[] | undefined>(undefined);
-  const [stats, setStats] = useState<any>(undefined);
+  const [backups] = useState<Backup[] | undefined>(undefined);
+  const [stats] = useState<any>(undefined);
   const [isCreating, setIsCreating] = useState(false);
   const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
   const [selectedBackupId, setSelectedBackupId] = useState<string | null>(null);

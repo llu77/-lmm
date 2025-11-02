@@ -108,9 +108,9 @@ function StatsCard({
 function DashboardContent() {
   // TODO: Replace with API calls to Cloudflare backend
   // Example: const { data: stats } = useQuery('/api/dashboard/stats');
-  const [stats, setStats] = useState<DashboardStats | undefined>(undefined);
-  const [chartData, setChartData] = useState<DashboardChartPoint[] | undefined>(undefined);
-  const [recentActivity, setRecentActivity] = useState<DashboardRecentActivity | undefined>(undefined);
+  const [stats] = useState<DashboardStats | undefined>(undefined);
+  const [chartData] = useState<DashboardChartPoint[] | undefined>(undefined);
+  const [recentActivity] = useState<DashboardRecentActivity | undefined>(undefined);
 
   useEffect(() => {
     // TODO: Fetch dashboard stats from Cloudflare API
