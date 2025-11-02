@@ -1,8 +1,6 @@
 import type { APIRoute } from 'astro';
 import { requireAuth } from '@/lib/session';
 import { callClaudeViaGateway, callWorkersAI } from '@/lib/ai';
-import { rateLimitMiddleware, RATE_LIMIT_PRESETS } from '@/lib/rate-limiter';
-import { validateInput, aiChatSchema } from '@/lib/validation-schemas';
 
 export const POST: APIRoute = async ({ request, locals }) => {
   // Check authentication
@@ -11,33 +9,18 @@ export const POST: APIRoute = async ({ request, locals }) => {
     return authResult;
   }
 
-  // Rate limiting
-  const rateLimitResponse = await rateLimitMiddleware(
-    request,
-    locals.runtime.env.KV || locals.runtime.env.SESSIONS,
-    RATE_LIMIT_PRESETS.ai_chat
-  );
-  if (rateLimitResponse) return rateLimitResponse;
-
   try {
-    const body = await request.json();
+    const { message, useWorkersAI = false } = await request.json();
 
-    // Validate input
-    const validationResult = validateInput(aiChatSchema, body);
-    if (!validationResult.success) {
+    if (!message) {
       return new Response(
-        JSON.stringify({
-          error: 'خطأ في البيانات المدخلة',
-          details: validationResult.error
-        }),
+        JSON.stringify({ error: 'الرسالة مطلوبة' }),
         {
           status: 400,
           headers: { 'Content-Type': 'application/json' }
         }
       );
     }
-
-    const validatedData = validationResult.data;
 
     const env = {
       AI: locals.runtime.env.AI,
@@ -48,9 +31,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
     let response;
 
-    if (validatedData.useWorkersAI || !env.ANTHROPIC_API_KEY) {
+    if (useWorkersAI || !env.ANTHROPIC_API_KEY) {
       // Use Cloudflare Workers AI (free, built-in)
-      response = await callWorkersAI(env, validatedData.message, {
+      response = await callWorkersAI(env, message, {
         model: '@cf/meta/llama-3-8b-instruct',
         maxTokens: 2048
       });
@@ -58,7 +41,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       // Use Anthropic Claude via AI Gateway (higher quality)
       response = await callClaudeViaGateway(
         env,
-        [{ role: 'user', content: validatedData.message }],
+        [{ role: 'user', content: message }],
         {
           model: 'claude-3-5-sonnet-20241022',
           maxTokens: 2048,
@@ -72,7 +55,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
         success: true,
         response: response.content,
         usage: response.usage,
-        model: validatedData.useWorkersAI ? 'workers-ai' : 'claude-via-gateway'
+        model: useWorkersAI ? 'workers-ai' : 'claude-via-gateway'
       }),
       {
         status: 200,

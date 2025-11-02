@@ -2,7 +2,6 @@ import type { APIRoute } from 'astro';
 import { requireAuthWithPermissions, requirePermission, logAudit, getClientIP } from '@/lib/permissions';
 import { employeeRequestQueries } from '@/lib/db';
 import { triggerEmployeeRequestResponded } from '@/lib/email-triggers';
-import { sanitizeInput } from '@/lib/sanitize';
 
 export const PUT: APIRoute = async ({ request, locals }) => {
   // Check authentication with permissions
@@ -46,13 +45,6 @@ export const PUT: APIRoute = async ({ request, locals }) => {
       );
     }
 
-    // Sanitize admin response to prevent XSS
-    const sanitizedAdminResponse = sanitizeInput(adminResponse, {
-      allowFormatting: true, // Allow basic formatting (bold, italic, etc.)
-      textOnly: false,
-      maxLength: 1000
-    });
-
     // Get request details before updating
     const requestDetails = await locals.runtime.env.DB.prepare(`
       SELECT employee_name, request_type, user_id
@@ -70,12 +62,12 @@ export const PUT: APIRoute = async ({ request, locals }) => {
       );
     }
 
-    // Update request with sanitized response
+    // Update request with response
     await employeeRequestQueries.respond(
       locals.runtime.env.DB,
       id,
       status,
-      sanitizedAdminResponse
+      adminResponse
     );
 
     // Send email to employee
@@ -85,7 +77,7 @@ export const PUT: APIRoute = async ({ request, locals }) => {
         employeeName: requestDetails.employee_name as string,
         requestType: requestDetails.request_type as string,
         status,
-        adminResponse: sanitizedAdminResponse,
+        adminResponse,
         responseDate: new Date().toLocaleDateString('ar-EG'),
         userId: requestDetails.user_id as string
       });

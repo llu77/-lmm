@@ -13,8 +13,6 @@
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import fs from 'fs/promises';
-import path from 'path';
-
 const SALT_ROUNDS = 10;
 const PASSWORD_LENGTH = 24;
 

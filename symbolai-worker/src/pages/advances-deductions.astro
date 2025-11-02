@@ -1,28 +1,14 @@
 ---
 import MainLayout from '@/layouts/MainLayout.astro';
-import { authenticateAstroPage, requirePermission, requireBranch } from '@/lib/astro-auth';
 
-// Authenticate and check permissions
-const authResult = await authenticateAstroPage(Astro);
-if (authResult instanceof Response) return authResult;
-
-// Check permission
-const permCheck = requirePermission(authResult, 'canManageEmployees');
-if (permCheck) return permCheck;
-
-// Check branch
-const branchCheck = requireBranch(authResult);
-if (branchCheck) return branchCheck;
-
-const permissions = authResult.permissions;
+// Check authentication
+const cookieHeader = Astro.request.headers.get('Cookie');
+if (!cookieHeader?.includes('session=')) {
+  return Astro.redirect('/auth/login');
+}
 ---
 
 <MainLayout title="السلف والخصومات - SymbolAI">
-  <!-- Pass authentication data to client-side scripts -->
-  <script is:inline define:vars={{ branchId: permissions.branchId }}>
-    window.userBranchId = branchId;
-  </script>
-
   <div class="space-y-6">
     <div>
       <h1 class="text-3xl font-bold">السلف والخصومات</h1>
@@ -487,7 +473,7 @@ const permissions = authResult.permissions;
     // Load employees for dropdowns
     async function loadEmployees() {
       try {
-        const response = await fetch(`/api/employees/list?branchId=${window.userBranchId}`);
+        const response = await fetch('/api/employees/list?branchId=BR001');
         const data = await response.json();
 
         if (data.success) {

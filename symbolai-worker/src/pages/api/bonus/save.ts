@@ -1,8 +1,6 @@
 import type { APIRoute } from 'astro';
 import { requireAuthWithPermissions, requirePermission, validateBranchAccess, logAudit, getClientIP } from '@/lib/permissions';
 import { bonusQueries, generateId } from '@/lib/db';
-import { rateLimitMiddleware, RATE_LIMIT_PRESETS } from '@/lib/rate-limiter';
-import { validateInput, saveBonusSchema } from '@/lib/validation-schemas';
 
 export const POST: APIRoute = async ({ request, locals }) => {
   // Check authentication with permissions
@@ -22,25 +20,22 @@ export const POST: APIRoute = async ({ request, locals }) => {
     return permError;
   }
 
-  // Rate limiting
-  const rateLimitResponse = await rateLimitMiddleware(
-    request,
-    locals.runtime.env.KV || locals.runtime.env.SESSIONS,
-    RATE_LIMIT_PRESETS.financial_critical
-  );
-  if (rateLimitResponse) return rateLimitResponse;
-
   try {
-    const body = await request.json();
+    const {
+      branchId,
+      weekNumber,
+      month,
+      year,
+      employeeBonuses,
+      totalBonusPaid,
+      revenueSnapshot,
+      approved = false
+    } = await request.json();
 
-    // Validate input
-    const validationResult = validateInput(saveBonusSchema, body);
-    if (!validationResult.success) {
+    // Validation
+    if (!branchId || !weekNumber || !month || !year || !employeeBonuses) {
       return new Response(
-        JSON.stringify({
-          error: 'خطأ في البيانات المدخلة',
-          details: validationResult.error
-        }),
+        JSON.stringify({ error: 'البيانات المطلوبة ناقصة' }),
         {
           status: 400,
           headers: { 'Content-Type': 'application/json' }
@@ -48,10 +43,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
       );
     }
 
-    const validatedData = validationResult.data;
-
     // Validate branch access
-    const branchError = validateBranchAccess(authResult, validatedData.branchId);
+    const branchError = validateBranchAccess(authResult, branchId);
     if (branchError) {
       return branchError;
     }
@@ -60,17 +53,17 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
     await bonusQueries.create(locals.runtime.env.DB, {
       id: bonusId,
-      branchId: validatedData.branchId,
-      weekNumber: validatedData.weekNumber,
-      month: validatedData.month,
-      year: validatedData.year,
-      employeeBonuses: JSON.stringify(validatedData.employeeBonuses),
-      totalBonusPaid: validatedData.totalBonusPaid || 0,
-      revenueSnapshot: validatedData.revenueSnapshot ? JSON.stringify(validatedData.revenueSnapshot) : undefined
+      branchId,
+      weekNumber,
+      month,
+      year,
+      employeeBonuses: JSON.stringify(employeeBonuses),
+      totalBonusPaid: totalBonusPaid || 0,
+      revenueSnapshot: revenueSnapshot ? JSON.stringify(revenueSnapshot) : undefined
     });
 
     // If approved, update approval status
-    if (validatedData.approved) {
+    if (approved) {
       await bonusQueries.approve(
         locals.runtime.env.DB,
         bonusId,
@@ -85,7 +78,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       'create',
       'bonus_record',
       bonusId,
-      { branchId: validatedData.branchId, weekNumber: validatedData.weekNumber, month: validatedData.month, year: validatedData.year, totalBonusPaid: validatedData.totalBonusPaid, approved: validatedData.approved },
+      { branchId, weekNumber, month, year, totalBonusPaid, approved },
       getClientIP(request),
       request.headers.get('User-Agent') || undefined
     );
