@@ -1,0 +1,287 @@
+---
+/**
+ * MCP Server Test Page
+ * صفحة اختبار MCP Server المحلي
+ */
+
+import MainLayout from '@/layouts/MainLayout.astro';
+
+// Get session from cookie
+const sessionCookie = Astro.cookies.get('session');
+const sessionToken = sessionCookie?.value;
+
+// Initial server info
+let serverInfo: any = null;
+let error: string | null = null;
+
+try {
+  const response = await fetch(new URL('/api/mcp-server', Astro.url), {
+    method: 'GET'
+  });
+
+  if (response.ok) {
+    serverInfo = await response.json();
+  }
+} catch (e) {
+  error = e instanceof Error ? e.message : 'Unknown error';
+}
+---
+
+<MainLayout title="MCP Server Test">
+  <div class="container mx-auto p-6 max-w-6xl">
+    <h1 class="text-3xl font-bold mb-6">🔧 MCP Server Test</h1>
+
+    {error && (
+      <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+        Error: {error}
+      </div>
+    )}
+
+    {serverInfo && (
+      <div class="bg-white shadow rounded-lg p-6 mb-6">
+        <h2 class="text-2xl font-semibold mb-4">Server Info</h2>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <p class="text-gray-600">Name:</p>
+            <p class="font-medium">{serverInfo.name}</p>
+          </div>
+          <div>
+            <p class="text-gray-600">Version:</p>
+            <p class="font-medium">{serverInfo.version}</p>
+          </div>
+          <div class="col-span-2">
+            <p class="text-gray-600">Description:</p>
+            <p class="font-medium">{serverInfo.description}</p>
+          </div>
+        </div>
+      </div>
+    )}
+
+    <div class="bg-white shadow rounded-lg p-6 mb-6">
+      <h2 class="text-2xl font-semibold mb-4">Available Tools</h2>
+      <div id="tools-list" class="space-y-2">
+        <p class="text-gray-500">Loading...</p>
+      </div>
+    </div>
+
+    <div class="bg-white shadow rounded-lg p-6 mb-6">
+      <h2 class="text-2xl font-semibold mb-4">Test Operations</h2>
+
+      <div class="space-y-4">
+        <!-- D1 Tests -->
+        <div>
+          <h3 class="text-xl font-semibold mb-2">D1 Database</h3>
+          <div class="flex gap-2 mb-2">
+            <button id="test-d1-list-tables" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+              List Tables
+            </button>
+            <button id="test-d1-query" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+              Count Employees
+            </button>
+          </div>
+          <pre id="d1-result" class="bg-gray-100 p-4 rounded text-sm overflow-x-auto hidden"></pre>
+        </div>
+
+        <!-- KV Tests -->
+        <div>
+          <h3 class="text-xl font-semibold mb-2">KV Namespace</h3>
+          <div class="flex gap-2 mb-2">
+            <button id="test-kv-list" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">
+              List Keys
+            </button>
+            <button id="test-kv-put" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">
+              Put Test Key
+            </button>
+            <button id="test-kv-get" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">
+              Get Test Key
+            </button>
+          </div>
+          <pre id="kv-result" class="bg-gray-100 p-4 rounded text-sm overflow-x-auto hidden"></pre>
+        </div>
+
+        <!-- R2 Tests -->
+        <div>
+          <h3 class="text-xl font-semibold mb-2">R2 Storage</h3>
+          <div class="flex gap-2 mb-2">
+            <button id="test-r2-list" class="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600">
+              List Objects
+            </button>
+          </div>
+          <pre id="r2-result" class="bg-gray-100 p-4 rounded text-sm overflow-x-auto hidden"></pre>
+        </div>
+
+        <!-- Summary -->
+        <div>
+          <h3 class="text-xl font-semibold mb-2">Resources Summary</h3>
+          <button id="test-summary" class="bg-indigo-500 text-white px-4 py-2 rounded hover:bg-indigo-600">
+            Get Summary
+          </button>
+          <pre id="summary-result" class="bg-gray-100 p-4 rounded text-sm overflow-x-auto hidden mt-2"></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-white shadow rounded-lg p-6">
+      <h2 class="text-2xl font-semibold mb-4">Custom Query</h2>
+      <div class="space-y-2">
+        <textarea
+          id="custom-sql"
+          class="w-full border rounded p-2 font-mono text-sm"
+          rows="4"
+          placeholder="SELECT * FROM employees LIMIT 5"
+        ></textarea>
+        <button id="run-custom-query" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+          Run Query
+        </button>
+        <pre id="custom-result" class="bg-gray-100 p-4 rounded text-sm overflow-x-auto hidden"></pre>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // MCP Client
+    async function mcpRequest(method: string, params?: any): Promise<any> {
+      const response = await fetch('/api/mcp-server', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method,
+          params: params || {},
+          id: Date.now()
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (data.error) {
+        throw new Error(data.error.message);
+      }
+
+      return data.result;
+    }
+
+    async function callTool(name: string, args: any = {}): Promise<any> {
+      return await mcpRequest('tools/call', { name, arguments: args });
+    }
+
+    function displayResult(elementId: string, data: any): void {
+      const element = document.getElementById(elementId);
+      if (element) {
+        element.textContent = JSON.stringify(data, null, 2);
+        element.classList.remove('hidden');
+      }
+    }
+
+    function displayError(elementId: string, error: any): void {
+      const element = document.getElementById(elementId);
+      if (element) {
+        element.textContent = `Error: ${error.message || error}`;
+        element.classList.remove('hidden');
+        element.classList.add('text-red-600');
+      }
+    }
+
+    // Load tools list
+    async function loadTools() {
+      try {
+        const result = await mcpRequest('tools/list');
+        const toolsList = document.getElementById('tools-list');
+
+        if (toolsList) {
+          toolsList.innerHTML = result.tools.map((tool: any) => `
+            <div class="border-l-4 border-blue-500 pl-4 py-2">
+              <p class="font-semibold">${tool.name}</p>
+              <p class="text-sm text-gray-600">${tool.description}</p>
+            </div>
+          `).join('');
+        }
+      } catch (error) {
+        console.error('Failed to load tools:', error);
+      }
+    }
+
+    // Event listeners
+    document.getElementById('test-d1-list-tables')?.addEventListener('click', async () => {
+      try {
+        const result = await callTool('d1_list_tables');
+        displayResult('d1-result', result);
+      } catch (error) {
+        displayError('d1-result', error);
+      }
+    });
+
+    document.getElementById('test-d1-query')?.addEventListener('click', async () => {
+      try {
+        const result = await callTool('d1_query', {
+          sql: 'SELECT COUNT(*) as count FROM employees WHERE is_active = 1'
+        });
+        displayResult('d1-result', result);
+      } catch (error) {
+        displayError('d1-result', error);
+      }
+    });
+
+    document.getElementById('test-kv-list')?.addEventListener('click', async () => {
+      try {
+        const result = await callTool('kv_list_keys', { limit: 20 });
+        displayResult('kv-result', result);
+      } catch (error) {
+        displayError('kv-result', error);
+      }
+    });
+
+    document.getElementById('test-kv-put')?.addEventListener('click', async () => {
+      try {
+        const result = await callTool('kv_put', {
+          key: 'mcp:test',
+          value: JSON.stringify({ timestamp: new Date().toISOString(), test: true }),
+          expirationTtl: 3600
+        });
+        displayResult('kv-result', result);
+      } catch (error) {
+        displayError('kv-result', error);
+      }
+    });
+
+    document.getElementById('test-kv-get')?.addEventListener('click', async () => {
+      try {
+        const result = await callTool('kv_get', { key: 'mcp:test' });
+        displayResult('kv-result', result);
+      } catch (error) {
+        displayError('kv-result', error);
+      }
+    });
+
+    document.getElementById('test-r2-list')?.addEventListener('click', async () => {
+      try {
+        const result = await callTool('r2_list_objects', { limit: 20 });
+        displayResult('r2-result', result);
+      } catch (error) {
+        displayError('r2-result', error);
+      }
+    });
+
+    document.getElementById('run-custom-query')?.addEventListener('click', async () => {
+      try {
+        const sql = (document.getElementById('custom-sql') as HTMLTextAreaElement).value;
+
+        if (!sql.trim()) {
+          throw new Error('SQL query is empty');
+        }
+
+        const result = await callTool('d1_query', { sql });
+        displayResult('custom-result', result);
+      } catch (error) {
+        displayError('custom-result', error);
+      }
+    });
+
+    // Load tools on page load
+    loadTools();
+  </script>
+</MainLayout>
