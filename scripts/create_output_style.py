@@ -151,7 +151,7 @@ def list_output_styles(location: Optional[str] = None) -> dict:
                             styles[file_path.stem] = {
                                 'name': name,
                                 'path': file_path,
-                                'location': 'user' if '.claude' in str(file_path.parent.parent) and 'home' in str(file_path) else 'project'
+                                'location': 'user' if (Path.home() in file_path.resolve().parents) else 'project'
                             }
                             break
 
