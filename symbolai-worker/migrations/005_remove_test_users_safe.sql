@@ -45,7 +45,7 @@ SELECT
   COUNT(*) as count
 FROM users_new
 WHERE is_active = 0
-  AND id LIKE 'user_%_1010%' OR id LIKE 'user_%_2020%'
+  AND (id LIKE 'user_%_1010%' OR id LIKE 'user_%_2020%')
 
 UNION ALL
 
