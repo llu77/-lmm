@@ -5,7 +5,9 @@
   "scripts": {
     "build": "cd symbolai-worker && npm install && npm run build",
     "dev": "cd symbolai-worker && npm run dev",
-    "preview": "cd symbolai-worker && npm run preview"
+    "preview": "cd symbolai-worker && npm run preview",
+    "test:mcp": "BASE_URL=http://localhost:4321 node test-mcp-local.mjs",
+    "test:mcp:prod": "BASE_URL=https://symbolai.net node test-mcp-local.mjs"
   },
   "workspaces": [
     "symbolai-worker"
