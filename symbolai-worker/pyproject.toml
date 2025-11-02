@@ -1,0 +1,15 @@
+[project]
+name = "symbolai-worker"
+version = "1.0.0"
+description = "SymbolAI Financial Worker - Cloudflare Workers with Astro"
+requires-python = ">=3.11"
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+dev-dependencies = []
+
+[tool.uv.sources]

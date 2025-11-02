@@ -25,6 +25,14 @@ export const GET: APIRoute = async ({ request, url, locals }) => {
       );
     }
 
+    // Validate build ID format (UUID or alphanumeric with hyphens)
+    if (!/^[a-zA-Z0-9-]{1,100}$/.test(buildId)) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid build ID format' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
     const mcpClient = await createAuthenticatedMCPClient(
       locals.runtime.env.SESSIONS,
       authResult.userId

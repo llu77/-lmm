@@ -9,6 +9,9 @@
  * @see https://github.com/cloudflare/mcp-server-cloudflare
  */
 
+// Import Cloudflare Workers runtime types
+/// <reference types="@cloudflare/workers-types" />
+
 // ==================== Type Definitions ====================
 
 export interface MCPConfig {
@@ -86,8 +89,8 @@ export interface D1QueryResult {
   results: Record<string, any>[];
 }
 
-// KV Namespace Types
-export interface KVNamespace {
+// KV Namespace Metadata Types (different from runtime KVNamespace binding)
+export interface KVNamespaceInfo {
   id: string;
   title: string;
   supports_url_encoding: boolean;
@@ -141,13 +144,16 @@ export class MCPClient {
   }
 
   /**
-   * Make a request to an MCP server endpoint
+   * Make a request to an MCP server endpoint with retry logic and timeout
    */
   private async makeRequest<T = any>(
     endpoint: string,
     method: string,
-    params?: Record<string, any>
+    params?: Record<string, any>,
+    options: { timeout?: number; retries?: number } = {}
   ): Promise<T> {
+    const { timeout = 30000, retries = 3 } = options;
+
     const request: MCPRequest = {
       jsonrpc: '2.0',
       method,
@@ -164,23 +170,80 @@ export class MCPClient {
       headers['Authorization'] = `Bearer ${this.config.apiToken}`;
     }
 
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(request),
-    });
+    let lastError: Error | null = null;
 
-    if (!response.ok) {
-      throw new Error(`MCP request failed: ${response.status} ${response.statusText}`);
+    // Retry loop with exponential backoff
+    for (let attempt = 0; attempt < retries; attempt++) {
+      try {
+        // Create abort controller for timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+        try {
+          const response = await fetch(endpoint, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(request),
+            signal: controller.signal,
+          });
+
+          clearTimeout(timeoutId);
+
+          // Check response status
+          if (!response.ok) {
+            const errorText = await response.text().catch(() => 'Unknown error');
+            throw new Error(
+              `MCP request failed: ${response.status} ${response.statusText}. Details: ${errorText}`
+            );
+          }
+
+          // Parse JSON response
+          const data: MCPResponse<T> = await response.json();
+
+          // Check for JSON-RPC error
+          if (data.error) {
+            throw new Error(
+              `MCP error: ${data.error.message} (code: ${data.error.code})${
+                data.error.data ? `. Data: ${JSON.stringify(data.error.data)}` : ''
+              }`
+            );
+          }
+
+          // Validate result exists
+          if (data.result === undefined) {
+            throw new Error('MCP response missing result field');
+          }
+
+          return data.result as T;
+        } finally {
+          clearTimeout(timeoutId);
+        }
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+
+        // Don't retry on certain errors
+        if (
+          error instanceof Error &&
+          (error.message.includes('401') || // Unauthorized
+            error.message.includes('403') || // Forbidden
+            error.message.includes('404')) // Not Found
+        ) {
+          throw lastError;
+        }
+
+        // If this was the last attempt, throw the error
+        if (attempt === retries - 1) {
+          throw lastError;
+        }
+
+        // Exponential backoff: wait 2^attempt seconds
+        const waitTime = Math.pow(2, attempt) * 1000;
+        await new Promise((resolve) => setTimeout(resolve, waitTime));
+      }
     }
 
-    const data: MCPResponse<T> = await response.json();
-
-    if (data.error) {
-      throw new Error(`MCP error: ${data.error.message} (code: ${data.error.code})`);
-    }
-
-    return data.result as T;
+    // Should never reach here, but TypeScript needs it
+    throw lastError || new Error('MCP request failed after all retries');
   }
 
   // ==================== Workers Bindings Server ====================
@@ -247,12 +310,27 @@ export class MCPClient {
     sql: string,
     params?: any[]
   ): Promise<D1QueryResult> {
+    // Validate inputs
+    if (!databaseId || databaseId.trim() === '') {
+      throw new Error('Database ID is required');
+    }
+
+    if (!sql || sql.trim() === '') {
+      throw new Error('SQL query is required');
+    }
+
+    // Validate SQL for security (basic check)
+    const validation = validateSQL(sql);
+    if (!validation.valid) {
+      throw new Error(`SQL validation failed: ${validation.error}`);
+    }
+
     return this.makeRequest<D1QueryResult>(
       MCP_ENDPOINTS.bindings,
       'd1_database_query',
       {
         database_id: databaseId,
-        sql,
+        sql: sql.trim(),
         params: params || [],
       }
     );
@@ -285,8 +363,8 @@ export class MCPClient {
   /**
    * List all KV namespaces
    */
-  async listKVNamespaces(): Promise<KVNamespace[]> {
-    return this.makeRequest<KVNamespace[]>(
+  async listKVNamespaces(): Promise<KVNamespaceInfo[]> {
+    return this.makeRequest<KVNamespaceInfo[]>(
       MCP_ENDPOINTS.bindings,
       'kv_namespaces_list'
     );
@@ -295,8 +373,12 @@ export class MCPClient {
   /**
    * Get KV namespace details
    */
-  async getKVNamespace(namespaceId: string): Promise<KVNamespace> {
-    return this.makeRequest<KVNamespace>(
+  async getKVNamespace(namespaceId: string): Promise<KVNamespaceInfo> {
+    if (!namespaceId || namespaceId.trim() === '') {
+      throw new Error('Namespace ID is required');
+    }
+
+    return this.makeRequest<KVNamespaceInfo>(
       MCP_ENDPOINTS.bindings,
       'kv_namespace_get',
       { namespace_id: namespaceId }
@@ -306,8 +388,12 @@ export class MCPClient {
   /**
    * Create a new KV namespace
    */
-  async createKVNamespace(title: string): Promise<KVNamespace> {
-    return this.makeRequest<KVNamespace>(
+  async createKVNamespace(title: string): Promise<KVNamespaceInfo> {
+    if (!title || title.trim() === '') {
+      throw new Error('KV namespace title is required');
+    }
+
+    return this.makeRequest<KVNamespaceInfo>(
       MCP_ENDPOINTS.bindings,
       'kv_namespace_create',
       { title }
@@ -498,7 +584,11 @@ export class MCPClient {
 
 // ==================== Token Management ====================
 
-interface MCPTokenData {
+/**
+ * MCP Token Data Structure
+ * Stored in KV for authenticated MCP sessions
+ */
+export interface MCPTokenData {
   accessToken: string;
   refreshToken?: string;
   expiresAt: number;
@@ -507,12 +597,23 @@ interface MCPTokenData {
 
 /**
  * Store MCP token in KV
+ * @param kv - Cloudflare KV namespace binding (from env.SESSIONS)
+ * @param userId - User ID to associate the token with
+ * @param tokenData - MCP token data to store
  */
 export async function storeMCPToken(
-  kv: KVNamespace,
+  kv: KVNamespace,  // This is the runtime KVNamespace from @cloudflare/workers-types
   userId: string,
   tokenData: MCPTokenData
 ): Promise<void> {
+  if (!userId || userId.trim() === '') {
+    throw new Error('User ID is required');
+  }
+
+  if (!tokenData.accessToken) {
+    throw new Error('Access token is required');
+  }
+
   const key = `mcp_token:${userId}`;
   await kv.put(key, JSON.stringify(tokenData), {
     expirationTtl: 7 * 24 * 60 * 60, // 7 days
@@ -521,47 +622,81 @@ export async function storeMCPToken(
 
 /**
  * Get MCP token from KV
+ * @param kv - Cloudflare KV namespace binding (from env.SESSIONS)
+ * @param userId - User ID to retrieve the token for
+ * @returns Token data or null if not found/expired/invalid
  */
 export async function getMCPToken(
   kv: KVNamespace,
   userId: string
 ): Promise<MCPTokenData | null> {
+  if (!userId || userId.trim() === '') {
+    throw new Error('User ID is required');
+  }
+
   const key = `mcp_token:${userId}`;
-  const data = await kv.get(key);
+  const data = await kv.get(key, 'text');
 
   if (!data) {
     return null;
   }
 
-  const tokenData: MCPTokenData = JSON.parse(data);
+  try {
+    const tokenData: MCPTokenData = JSON.parse(data);
 
-  // Check if token is expired
-  if (tokenData.expiresAt < Date.now()) {
+    // Validate token structure
+    if (!tokenData.accessToken || !tokenData.accountId || !tokenData.expiresAt) {
+      console.error('Invalid token data structure for user:', userId);
+      await kv.delete(key);
+      return null;
+    }
+
+    // Check if token is expired
+    if (tokenData.expiresAt < Date.now()) {
+      await kv.delete(key);
+      return null;
+    }
+
+    return tokenData;
+  } catch (error) {
+    console.error('Failed to parse token data for user:', userId, error);
+    // Delete corrupted data
     await kv.delete(key);
     return null;
   }
-
-  return tokenData;
 }
 
 /**
  * Delete MCP token from KV
+ * @param kv - Cloudflare KV namespace binding (from env.SESSIONS)
+ * @param userId - User ID to delete the token for
  */
 export async function deleteMCPToken(
   kv: KVNamespace,
   userId: string
 ): Promise<void> {
+  if (!userId || userId.trim() === '') {
+    throw new Error('User ID is required');
+  }
+
   const key = `mcp_token:${userId}`;
   await kv.delete(key);
 }
 
 /**
  * Create an authenticated MCP client for a user
+ * @param kv - Cloudflare KV namespace binding (from env.SESSIONS)
+ * @param userId - User ID to create the client for
+ * @returns MCP client instance or null if no valid token found
  */
 export async function createAuthenticatedMCPClient(
   kv: KVNamespace,
   userId: string
 ): Promise<MCPClient | null> {
+  if (!userId || userId.trim() === '') {
+    throw new Error('User ID is required');
+  }
+
   const tokenData = await getMCPToken(kv, userId);
 
   if (!tokenData) {
@@ -604,35 +739,76 @@ export function formatD1Results(results: D1QueryResult): string {
 }
 
 /**
- * Sanitize SQL query (basic validation)
+ * Validate SQL query for security
+ * @param sql - SQL query to validate
+ * @returns Validation result with error message if invalid
  */
 export function validateSQL(sql: string): { valid: boolean; error?: string } {
-  // Convert to lowercase for checking
-  const lowerSQL = sql.trim().toLowerCase();
+  if (!sql || sql.trim() === '') {
+    return { valid: false, error: 'SQL query cannot be empty' };
+  }
+
+  const trimmedSQL = sql.trim();
+  const lowerSQL = trimmedSQL.toLowerCase();
+
+  // Check maximum length (prevent DoS)
+  const MAX_SQL_LENGTH = 10000;
+  if (trimmedSQL.length > MAX_SQL_LENGTH) {
+    return {
+      valid: false,
+      error: `SQL query too long (max ${MAX_SQL_LENGTH} characters)`,
+    };
+  }
 
   // Block dangerous operations
   const dangerousPatterns = [
-    /drop\s+table/i,
-    /drop\s+database/i,
-    /truncate/i,
-    /alter\s+table.*drop/i,
+    /\bdrop\s+(table|database|index|view|trigger)\b/i,
+    /\btruncate\b/i,
+    /\balter\s+table\b.*\bdrop\b/i,
+    /\bdelete\s+from\b.*\bwhere\s+(1\s*=\s*1|true)\b/i, // DELETE without proper WHERE
+    /\bexec(ute)?\b/i,
+    /\battach\b/i,
+    /\bdetach\b/i,
   ];
 
   for (const pattern of dangerousPatterns) {
     if (pattern.test(lowerSQL)) {
       return {
         valid: false,
-        error: 'Dangerous SQL operation detected. DROP, TRUNCATE are not allowed.',
+        error: 'Dangerous SQL operation detected. DROP, TRUNCATE, EXEC, ATTACH are not allowed.',
       };
     }
   }
 
-  // Must start with SELECT, INSERT, UPDATE, or DELETE
-  if (!/^(select|insert|update|delete|pragma)/i.test(lowerSQL)) {
+  // Check for SQL injection patterns
+  const injectionPatterns = [
+    /;\s*(drop|delete|update|insert|exec)/i, // Multiple statements
+    /--/, // SQL comments
+    /\/\*/, // Multi-line comments
+    /union\s+select/i, // UNION injection
+    /into\s+(outfile|dumpfile)/i, // File operations
+  ];
+
+  for (const pattern of injectionPatterns) {
+    if (pattern.test(lowerSQL)) {
+      return {
+        valid: false,
+        error: 'Potential SQL injection pattern detected',
+      };
+    }
+  }
+
+  // Must start with allowed commands (removed PRAGMA for security)
+  if (!/^(select|insert|update|delete|with)\s/i.test(lowerSQL)) {
     return {
       valid: false,
-      error: 'Query must start with SELECT, INSERT, UPDATE, or DELETE',
+      error: 'Query must start with SELECT, INSERT, UPDATE, DELETE, or WITH',
     };
+  }
+
+  // Recommend using LIMIT for SELECT queries
+  if (lowerSQL.startsWith('select') && !lowerSQL.includes('limit')) {
+    console.warn('SELECT query without LIMIT may return large result sets');
   }
 
   return { valid: true };

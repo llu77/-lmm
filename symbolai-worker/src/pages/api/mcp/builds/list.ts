@@ -29,8 +29,14 @@ export const GET: APIRoute = async ({ request, url, locals }) => {
     }
 
     // Get limit from query params (default 10)
-    const limit = parseInt(url.searchParams.get('limit') || '10', 10);
-    const workerName = url.searchParams.get('worker') || 'symbolai-worker';
+    const rawLimit = parseInt(url.searchParams.get('limit') || '10', 10);
+    const limit = Math.max(1, Math.min(rawLimit, 100)); // Clamp between 1-100
+
+    const rawWorkerName = url.searchParams.get('worker') || 'symbolai-worker';
+    // Validate worker name: alphanumeric, hyphens, underscores only
+    const workerName = /^[a-zA-Z0-9_-]+$/.test(rawWorkerName)
+      ? rawWorkerName
+      : 'symbolai-worker';
 
     // Set active worker
     await mcpClient.setActiveWorker(workerName);
