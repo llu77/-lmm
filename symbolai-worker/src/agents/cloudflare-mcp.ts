@@ -36,7 +36,7 @@ export interface AuthContext {
 /**
  * Agent state structure
  */
-interface CloudflareMCPState {
+export interface CloudflareMCPState {
   activeAccountId?: string;
   activeWorkerId?: string;
   tokenData?: {
@@ -50,6 +50,30 @@ interface CloudflareMCPState {
     queriesExecuted: number;
     lastActivity: number;
   };
+  // Cached data from periodic syncs
+  cachedData?: {
+    databases?: any[];
+    namespaces?: any[];
+    buckets?: any[];
+    workers?: any[];
+    lastCacheUpdate?: number;
+  };
+  // Scheduled tasks tracking
+  scheduledTasks?: {
+    syncEnabled: boolean;
+    syncInterval: string; // cron expression
+    lastSyncStatus?: 'success' | 'error';
+    lastSyncError?: string;
+  };
+  // Workflow tracking
+  activeWorkflows?: Array<{
+    id: string;
+    type: 'migration' | 'batch' | 'deployment';
+    status: 'running' | 'completed' | 'failed';
+    startedAt: number;
+    completedAt?: number;
+    error?: string;
+  }>;
 }
 
 /**
@@ -769,6 +793,307 @@ export class CloudflareMCPAgent extends McpAgent<Env, CloudflareMCPState, AuthCo
   }
 
   /**
+   * ==================== Scheduled Tasks ====================
+   */
+
+  /**
+   * Enable periodic syncing of Cloudflare resources
+   */
+  async enablePeriodicSync(interval: string = '0 * * * *') {
+    // Cancel existing sync task if any
+    const existingTasks = this.getSchedules({ description: 'periodic-sync' });
+    for (const task of existingTasks) {
+      await this.cancelSchedule(task.id);
+    }
+
+    // Schedule new sync task
+    await this.schedule(interval, 'syncCloudflareResources', {
+      description: 'periodic-sync'
+    });
+
+    // Update state
+    this.setState({
+      ...this.state,
+      scheduledTasks: {
+        syncEnabled: true,
+        syncInterval: interval,
+        lastSyncStatus: this.state.scheduledTasks?.lastSyncStatus,
+        lastSyncError: this.state.scheduledTasks?.lastSyncError,
+      },
+    });
+
+    console.log(`Periodic sync enabled with interval: ${interval}`);
+  }
+
+  /**
+   * Disable periodic syncing
+   */
+  async disablePeriodicSync() {
+    const tasks = this.getSchedules({ description: 'periodic-sync' });
+    for (const task of tasks) {
+      await this.cancelSchedule(task.id);
+    }
+
+    this.setState({
+      ...this.state,
+      scheduledTasks: {
+        ...this.state.scheduledTasks,
+        syncEnabled: false,
+      } as any,
+    });
+
+    console.log('Periodic sync disabled');
+  }
+
+  /**
+   * Scheduled task: Sync all Cloudflare resources
+   * This runs periodically to keep cached data fresh
+   */
+  async syncCloudflareResources(data?: any) {
+    console.log('Starting periodic sync of Cloudflare resources...');
+
+    try {
+      const accountId = this.state.activeAccountId || this.props?.accountId;
+      if (!accountId) {
+        throw new Error('No account ID available for sync');
+      }
+
+      // Fetch all resources in parallel
+      const [databases, namespaces, buckets, workers] = await Promise.allSettled([
+        this.callCloudflareAPI<any[]>('/client/v4/accounts/{account_id}/d1/database', 'GET'),
+        this.callCloudflareAPI<any[]>('/client/v4/accounts/{account_id}/storage/kv/namespaces', 'GET'),
+        this.callCloudflareAPI<any>('/client/v4/accounts/{account_id}/r2/buckets', 'GET'),
+        this.callCloudflareAPI<any>('/client/v4/accounts/{account_id}/workers/scripts', 'GET'),
+      ]);
+
+      // Update cached data
+      this.setState({
+        ...this.state,
+        cachedData: {
+          databases: databases.status === 'fulfilled' ? databases.value : [],
+          namespaces: namespaces.status === 'fulfilled' ? namespaces.value : [],
+          buckets: buckets.status === 'fulfilled' ? buckets.value : [],
+          workers: workers.status === 'fulfilled' ? workers.value : [],
+          lastCacheUpdate: Date.now(),
+        },
+        scheduledTasks: {
+          ...this.state.scheduledTasks,
+          syncEnabled: this.state.scheduledTasks?.syncEnabled ?? false,
+          syncInterval: this.state.scheduledTasks?.syncInterval ?? '0 * * * *',
+          lastSyncStatus: 'success',
+          lastSyncError: undefined,
+        } as any,
+        lastSync: Date.now(),
+      });
+
+      console.log('Periodic sync completed successfully');
+    } catch (error) {
+      console.error('Periodic sync failed:', error);
+
+      this.setState({
+        ...this.state,
+        scheduledTasks: {
+          ...this.state.scheduledTasks,
+          syncEnabled: this.state.scheduledTasks?.syncEnabled ?? false,
+          syncInterval: this.state.scheduledTasks?.syncInterval ?? '0 * * * *',
+          lastSyncStatus: 'error',
+          lastSyncError: error instanceof Error ? error.message : 'Unknown error',
+        } as any,
+      });
+    }
+  }
+
+  /**
+   * ==================== Workflow Integration ====================
+   */
+
+  /**
+   * Trigger a workflow for D1 database migration
+   */
+  async triggerMigrationWorkflow(databaseId: string, migrations: string[]) {
+    const workflowId = crypto.randomUUID();
+
+    try {
+      // Create workflow instance
+      const instance = await (this.env as any).D1_MIGRATION_WORKFLOW?.create({
+        id: workflowId,
+        params: {
+          databaseId,
+          migrations,
+          accountId: this.state.activeAccountId,
+          apiToken: this.state.tokenData?.apiToken,
+        },
+      });
+
+      // Track workflow in state
+      this.setState({
+        ...this.state,
+        activeWorkflows: [
+          ...(this.state.activeWorkflows || []),
+          {
+            id: workflowId,
+            type: 'migration',
+            status: 'running',
+            startedAt: Date.now(),
+          },
+        ],
+      });
+
+      // Schedule a task to check workflow status every 5 minutes
+      await this.schedule('*/5 * * * *', 'checkWorkflowStatus', {
+        workflowId,
+        type: 'migration',
+      });
+
+      return {
+        workflowId,
+        status: 'started',
+        message: `Migration workflow started for database ${databaseId}`,
+      };
+    } catch (error) {
+      console.error('Failed to trigger migration workflow:', error);
+
+      // Update workflow status
+      this.setState({
+        ...this.state,
+        activeWorkflows: [
+          ...(this.state.activeWorkflows || []),
+          {
+            id: workflowId,
+            type: 'migration',
+            status: 'failed',
+            startedAt: Date.now(),
+            completedAt: Date.now(),
+            error: error instanceof Error ? error.message : 'Unknown error',
+          },
+        ],
+      });
+
+      throw error;
+    }
+  }
+
+  /**
+   * Trigger a workflow for batch KV operations
+   */
+  async triggerBatchKVWorkflow(namespaceId: string, operations: Array<{
+    key: string;
+    value: string;
+    operation: 'put' | 'delete';
+  }>) {
+    const workflowId = crypto.randomUUID();
+
+    try {
+      const instance = await (this.env as any).KV_BATCH_WORKFLOW?.create({
+        id: workflowId,
+        params: {
+          namespaceId,
+          operations,
+          accountId: this.state.activeAccountId,
+          apiToken: this.state.tokenData?.apiToken,
+        },
+      });
+
+      this.setState({
+        ...this.state,
+        activeWorkflows: [
+          ...(this.state.activeWorkflows || []),
+          {
+            id: workflowId,
+            type: 'batch',
+            status: 'running',
+            startedAt: Date.now(),
+          },
+        ],
+      });
+
+      await this.schedule('*/5 * * * *', 'checkWorkflowStatus', {
+        workflowId,
+        type: 'batch',
+      });
+
+      return {
+        workflowId,
+        status: 'started',
+        message: `Batch KV workflow started for ${operations.length} operations`,
+      };
+    } catch (error) {
+      console.error('Failed to trigger batch KV workflow:', error);
+
+      this.setState({
+        ...this.state,
+        activeWorkflows: [
+          ...(this.state.activeWorkflows || []),
+          {
+            id: workflowId,
+            type: 'batch',
+            status: 'failed',
+            startedAt: Date.now(),
+            completedAt: Date.now(),
+            error: error instanceof Error ? error.message : 'Unknown error',
+          },
+        ],
+      });
+
+      throw error;
+    }
+  }
+
+  /**
+   * Scheduled task: Check workflow status
+   */
+  async checkWorkflowStatus(data: { workflowId: string; type: string }) {
+    console.log(`Checking status for workflow ${data.workflowId}`);
+
+    try {
+      // Get workflow instance based on type
+      let instance;
+      if (data.type === 'migration') {
+        instance = await (this.env as any).D1_MIGRATION_WORKFLOW?.get(data.workflowId);
+      } else if (data.type === 'batch') {
+        instance = await (this.env as any).KV_BATCH_WORKFLOW?.get(data.workflowId);
+      }
+
+      if (!instance) {
+        console.warn(`Workflow ${data.workflowId} not found`);
+        return;
+      }
+
+      const status = await instance.status();
+
+      // Update workflow state
+      const workflows = this.state.activeWorkflows || [];
+      const workflowIndex = workflows.findIndex(w => w.id === data.workflowId);
+
+      if (workflowIndex >= 0) {
+        workflows[workflowIndex] = {
+          ...workflows[workflowIndex],
+          status: status.status === 'complete' ? 'completed' :
+                  status.status === 'error' ? 'failed' : 'running',
+          completedAt: status.status === 'complete' || status.status === 'error' ?
+                       Date.now() : undefined,
+          error: status.status === 'error' ? status.error : undefined,
+        };
+
+        this.setState({
+          ...this.state,
+          activeWorkflows: workflows,
+        });
+
+        // Cancel this check task if workflow is complete
+        if (status.status === 'complete' || status.status === 'error') {
+          const tasks = this.getSchedules({ description: `workflow-check-${data.workflowId}` });
+          for (const task of tasks) {
+            await this.cancelSchedule(task.id);
+          }
+        }
+      }
+    } catch (error) {
+      console.error(`Failed to check workflow status for ${data.workflowId}:`, error);
+    }
+  }
+
+  /**
    * Handle state updates
    */
   onStateUpdate(state: CloudflareMCPState) {
@@ -776,6 +1101,9 @@ export class CloudflareMCPAgent extends McpAgent<Env, CloudflareMCPState, AuthCo
       activeAccountId: state.activeAccountId,
       toolCallsCount: state.stats?.toolCallsCount,
       queriesExecuted: state.stats?.queriesExecuted,
+      cachedDataAvailable: !!state.cachedData,
+      activeWorkflows: state.activeWorkflows?.length || 0,
+      syncEnabled: state.scheduledTasks?.syncEnabled,
     });
   }
 }

@@ -14,6 +14,7 @@ type R2Bucket = import('@cloudflare/workers-types').R2Bucket;
 type Ai = import('@cloudflare/workers-types').Ai;
 type Queue = import('@cloudflare/workers-types').Queue;
 type WorkflowEntrypoint = import('@cloudflare/workers-types').WorkflowEntrypoint;
+type Workflow = import('@cloudflare/workers-types').Workflow;
 
 /**
  * Runtime Environment Interface
@@ -36,6 +37,8 @@ interface RuntimeEnv {
 
   // Workflow Bindings
   WORKFLOWS: WorkflowEntrypoint;
+  D1_MIGRATION_WORKFLOW: Workflow;
+  KV_BATCH_WORKFLOW: Workflow;
 
   // Environment Variables
   ENVIRONMENT: string;
@@ -127,3 +130,8 @@ interface ExecutionContext {
   waitUntil(promise: Promise<any>): void;
   passThroughOnException(): void;
 }
+
+/**
+ * Export Env type for use in Workers and Agents
+ */
+export type Env = RuntimeEnv;

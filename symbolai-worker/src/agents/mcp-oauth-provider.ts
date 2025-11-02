@@ -7,7 +7,6 @@
  * @see https://developers.cloudflare.com/agents/mcp/oauth
  */
 
-import { OAuthProvider } from 'agents/mcp';
 import type { Env } from '../env';
 import type { AuthContext } from './cloudflare-mcp';
 
