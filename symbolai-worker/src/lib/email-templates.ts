@@ -1,7 +1,10 @@
 /**
  * SymbolAI Email Templates
  * 14 Professional Arabic HTML Email Templates
+ * All variables are sanitized to prevent XSS attacks
  */
+
+import { sanitizeEmailTemplate } from './sanitize';
 
 export interface EmailTemplate {
   id: string;
@@ -44,9 +47,17 @@ const BASE_TEMPLATE = `
       text-align: center;
     }
     .email-logo {
-      font-size: 32px;
+      margin-bottom: 15px;
+    }
+    .email-logo img {
+      max-width: 120px;
+      height: auto;
+    }
+    .email-logo-text {
+      font-size: 28px;
       font-weight: bold;
-      margin-bottom: 10px;
+      color: white;
+      margin: 0;
     }
     .email-title {
       font-size: 24px;
@@ -142,7 +153,9 @@ const BASE_TEMPLATE = `
 <body>
   <div class="email-container">
     <div class="email-header">
-      <div class="email-logo">⚡ SymbolAI</div>
+      <div class="email-logo">
+        <img src="{{baseUrl}}/assets/logo-white.svg" alt="Jobfit Community" />
+      </div>
       <h1 class="email-title">{{title}}</h1>
     </div>
 
@@ -151,8 +164,9 @@ const BASE_TEMPLATE = `
     </div>
 
     <div class="email-footer">
-      <p><strong>SymbolAI Financial System</strong></p>
-      <p>info@symbolai.net</p>
+      <p><strong>Jobfit Community</strong></p>
+      <p>منصة إدارة الموارد البشرية الشاملة</p>
+      <p style="margin-top: 8px;">info@jobfit.sa | +966 11 XXX XXXX</p>
       <p style="margin-top: 10px; font-size: 12px; color: #9ca3af;">
         هذا إيميل تلقائي، يرجى عدم الرد عليه مباشرة
       </p>
@@ -167,12 +181,15 @@ function renderBaseTemplate(params: {
   content: string;
   headerColor: string;
   accentColor: string;
+  baseUrl?: string;
 }): string {
+  const baseUrl = params.baseUrl || 'https://your-domain.workers.dev';
   return BASE_TEMPLATE
     .replace('{{title}}', params.title)
     .replace('{{content}}', params.content)
     .replace(/{{headerColor}}/g, params.headerColor)
-    .replace(/{{accentColor}}/g, params.accentColor);
+    .replace(/{{accentColor}}/g, params.accentColor)
+    .replace(/{{baseUrl}}/g, baseUrl);
 }
 
 // ============================================================================

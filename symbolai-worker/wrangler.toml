@@ -10,9 +10,11 @@ database_name = "symbolai-financial-db"
 database_id = "3897ede2-ffc0-4fe8-8217-f9607c89bef2"
 
 # KV Namespace for Sessions
+# Run: wrangler kv:namespace create "SESSIONS"
+# Then replace the ID below with the output
 [[kv_namespaces]]
 binding = "SESSIONS"
-id = "your_kv_namespace_id_here"
+id = "PLACEHOLDER_KV_ID"  # ⚠️ Replace with actual KV namespace ID
 
 # R2 Bucket for Payroll PDFs
 [[r2_buckets]]
@@ -36,9 +38,9 @@ AI_GATEWAY_ACCOUNT_ID = "85b01d19439ca53d3cfa740d2621a2bd"
 AI_GATEWAY_NAME = "symbolai-gateway"
 
 # Email Configuration
-EMAIL_FROM = "info@symbolai.net"
-EMAIL_FROM_NAME = "SymbolAI"
-ADMIN_EMAIL = "admin@symbolai.net"
+EMAIL_FROM = "info@jobfit.sa"
+EMAIL_FROM_NAME = "Jobfit Community"
+ADMIN_EMAIL = "admin@jobfit.sa"
 
 # Secrets (set using: wrangler secret put SECRET_NAME)
 # ANTHROPIC_API_KEY
@@ -48,10 +50,14 @@ ADMIN_EMAIL = "admin@symbolai.net"
 # SESSION_SECRET
 
 # Routes configuration
-routes = [
-  { pattern = "symbolai.net/*", zone_name = "symbolai.net" },
-  { pattern = "*.symbolai.net/*", zone_name = "symbolai.net" }
-]
+# Uncomment and update with your actual domain
+# routes = [
+#   { pattern = "yourdomain.com/*", zone_name = "yourdomain.com" },
+#   { pattern = "*.yourdomain.com/*", zone_name = "yourdomain.com" }
+# ]
+#
+# For now, using workers.dev subdomain (automatic)
+# Format: symbolai-worker.<your-account>.workers.dev
 
 # Email Queue Configuration
 [[queues.producers]]

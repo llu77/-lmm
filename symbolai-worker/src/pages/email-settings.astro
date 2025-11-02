@@ -1,11 +1,16 @@
 ---
 import MainLayout from '@/layouts/MainLayout.astro';
+import { authenticateAstroPage, requirePermission } from '@/lib/astro-auth';
 
-// Check authentication (admin only)
-const cookieHeader = Astro.request.headers.get('Cookie');
-if (!cookieHeader?.includes('session=')) {
-  return Astro.redirect('/auth/login');
-}
+// Authenticate and check permissions
+const authResult = await authenticateAstroPage(Astro);
+if (authResult instanceof Response) return authResult;
+
+// Check permission
+const permCheck = requirePermission(authResult, 'canManageSettings');
+if (permCheck) return permCheck;
+
+const permissions = authResult.permissions;
 ---
 
 <MainLayout title="إعدادات البريد الإلكتروني - SymbolAI">

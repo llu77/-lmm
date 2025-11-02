@@ -13,6 +13,7 @@ import type { APIRoute } from 'astro';
 import { requireAdminRole } from '@/lib/permissions';
 import { createAuthenticatedMCPClient } from '@/lib/mcp-client';
 import { callClaudeViaGateway } from '@/lib/ai';
+import { rateLimitMiddleware, RATE_LIMIT_PRESETS } from '@/lib/rate-limiter';
 
 export const POST: APIRoute = async ({ request, locals }) => {
   try {
@@ -27,7 +28,15 @@ export const POST: APIRoute = async ({ request, locals }) => {
       return authResult;
     }
 
-    // 2. Parse request
+    // 2. Rate limiting
+    const rateLimitResponse = await rateLimitMiddleware(
+      request,
+      locals.runtime.env.KV || locals.runtime.env.SESSIONS,
+      RATE_LIMIT_PRESETS.ai_expensive
+    );
+    if (rateLimitResponse) return rateLimitResponse;
+
+    // 3. Parse request
     const body = await request.json();
     const { message, conversationHistory = [] } = body;
 

@@ -1,14 +1,28 @@
 ---
 import MainLayout from '@/layouts/MainLayout.astro';
+import { authenticateAstroPage, requirePermission, requireBranch } from '@/lib/astro-auth';
 
-// Check authentication
-const cookieHeader = Astro.request.headers.get('Cookie');
-if (!cookieHeader?.includes('session=')) {
-  return Astro.redirect('/auth/login');
-}
+// Authenticate and check permissions
+const authResult = await authenticateAstroPage(Astro);
+if (authResult instanceof Response) return authResult;
+
+// Check permission
+const permCheck = requirePermission(authResult, 'canGeneratePayroll');
+if (permCheck) return permCheck;
+
+// Check branch
+const branchCheck = requireBranch(authResult);
+if (branchCheck) return branchCheck;
+
+const permissions = authResult.permissions;
 ---
 
 <MainLayout title="الرواتب - SymbolAI">
+  <!-- Pass authentication data to client-side scripts -->
+  <script is:inline define:vars={{ branchId: permissions.branchId }}>
+    window.userBranchId = branchId;
+  </script>
+
   <div class="space-y-6">
     <div>
       <h1 class="text-3xl font-bold">إدارة الرواتب</h1>
@@ -262,7 +276,7 @@ if (!cookieHeader?.includes('session=')) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            branchId: 'BR001',
+            branchId: window.userBranchId,
             month,
             year
           })
@@ -348,7 +362,7 @@ if (!cookieHeader?.includes('session=')) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            branchId: 'BR001',
+            branchId: window.userBranchId,
             month: currentMonth,
             year: currentYear,
             payrollData: currentPayrollData,
@@ -380,7 +394,7 @@ if (!cookieHeader?.includes('session=')) {
       const year = (document.getElementById('history-year') as HTMLSelectElement).value;
 
       try {
-        let url = '/api/payroll/list?branchId=BR001';
+        let url = `/api/payroll/list?branchId=${window.userBranchId}`;
         if (month) url += `&month=${month}`;
         if (year) url += `&year=${year}`;
 
@@ -433,7 +447,7 @@ if (!cookieHeader?.includes('session=')) {
 
     (window as any).viewPayrollDetails = async function(payrollId: string) {
       try {
-        const response = await fetch(`/api/payroll/list?branchId=BR001`);
+        const response = await fetch(`/api/payroll/list?branchId=${window.userBranchId}`);
         const data = await response.json();
 
         if (data.success) {

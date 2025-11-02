@@ -1,9 +1,22 @@
 import type { APIRoute } from 'astro';
 import { createSession, createSessionCookie } from '@/lib/session';
-import { loadUserPermissions } from '@/lib/permissions';
+import { loadUserPermissions, logAudit, getClientIP } from '@/lib/permissions';
+import { rateLimitMiddleware, RATE_LIMIT_PRESETS } from '@/lib/rate-limiter';
+import { verifyPassword, isOldPasswordFormat, hashPasswordSHA256Legacy, hashPassword } from '@/lib/password';
 
 export const POST: APIRoute = async ({ request, locals }) => {
   try {
+    // تطبيق Rate Limiting للحماية من Brute Force
+    const rateLimitResponse = await rateLimitMiddleware(
+      request,
+      locals.runtime.env.KV || locals.runtime.env.SESSIONS,
+      RATE_LIMIT_PRESETS.auth
+    );
+
+    if (rateLimitResponse) {
+      return rateLimitResponse;
+    }
+
     const { username, password } = await request.json();
 
     if (!username || !password) {
@@ -13,25 +26,60 @@ export const POST: APIRoute = async ({ request, locals }) => {
       });
     }
 
-    // Hash password for comparison (SHA-256 - same as user creation)
-    const encoder = new TextEncoder();
-    const data = encoder.encode(password);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const hashedPassword = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-
-    // Get user from database (using new users_new table)
+    // Get user from database by username only
     const user = await locals.runtime.env.DB.prepare(`
       SELECT id, username, password, email, full_name, role_id, branch_id, is_active
       FROM users_new
-      WHERE username = ? AND password = ?
-    `).bind(username, hashedPassword).first();
+      WHERE username = ?
+    `).bind(username).first();
 
     if (!user) {
+      // Log failed attempt - username doesn't exist
+      await logFailedLogin(locals.runtime.env.KV, username, getClientIP(request), 'user_not_found');
+
       return new Response(JSON.stringify({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' }), {
         status: 401,
         headers: { 'Content-Type': 'application/json' }
       });
+    }
+
+    const storedPasswordHash = user.password as string;
+    let isValidPassword = false;
+    let needsMigration = false;
+
+    // Check if password uses old SHA-256 format
+    if (isOldPasswordFormat(storedPasswordHash)) {
+      // Legacy password - verify using old method
+      const oldHash = await hashPasswordSHA256Legacy(password);
+      isValidPassword = oldHash === storedPasswordHash;
+      needsMigration = isValidPassword; // Migrate if password is correct
+    } else {
+      // New PBKDF2 format - verify using secure method
+      isValidPassword = await verifyPassword(password, storedPasswordHash);
+    }
+
+    if (!isValidPassword) {
+      // Log failed attempt - wrong password
+      await logFailedLogin(locals.runtime.env.KV, username, getClientIP(request), 'wrong_password');
+
+      return new Response(JSON.stringify({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Migrate password to new format if needed (transparent upgrade)
+    if (needsMigration) {
+      try {
+        const newHash = await hashPassword(password);
+        await locals.runtime.env.DB.prepare(`
+          UPDATE users_new SET password = ? WHERE id = ?
+        `).bind(newHash, user.id).run();
+        console.log(`Password migrated for user: ${username}`);
+      } catch (migrationError) {
+        // Log but don't fail login if migration fails
+        console.error('Password migration failed:', migrationError);
+      }
     }
 
     // Check if user is active
@@ -52,12 +100,29 @@ export const POST: APIRoute = async ({ request, locals }) => {
       });
     }
 
-    // Create session with enhanced data
+    // Create session with enhanced data (with session rotation for security)
     const token = await createSession(
       locals.runtime.env.SESSIONS,
       user.id as string,
       user.username as string,
       permissions.roleName
+    );
+
+    // Log successful login
+    await logAudit(
+      locals.runtime.env.DB,
+      {
+        userId: user.id as string,
+        username: user.username as string,
+        permissions,
+        branchId: user.branch_id as string | null
+      } as any,
+      'view',
+      'auth',
+      'login',
+      { username, migrated: needsMigration },
+      getClientIP(request),
+      request.headers.get('User-Agent') || undefined
     );
 
     // Also store permissions and branch info in session
@@ -129,3 +194,42 @@ export const POST: APIRoute = async ({ request, locals }) => {
     );
   }
 };
+
+/**
+ * Log failed login attempts for security monitoring
+ */
+async function logFailedLogin(
+  kv: any,
+  username: string,
+  ip: string,
+  reason: string
+): Promise<void> {
+  try {
+    const key = `failed_login:${username}:${Date.now()}`;
+    await kv.put(
+      key,
+      JSON.stringify({
+        username,
+        ip,
+        reason,
+        timestamp: Date.now()
+      }),
+      { expirationTtl: 86400 } // 24 hours
+    );
+
+    // Check total failures in last hour
+    const listResult = await kv.list({ prefix: `failed_login:${username}:` });
+    const recentFailures = listResult.keys.filter((k: any) => {
+      const timestamp = parseInt(k.name.split(':')[2]);
+      return Date.now() - timestamp < 3600000; // 1 hour
+    });
+
+    if (recentFailures.length >= 5) {
+      console.warn(`Security Alert: ${recentFailures.length} failed login attempts for ${username} from ${ip}`);
+      // TODO: Send security alert email to admin
+    }
+  } catch (error) {
+    // Don't fail login if logging fails
+    console.error('Failed to log failed login:', error);
+  }
+}

@@ -1,11 +1,27 @@
-# Admin credentials - DO NOT COMMIT
-admin-*.sql
-ADMIN_CREDENTIALS_*.txt
 
-# Node modules
+# ============================================
+# Cleanup - Backup directories
+# ============================================
+src-convex-backup/
+*.backup
+
+# ============================================
+# Cloudflare Worker
+# ============================================
+.env
+.dev.vars
+.wrangler/
+wrangler.toml.backup
+
+# ============================================
+# Build outputs
+# ============================================
+symbolai-worker/dist/
+symbolai-worker/.astro/
+
+# ============================================
+# Dependencies
+# ============================================
 node_modules/
-package-lock.json
-
-# Temporary files
-*.log
-.DS_Store
+symbolai-worker/node_modules/
+mo 
