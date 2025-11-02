@@ -1,0 +1,199 @@
+---
+/**
+ * 500 Error Page
+ *
+ * Automatically rendered when an error is thrown during page rendering.
+ * The error prop contains details about the error.
+ */
+
+interface Props {
+  error: unknown;
+}
+
+const { error } = Astro.props;
+
+// Extract error message safely without leaking sensitive info
+let errorMessage = 'خطأ داخلي في الخادم';
+let errorDetails = '';
+
+if (error instanceof Error) {
+  errorMessage = 'حدث خطأ أثناء معالجة طلبك';
+  // Only show error message in development, not stack trace
+  if (import.meta.env.DEV) {
+    errorDetails = error.message;
+  }
+}
+
+const statusCode = Astro.response.status || 500;
+---
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>خطأ {statusCode} - SymbolAI</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+      }
+
+      .error-container {
+        background: white;
+        border-radius: 1rem;
+        padding: 3rem;
+        max-width: 600px;
+        width: 100%;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        text-align: center;
+      }
+
+      .error-code {
+        font-size: 6rem;
+        font-weight: 800;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        margin-bottom: 1rem;
+      }
+
+      .error-title {
+        font-size: 1.5rem;
+        color: #333;
+        margin-bottom: 1rem;
+        font-weight: 600;
+      }
+
+      .error-message {
+        font-size: 1rem;
+        color: #666;
+        margin-bottom: 2rem;
+        line-height: 1.6;
+      }
+
+      .error-details {
+        background: #f7f7f7;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        margin-bottom: 2rem;
+        font-family: 'Courier New', monospace;
+        font-size: 0.875rem;
+        color: #e74c3c;
+        text-align: left;
+        direction: ltr;
+        overflow-x: auto;
+      }
+
+      .action-buttons {
+        display: flex;
+        gap: 1rem;
+        justify-content: center;
+        flex-wrap: wrap;
+      }
+
+      .btn {
+        padding: 0.75rem 2rem;
+        border-radius: 0.5rem;
+        text-decoration: none;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        border: none;
+        cursor: pointer;
+        font-size: 1rem;
+      }
+
+      .btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+      }
+
+      .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+      }
+
+      .btn-secondary {
+        background: white;
+        color: #667eea;
+        border: 2px solid #667eea;
+      }
+
+      .btn-secondary:hover {
+        background: #f7f7f7;
+      }
+
+      .icon {
+        width: 80px;
+        height: 80px;
+        margin: 0 auto 2rem;
+      }
+
+      @media (max-width: 640px) {
+        .error-container {
+          padding: 2rem;
+        }
+
+        .error-code {
+          font-size: 4rem;
+        }
+
+        .error-title {
+          font-size: 1.25rem;
+        }
+
+        .action-buttons {
+          flex-direction: column;
+        }
+
+        .btn {
+          width: 100%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="error-container">
+      <!-- Error Icon -->
+      <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="12" cy="12" r="10" stroke="#e74c3c" stroke-width="2"/>
+        <path d="M12 8V12" stroke="#e74c3c" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="12" cy="16" r="1" fill="#e74c3c"/>
+      </svg>
+
+      <div class="error-code">{statusCode}</div>
+      <h1 class="error-title">{errorMessage}</h1>
+      <p class="error-message">
+        نعتذر عن هذا الخطأ. يرجى المحاولة مرة أخرى أو الاتصال بفريق الدعم إذا استمرت المشكلة.
+      </p>
+
+      {errorDetails && (
+        <div class="error-details">
+          <strong>Development Error Details:</strong><br/>
+          {errorDetails}
+        </div>
+      )}
+
+      <div class="action-buttons">
+        <button class="btn btn-primary" onclick="window.location.reload()">
+          إعادة المحاولة
+        </button>
+        <a href="/" class="btn btn-secondary">
+          العودة للرئيسية
+        </a>
+      </div>
+    </div>
+  </body>
+</html>
