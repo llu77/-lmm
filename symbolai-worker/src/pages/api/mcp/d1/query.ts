@@ -8,7 +8,6 @@
 import type { APIRoute } from 'astro';
 import { requireAdminRole, logAudit } from '@/lib/permissions';
 import { createAuthenticatedMCPClient, validateSQL, formatD1Results } from '@/lib/mcp-client';
-import { rateLimitMiddleware, RATE_LIMIT_PRESETS } from '@/lib/rate-limiter';
 
 export const POST: APIRoute = async ({ request, locals, clientAddress }) => {
   try {
@@ -23,15 +22,7 @@ export const POST: APIRoute = async ({ request, locals, clientAddress }) => {
       return authResult;
     }
 
-    // 2. Rate limiting
-    const rateLimitResponse = await rateLimitMiddleware(
-      request,
-      locals.runtime.env.KV || locals.runtime.env.SESSIONS,
-      RATE_LIMIT_PRESETS.database_direct
-    );
-    if (rateLimitResponse) return rateLimitResponse;
-
-    // 3. Parse request body
+    // 2. Parse request body
     const body = await request.json();
     const { databaseId, sql, params, format = 'json' } = body;
 

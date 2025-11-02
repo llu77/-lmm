@@ -1,8 +1,6 @@
 import type { APIRoute } from 'astro';
 import { requireAuthWithPermissions, requirePermission, validateBranchAccess, logAudit, getClientIP } from '@/lib/permissions';
 import { generateId } from '@/lib/db';
-import { rateLimitMiddleware, RATE_LIMIT_PRESETS } from '@/lib/rate-limiter';
-import { validateInput, savePayrollSchema } from '@/lib/validation-schemas';
 
 export const POST: APIRoute = async ({ request, locals }) => {
   // Check authentication with permissions
@@ -22,25 +20,19 @@ export const POST: APIRoute = async ({ request, locals }) => {
     return permError;
   }
 
-  // Rate limiting
-  const rateLimitResponse = await rateLimitMiddleware(
-    request,
-    locals.runtime.env.KV || locals.runtime.env.SESSIONS,
-    RATE_LIMIT_PRESETS.financial_critical
-  );
-  if (rateLimitResponse) return rateLimitResponse;
-
   try {
-    const body = await request.json();
+    const {
+      branchId,
+      month,
+      year,
+      payrollData,
+      totals
+    } = await request.json();
 
-    // Validate input
-    const validationResult = validateInput(savePayrollSchema, body);
-    if (!validationResult.success) {
+    // Validation
+    if (!branchId || !month || !year || !payrollData || !Array.isArray(payrollData)) {
       return new Response(
-        JSON.stringify({
-          error: 'خطأ في البيانات المدخلة',
-          details: validationResult.error
-        }),
+        JSON.stringify({ error: 'البيانات المطلوبة ناقصة' }),
         {
           status: 400,
           headers: { 'Content-Type': 'application/json' }
@@ -48,10 +40,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
       );
     }
 
-    const validatedData = validationResult.data;
-
     // Validate branch access
-    const branchError = validateBranchAccess(authResult, validatedData.branchId);
+    const branchError = validateBranchAccess(authResult, branchId);
     if (branchError) {
       return branchError;
     }
@@ -60,7 +50,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const existingPayroll = await locals.runtime.env.DB.prepare(`
       SELECT id FROM payroll_records
       WHERE branch_id = ? AND month = ? AND year = ?
-    `).bind(validatedData.branchId, validatedData.month, parseInt(validatedData.year.toString())).first();
+    `).bind(branchId, month, parseInt(year)).first();
 
     if (existingPayroll) {
       return new Response(
@@ -75,7 +65,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     // Save payroll record
     const payrollId = generateId();
     const { username } = authResult.permissions;
-    const employeesJson = JSON.stringify(validatedData.payrollData);
+    const employeesJson = JSON.stringify(payrollData);
 
     await locals.runtime.env.DB.prepare(`
       INSERT INTO payroll_records (
@@ -89,11 +79,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
       ) VALUES (?, ?, ?, ?, ?, ?, ?)
     `).bind(
       payrollId,
-      validatedData.branchId,
-      validatedData.month,
-      parseInt(validatedData.year.toString()),
+      branchId,
+      month,
+      parseInt(year),
       employeesJson,
-      validatedData.totals?.totalNetSalary || 0,
+      totals?.totalNetSalary || 0,
       username || 'admin'
     ).run();
 
@@ -104,7 +94,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       'create',
       'payroll_record',
       payrollId,
-      { branchId: validatedData.branchId, month: validatedData.month, year: validatedData.year, totalNetSalary: validatedData.totals?.totalNetSalary, employeeCount: validatedData.payrollData.length },
+      { branchId, month, year, totalNetSalary: totals?.totalNetSalary, employeeCount: payrollData.length },
       getClientIP(request),
       request.headers.get('User-Agent') || undefined
     );

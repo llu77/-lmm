@@ -2,7 +2,6 @@ import type { APIRoute } from 'astro';
 import { requireAuth } from '@/lib/session';
 import { analyzeFinancialData } from '@/lib/ai';
 import { revenueQueries, expenseQueries } from '@/lib/db';
-import { rateLimitMiddleware, RATE_LIMIT_PRESETS } from '@/lib/rate-limiter';
 
 export const POST: APIRoute = async ({ request, locals }) => {
   // Check authentication
@@ -10,14 +9,6 @@ export const POST: APIRoute = async ({ request, locals }) => {
   if (authResult instanceof Response) {
     return authResult;
   }
-
-  // Rate limiting
-  const rateLimitResponse = await rateLimitMiddleware(
-    request,
-    locals.runtime.env.KV || locals.runtime.env.SESSIONS,
-    RATE_LIMIT_PRESETS.ai_expensive
-  );
-  if (rateLimitResponse) return rateLimitResponse;
 
   try {
     const { startDate, endDate, branchId = 'BR001' } = await request.json();

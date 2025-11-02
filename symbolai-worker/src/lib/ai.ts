@@ -1,6 +1,5 @@
 // AI utilities using Cloudflare AI Gateway and Workers AI
 // Supports: Anthropic Claude, Cloudflare Workers AI models
-// PHASE 2: Added timeout protection to prevent worker timeouts
 
 interface AIEnv {
   AI: any; // Cloudflare AI binding
@@ -8,10 +7,6 @@ interface AIEnv {
   AI_GATEWAY_ACCOUNT_ID?: string;
   AI_GATEWAY_NAME?: string;
 }
-
-// AI API Timeout Settings
-const AI_TIMEOUT_MS = 25000; // 25 seconds (Cloudflare Worker limit is 30s)
-const AI_TIMEOUT_ERROR_MESSAGE = 'انتهت مهلة الانتظار للذكاء الاصطناعي. يرجى المحاولة مرة أخرى.';
 
 interface Message {
   role: 'user' | 'assistant' | 'system';
@@ -27,37 +22,8 @@ interface AIResponse {
 }
 
 /**
- * Fetch with timeout (prevents worker from hanging indefinitely)
- * PHASE 2 Security Enhancement
- */
-async function fetchWithTimeout(
-  url: string,
-  options: RequestInit,
-  timeoutMs: number = AI_TIMEOUT_MS
-): Promise<Response> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
-  try {
-    const response = await fetch(url, {
-      ...options,
-      signal: controller.signal
-    });
-    clearTimeout(timeoutId);
-    return response;
-  } catch (error: any) {
-    clearTimeout(timeoutId);
-    if (error.name === 'AbortError') {
-      throw new Error(`Request timeout after ${timeoutMs}ms`);
-    }
-    throw error;
-  }
-}
-
-/**
  * Call Anthropic Claude via Cloudflare AI Gateway
  * Benefits: Caching, rate limiting, logging, cost tracking
- * PHASE 2: Added 25s timeout protection
  */
 export async function callClaudeViaGateway(
   env: AIEnv,
@@ -67,21 +33,14 @@ export async function callClaudeViaGateway(
     maxTokens?: number;
     temperature?: number;
     system?: string;
-    timeout?: number; // Custom timeout in ms
   } = {}
 ): Promise<AIResponse> {
   const {
     model = 'claude-3-5-sonnet-20241022',
     maxTokens = 4096,
     temperature = 0.7,
-    system,
-    timeout = AI_TIMEOUT_MS
+    system
   } = options;
-
-  // Validate API key
-  if (!env.ANTHROPIC_API_KEY || env.ANTHROPIC_API_KEY.length < 20) {
-    throw new Error('Invalid or missing Anthropic API key');
-  }
 
   // Construct AI Gateway endpoint
   const gatewayEndpoint = `https://gateway.ai.cloudflare.com/v1/${env.AI_GATEWAY_ACCOUNT_ID}/${env.AI_GATEWAY_NAME}/anthropic`;
@@ -98,19 +57,15 @@ export async function callClaudeViaGateway(
   }
 
   try {
-    const response = await fetchWithTimeout(
-      `${gatewayEndpoint}/v1/messages`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'anthropic-version': '2023-06-01',
-          'x-api-key': env.ANTHROPIC_API_KEY
-        },
-        body: JSON.stringify(requestBody)
+    const response = await fetch(`${gatewayEndpoint}/v1/messages`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'anthropic-version': '2023-06-01',
+        'x-api-key': env.ANTHROPIC_API_KEY || ''
       },
-      timeout
-    );
+      body: JSON.stringify(requestBody)
+    });
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -123,14 +78,8 @@ export async function callClaudeViaGateway(
       content: data.content[0].text,
       usage: data.usage
     };
-  } catch (error: any) {
+  } catch (error) {
     console.error('AI Gateway error:', error);
-
-    // Return user-friendly error for timeout
-    if (error.message?.includes('timeout')) {
-      throw new Error(AI_TIMEOUT_ERROR_MESSAGE);
-    }
-
     throw error;
   }
 }
@@ -138,7 +87,6 @@ export async function callClaudeViaGateway(
 /**
  * Call Cloudflare Workers AI (built-in models)
  * Available models: @cf/meta/llama-3-8b-instruct, @cf/mistral/mistral-7b-instruct, etc.
- * PHASE 2: Added timeout protection
  */
 export async function callWorkersAI(
   env: AIEnv,
@@ -147,46 +95,29 @@ export async function callWorkersAI(
     model?: string;
     maxTokens?: number;
     temperature?: number;
-    timeout?: number;
   } = {}
 ): Promise<AIResponse> {
   const {
     model = '@cf/meta/llama-3-8b-instruct',
     maxTokens = 2048,
-    temperature = 0.7,
-    timeout = AI_TIMEOUT_MS
+    temperature = 0.7
   } = options;
 
   try {
-    // Create timeout promise
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error('Workers AI timeout')), timeout);
+    const response = await env.AI.run(model, {
+      messages: [
+        { role: 'user', content: prompt }
+      ],
+      max_tokens: maxTokens,
+      temperature
     });
-
-    // Race between AI call and timeout
-    const response = await Promise.race([
-      env.AI.run(model, {
-        messages: [
-          { role: 'user', content: prompt }
-        ],
-        max_tokens: maxTokens,
-        temperature
-      }),
-      timeoutPromise
-    ]);
 
     return {
       content: response.response || response.text || '',
       usage: response.usage
     };
-  } catch (error: any) {
+  } catch (error) {
     console.error('Workers AI error:', error);
-
-    // Return user-friendly error for timeout
-    if (error.message?.includes('timeout')) {
-      throw new Error(AI_TIMEOUT_ERROR_MESSAGE);
-    }
-
     throw error;
   }
 }

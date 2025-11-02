@@ -3,7 +3,6 @@ import { requireAuthWithPermissions, requirePermission, validateBranchAccess, lo
 import { generateId } from '@/lib/db';
 import { categorizeExpense } from '@/lib/ai';
 import { triggerLargeExpense } from '@/lib/email-triggers';
-import { validateInput, createExpenseSchema } from '@/lib/validation-schemas';
 
 export const POST: APIRoute = async ({ request, locals }) => {
   // Check authentication with permissions
@@ -24,16 +23,20 @@ export const POST: APIRoute = async ({ request, locals }) => {
   }
 
   try {
-    const body = await request.json();
+    const {
+      branchId,
+      title,
+      amount,
+      category,
+      description,
+      date,
+      autoCategorize = false
+    } = await request.json();
 
-    // Validate input
-    const validationResult = validateInput(createExpenseSchema, body);
-    if (!validationResult.success) {
+    // Validation
+    if (!branchId || !title || !amount || !date) {
       return new Response(
-        JSON.stringify({
-          error: 'خطأ في البيانات المدخلة',
-          details: validationResult.error
-        }),
+        JSON.stringify({ error: 'البيانات المطلوبة ناقصة' }),
         {
           status: 400,
           headers: { 'Content-Type': 'application/json' }
@@ -41,18 +44,16 @@ export const POST: APIRoute = async ({ request, locals }) => {
       );
     }
 
-    const validatedData = validationResult.data;
-
     // Validate branch access
-    const branchError = validateBranchAccess(authResult, validatedData.branchId);
+    const branchError = validateBranchAccess(authResult, branchId);
     if (branchError) {
       return branchError;
     }
 
-    let finalCategory = validatedData.category;
+    let finalCategory = category;
 
     // AI Auto-categorization if requested
-    if (validatedData.autoCategorize || !validatedData.category) {
+    if (autoCategorize || !category) {
       try {
         const aiCategory = await categorizeExpense(
           {
@@ -61,30 +62,30 @@ export const POST: APIRoute = async ({ request, locals }) => {
             AI_GATEWAY_ACCOUNT_ID: locals.runtime.env.AI_GATEWAY_ACCOUNT_ID,
             AI_GATEWAY_NAME: locals.runtime.env.AI_GATEWAY_NAME
           },
-          validatedData.title,
-          validatedData.description
+          title,
+          description
         );
         finalCategory = aiCategory;
       } catch (error) {
         console.error('AI categorization failed:', error);
-        finalCategory = validatedData.category || 'أخرى';
+        finalCategory = category || 'أخرى';
       }
     }
 
     // Create expense record
     const expenseId = generateId();
-    const parsedAmount = parseFloat(validatedData.amount.toString());
+    const parsedAmount = parseFloat(amount);
     await locals.runtime.env.DB.prepare(`
       INSERT INTO expenses (id, branch_id, title, amount, category, description, date)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).bind(
       expenseId,
-      validatedData.branchId,
-      validatedData.title,
+      branchId,
+      title,
       parsedAmount,
       finalCategory,
-      validatedData.description || null,
-      validatedData.date
+      description || null,
+      date
     ).run();
 
     // Send email alert for large expenses (> 1000 ج.م)
@@ -92,12 +93,12 @@ export const POST: APIRoute = async ({ request, locals }) => {
       try {
         await triggerLargeExpense(locals.runtime.env, {
           expenseId,
-          title: validatedData.title,
+          title,
           amount: parsedAmount,
           category: finalCategory,
-          description: validatedData.description || '',
-          date: validatedData.date,
-          branchId: validatedData.branchId,
+          description: description || '',
+          date,
+          branchId,
           userId: authResult.userId
         });
       } catch (emailError) {
@@ -113,7 +114,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       'create',
       'expense',
       expenseId,
-      { branchId: validatedData.branchId, title: validatedData.title, amount: parsedAmount, category: finalCategory },
+      { branchId, title, amount: parsedAmount, category: finalCategory },
       getClientIP(request),
       request.headers.get('User-Agent') || undefined
     );
