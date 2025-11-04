@@ -6,8 +6,20 @@ import {
   migrateSHA256ToBcrypt,
   isBcryptHash
 } from '@/lib/password';
+import { rateLimitMiddleware, RateLimitPresets } from '@/lib/rate-limit';
 
 export const POST: APIRoute = async ({ request, locals }) => {
+  // Rate limiting: 5 attempts per 15 minutes
+  const rateLimitResponse = await rateLimitMiddleware(
+    locals.runtime.env.SESSIONS, // Using SESSIONS KV for rate limiting
+    request,
+    RateLimitPresets.LOGIN
+  );
+
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+
   try {
     const { username, password } = await request.json();
 
