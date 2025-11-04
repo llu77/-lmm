@@ -1,6 +1,11 @@
 import type { APIRoute } from 'astro';
 import { createSession, createSessionCookie } from '@/lib/session';
 import { loadUserPermissions } from '@/lib/permissions';
+import {
+  verifyPassword,
+  migrateSHA256ToBcrypt,
+  isBcryptHash
+} from '@/lib/password';
 
 export const POST: APIRoute = async ({ request, locals }) => {
   try {
@@ -13,25 +18,57 @@ export const POST: APIRoute = async ({ request, locals }) => {
       });
     }
 
-    // Hash password for comparison (SHA-256 - same as user creation)
-    const encoder = new TextEncoder();
-    const data = encoder.encode(password);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const hashedPassword = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-
-    // Get user from database (using new users_new table)
+    // Get user from database by username only
     const user = await locals.runtime.env.DB.prepare(`
       SELECT id, username, password, email, full_name, role_id, branch_id, is_active
       FROM users_new
-      WHERE username = ? AND password = ?
-    `).bind(username, hashedPassword).first();
+      WHERE username = ?
+    `).bind(username).first();
 
     if (!user) {
       return new Response(JSON.stringify({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' }), {
         status: 401,
         headers: { 'Content-Type': 'application/json' }
       });
+    }
+
+    // Verify password based on hash type
+    let isPasswordValid = false;
+    let needsPasswordUpdate = false;
+    let newPasswordHash: string | undefined;
+
+    const storedHash = user.password as string;
+
+    if (isBcryptHash(storedHash)) {
+      // Modern bcrypt hash - verify directly
+      isPasswordValid = await verifyPassword(password, storedHash);
+    } else {
+      // Legacy SHA-256 hash - verify and migrate
+      const migrationResult = await migrateSHA256ToBcrypt(password, storedHash);
+      isPasswordValid = migrationResult.isValid;
+
+      if (migrationResult.isValid && migrationResult.newHash) {
+        needsPasswordUpdate = true;
+        newPasswordHash = migrationResult.newHash;
+      }
+    }
+
+    if (!isPasswordValid) {
+      return new Response(JSON.stringify({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Update password hash if migration occurred
+    if (needsPasswordUpdate && newPasswordHash) {
+      await locals.runtime.env.DB.prepare(`
+        UPDATE users_new
+        SET password = ?, updated_at = datetime('now')
+        WHERE id = ?
+      `).bind(newPasswordHash, user.id).run();
+
+      console.log(`Password migrated to bcrypt for user: ${username}`);
     }
 
     // Check if user is active
