@@ -1,38 +1,36 @@
 ---
-name: Bug report
-about: Create a report to help us improve
-title: ''
-labels: ''
+name: 🐛 Bug Report
+about: أبلغ عن مشكلة لمساعدتنا في التحسين
+title: '[BUG] '
+labels: bug
 assignees: ''
-
 ---
 
-**Describe the bug**
-A clear and concise description of what the bug is.
+## 🐛 وصف المشكلة / Bug Description
 
-**To Reproduce**
-Steps to reproduce the behavior:
-1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
-4. See error
+<!-- وصف واضح وموجز للمشكلة -->
 
-**Expected behavior**
-A clear and concise description of what you expected to happen.
+## 🔄 خطوات إعادة الإنتاج / Steps to Reproduce
 
-**Screenshots**
-If applicable, add screenshots to help explain your problem.
+1. اذهب إلى '...'
+2. اضغط على '...'
+3. انتقل إلى '...'
+4. شاهد الخطأ
 
-**Desktop (please complete the following information):**
- - OS: [e.g. iOS]
- - Browser [e.g. chrome, safari]
- - Version [e.g. 22]
+## ✅ السلوك المتوقع / Expected Behavior
 
-**Smartphone (please complete the following information):**
- - Device: [e.g. iPhone6]
- - OS: [e.g. iOS8.1]
- - Browser [e.g. stock browser, safari]
- - Version [e.g. 22]
+<!-- ماذا كنت تتوقع أن يحدث؟ -->
 
-**Additional context**
-Add any other context about the problem here.
+## 📸 Screenshots
+
+<!-- إن أمكن، أضف صور لتوضيح المشكلة -->
+
+## 🖥️ البيئة / Environment
+
+- **المتصفح:** [مثال: Chrome 120]
+- **نظام التشغيل:** [مثال: Windows 11]
+- **الإصدار:** [مثال: v2.0.0]
+
+## 📝 معلومات إضافية / Additional Context
+
+<!-- أي معلومات إضافية عن المشكلة -->
