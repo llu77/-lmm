@@ -73,3 +73,19 @@ crons = [
   "0 10 * * 6",     # Bonus reminder every Saturday at 10 AM
   "0 3 1 * *"       # Cleanup on 1st of month at 3 AM
 ]
+
+# Observability Configuration
+[observability]
+enabled = false
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+persist = true
+invocation_logs = true
+
+[observability.traces]
+enabled = false
+persist = true
+head_sampling_rate = 1
