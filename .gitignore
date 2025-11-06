@@ -1,3 +1,8 @@
+# ============================================
+# Admin credentials - DO NOT COMMIT
+# ============================================
+admin-*.sql
+ADMIN_CREDENTIALS_*.txt
 
 # ============================================
 # Cleanup - Backup directories
@@ -24,4 +29,10 @@ symbolai-worker/.astro/
 # ============================================
 node_modules/
 symbolai-worker/node_modules/
+package-lock.json
 
+# ============================================
+# Temporary files
+# ============================================
+*.log
+.DS_Store
