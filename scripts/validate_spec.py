@@ -378,7 +378,7 @@ def validate_directory(directory: Path) -> Tuple[int, int]:
     """
     all_files = list(directory.glob("**/*.md"))
 
-    # Filter out documentation files (guides, READMEs, templates)
+    # Filter out documentation files (guides, READMEs, templates, summaries)
     # Only validate actual specifications (in modules/ and examples/)
     spec_files = [
         f for f in all_files
@@ -386,6 +386,7 @@ def validate_directory(directory: Path) -> Tuple[int, int]:
             "GUIDE" in f.name.upper(),
             "README" in f.name.upper(),
             "TEMPLATE" in f.name.upper(),
+            "SUMMARY" in f.name.upper(),
             "/templates/" in str(f),
         ])
     ]
