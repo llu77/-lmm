@@ -376,11 +376,29 @@ def validate_directory(directory: Path) -> Tuple[int, int]:
     Returns:
         Tuple of (passed_count, failed_count)
     """
-    spec_files = list(directory.glob("**/*.md"))
+    all_files = list(directory.glob("**/*.md"))
+
+    # Filter out documentation files (guides, READMEs, templates)
+    # Only validate actual specifications (in modules/ and examples/)
+    spec_files = [
+        f for f in all_files
+        if not any([
+            "GUIDE" in f.name.upper(),
+            "README" in f.name.upper(),
+            "TEMPLATE" in f.name.upper(),
+            "/templates/" in str(f),
+        ])
+    ]
 
     if not spec_files:
-        print(f"No markdown files found in {directory}")
+        print(f"No specification files found in {directory}")
+        print(f"(Skipped {len(all_files)} documentation/template files)")
         return 0, 0
+
+    # Show which files are being skipped
+    skipped = len(all_files) - len(spec_files)
+    if skipped > 0:
+        print(f"ℹ️  Skipping {skipped} documentation/template files\n")
 
     passed = 0
     failed = 0
@@ -393,6 +411,8 @@ def validate_directory(directory: Path) -> Tuple[int, int]:
 
     print(f"\n{'=' * 80}")
     print(f"SUMMARY: {passed} passed, {failed} failed out of {len(spec_files)} files")
+    if skipped > 0:
+        print(f"         ({skipped} documentation/template files skipped)")
     print(f"{'=' * 80}\n")
 
     return passed, failed
