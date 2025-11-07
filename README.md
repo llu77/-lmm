@@ -419,6 +419,143 @@ await createRevenue({
 
 ---
 
+## 🤖 Natural Language Specifications
+
+### Overview
+
+This project uses **Natural Language Programming Specification 3.0** - an AI-compilable documentation framework that serves as both human-readable documentation and machine-executable specifications for code generation.
+
+### What Are NL Specs?
+
+Natural Language Specifications are structured documents that:
+- Define module behavior with precision sufficient for AI-powered code generation
+- Follow a mandatory 10-chapter structure ensuring completeness
+- Serve as the single source of truth for both documentation and implementation
+- Enable Claude and other LLMs to generate production-ready code directly from specs
+
+### The 10-Chapter Structure
+
+Every specification follows this framework:
+
+1. **Module Overview** - Functional positioning, responsibilities, design goals
+2. **Interface Definition** - Inputs, outputs, data types with precise constraints
+3. **Core Logic** - Processing flow, algorithms, pseudocode
+4. **State Management** - Internal states, lifecycle, persistence
+5. **Exception Handling** - Error classification, recovery strategies
+6. **Performance Requirements** - Quantified SLAs (P50, P95, P99)
+7. **Security Considerations** - RBAC, attack prevention, audit logging
+8. **Dependencies** - Upstream/downstream services, libraries, configuration
+9. **Testing & Verification** - Unit tests, integration tests, acceptance criteria
+10. **AI Compiler Directives** - Language, frameworks, patterns, deployment
+
+### Directory Structure
+
+```
+specs/
+├── templates/
+│   └── MODULE_TEMPLATE.md              # Standard template for new specs
+├── modules/
+│   └── [module-name].md                # Production specifications
+├── examples/
+│   └── REVENUE_MANAGEMENT_SPEC.md      # Complete example specification
+└── NATURAL_LANGUAGE_SPECS_GUIDE.md     # Comprehensive guide
+```
+
+### Quick Start
+
+**1. Create a new specification:**
+```bash
+cp specs/templates/MODULE_TEMPLATE.md specs/modules/my-module.md
+```
+
+**2. Fill in all 10 chapters systematically**
+
+**3. Validate the specification:**
+```bash
+python scripts/validate_spec.py specs/modules/my-module.md
+```
+
+**4. Generate code using Claude:**
+```
+I have a Natural Language Specification 3.0 document.
+Please implement this module following the specification exactly.
+
+[Paste your specification]
+```
+
+### Key Principles
+
+**Semantic Clarity**:
+- Data types are explicit: "non-empty string, 1-50 characters" not just "string"
+- Logic is sequential with clear conditional branches
+- Performance is quantified: "99% under 100ms" not "fast"
+
+**Compilability**:
+- Sufficient precision for AI to generate:
+  - Type definitions
+  - Business logic
+  - Error handling
+  - Test cases
+
+**Maintainability**:
+- Single source of truth
+- Version controlled with code
+- Updated when implementation changes
+
+### Validation
+
+All specifications are validated using `scripts/validate_spec.py`:
+
+```bash
+# Validate single file
+python scripts/validate_spec.py specs/modules/my-module.md
+
+# Validate all specifications
+python scripts/validate_spec.py --all
+```
+
+The validator checks:
+- All 10 chapters are present
+- Required sections exist in each chapter
+- Data types have sufficient constraints
+- Code blocks are properly formatted
+- Revision history is included
+
+### Example
+
+See **[specs/examples/REVENUE_MANAGEMENT_SPEC.md](./specs/examples/REVENUE_MANAGEMENT_SPEC.md)** for a complete, production-ready specification of the Revenue Management module.
+
+### Documentation
+
+- **[Complete Guide](./specs/NATURAL_LANGUAGE_SPECS_GUIDE.md)**: Comprehensive guide to writing NL Specs
+- **[Template](./specs/templates/MODULE_TEMPLATE.md)**: Standard template with all required sections
+- **[Example Spec](./specs/examples/REVENUE_MANAGEMENT_SPEC.md)**: Real-world example
+
+### Benefits
+
+1. **Consistency**: Standardized structure across all modules
+2. **Completeness**: 10-chapter framework ensures nothing is overlooked
+3. **AI-Friendly**: Optimized for Claude Code and other LLMs
+4. **Dual-Purpose**: One document serves as both docs and code blueprint
+5. **Quality**: Enforced precision reduces ambiguity and errors
+
+### Integration with Development
+
+**Specification-First Development**:
+1. Write specification before code
+2. Get team review and approval
+3. Use Claude to generate implementation from spec
+4. Verify implementation matches specification
+5. Update spec if implementation reveals issues
+
+**Keep Specs in Sync**:
+- Specs live in version control alongside code
+- Code reviews reference corresponding specs
+- Spec changes require code review
+- Update specs in same PR as code changes
+
+---
+
 ## 📊 الإحصائيات
 
 | المقياس | القيمة |
