@@ -19,6 +19,9 @@ import {
   Loader2Icon,
   CheckCircle2Icon,
   XCircleIcon,
+  ZapIcon,
+  BarChart3Icon,
+  LightbulbIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useBranch } from "@/hooks/use-branch.ts";
@@ -80,12 +83,15 @@ function AIAssistantContent({ branchId, branchName }: { branchId: string; branch
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-4 lg:grid-cols-8">
           <TabsTrigger value="overview">نظرة عامة</TabsTrigger>
-          <TabsTrigger value="validator">التحقق من البيانات</TabsTrigger>
-          <TabsTrigger value="patterns">اكتشاف الأنماط</TabsTrigger>
-          <TabsTrigger value="content">كتابة المحتوى</TabsTrigger>
+          <TabsTrigger value="validator">التحقق</TabsTrigger>
+          <TabsTrigger value="patterns">الأنماط</TabsTrigger>
+          <TabsTrigger value="content">المحتوى</TabsTrigger>
           <TabsTrigger value="email">الإيميلات</TabsTrigger>
+          <TabsTrigger value="ultrathink">Ultra Think</TabsTrigger>
+          <TabsTrigger value="deepanalysis">تحليل عميق</TabsTrigger>
+          <TabsTrigger value="solveling">الحلول</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview">
@@ -106,6 +112,18 @@ function AIAssistantContent({ branchId, branchName }: { branchId: string; branch
 
         <TabsContent value="email">
           <EmailTab branchId={branchId} branchName={branchName} />
+        </TabsContent>
+
+        <TabsContent value="ultrathink">
+          <UltraThinkTab branchId={branchId} branchName={branchName} />
+        </TabsContent>
+
+        <TabsContent value="deepanalysis">
+          <DeepAnalysisTab branchId={branchId} branchName={branchName} />
+        </TabsContent>
+
+        <TabsContent value="solveling">
+          <SolvelingTab branchId={branchId} branchName={branchName} />
         </TabsContent>
       </Tabs>
     </div>
@@ -564,6 +582,583 @@ function EmailTab({ branchId, branchName }: { branchId: string; branchName: stri
             </>
           )}
         </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ============================================================================
+// Ultra Think Tab
+// ============================================================================
+
+function UltraThinkTab({ branchId, branchName }: { branchId: string; branchName: string }) {
+  const [loading, setLoading] = useState(false);
+  const [query, setQuery] = useState("");
+  const [context, setContext] = useState("");
+  const [result, setResult] = useState<Record<string, unknown> | null>(null);
+  // TODO: Create API action /api/ai/ultra-think
+
+  const handleUltraThink = async () => {
+    if (!query) {
+      toast.error("يرجى إدخال السؤال أو الموضوع");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await apiClient.post("/api/ai/ultra-think", {
+        query,
+        context,
+        branchId,
+        branchName,
+      });
+      setResult(response.data || response);
+      toast.success("تم التفكير العميق بنجاح");
+    } catch (error) {
+      toast.error("فشل التحليل");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center justify-center size-10 rounded-full bg-purple-100 dark:bg-purple-900/30">
+            <ZapIcon className="size-5 text-purple-600" />
+          </div>
+          <div>
+            <CardTitle>Ultra Think - التفكير العميق المتقدم</CardTitle>
+            <CardDescription>
+              محرك تفكير متقدم مع سلاسل استدلال موسعة وتحليل متعمق
+            </CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="rounded-lg border border-purple-200 bg-purple-50 dark:bg-purple-900/10 p-4">
+          <div className="flex items-start gap-3">
+            <BrainIcon className="size-5 text-purple-600 mt-0.5" />
+            <div className="space-y-2 flex-1">
+              <h4 className="font-semibold text-sm">ماذا يفعل Ultra Think؟</h4>
+              <ul className="space-y-1 text-sm text-muted-foreground">
+                <li className="flex items-start gap-2">
+                  <CheckCircle2Icon className="size-4 text-purple-600 mt-0.5 shrink-0" />
+                  <span>تحليل متعدد الأبعاد للمشاكل المعقدة</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2Icon className="size-4 text-purple-600 mt-0.5 shrink-0" />
+                  <span>سلاسل استدلال موسعة مع خطوات تفكير واضحة</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2Icon className="size-4 text-purple-600 mt-0.5 shrink-0" />
+                  <span>ربط المعلومات من مصادر متعددة</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2Icon className="size-4 text-purple-600 mt-0.5 shrink-0" />
+                  <span>توليد رؤى استراتيجية وتوصيات عملية</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="ultrathink-query">السؤال أو الموضوع للتحليل</Label>
+          <Textarea
+            id="ultrathink-query"
+            placeholder="مثال: كيف يمكن تحسين الإيرادات في الربع القادم مع مراعاة الاتجاهات الحالية؟"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            rows={4}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="ultrathink-context">السياق الإضافي (اختياري)</Label>
+          <Textarea
+            id="ultrathink-context"
+            placeholder="أضف أي معلومات إضافية أو سياق يساعد في التحليل..."
+            value={context}
+            onChange={(e) => setContext(e.target.value)}
+            rows={3}
+          />
+        </div>
+
+        <Button onClick={handleUltraThink} disabled={loading} className="w-full">
+          {loading ? (
+            <>
+              <Loader2Icon className="ml-2 size-4 animate-spin" />
+              جاري التفكير العميق...
+            </>
+          ) : (
+            <>
+              <ZapIcon className="ml-2 size-4" />
+              بدء Ultra Think
+            </>
+          )}
+        </Button>
+
+        {result && (
+          <div className="space-y-4">
+            {result.thinking && (
+              <div className="rounded-lg border p-4 bg-muted/50">
+                <h4 className="font-semibold mb-2 flex items-center gap-2">
+                  <BrainIcon className="size-4" />
+                  عملية التفكير:
+                </h4>
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                  {result.thinking as string}
+                </p>
+              </div>
+            )}
+
+            {result.analysis && (
+              <div className="rounded-lg border border-purple-200 bg-purple-50/50 dark:bg-purple-900/10 p-4">
+                <h4 className="font-semibold mb-2 text-purple-900 dark:text-purple-100">
+                  التحليل المتعمق:
+                </h4>
+                <p className="text-sm whitespace-pre-wrap">
+                  {result.analysis as string}
+                </p>
+              </div>
+            )}
+
+            {result.recommendations && Array.isArray(result.recommendations) && (
+              <div className="rounded-lg border p-4">
+                <h4 className="font-semibold mb-3">التوصيات:</h4>
+                <div className="space-y-2">
+                  {result.recommendations.map((rec: string, idx: number) => (
+                    <div key={idx} className="flex items-start gap-2">
+                      <Badge variant="secondary" className="mt-0.5">
+                        {idx + 1}
+                      </Badge>
+                      <span className="text-sm">{rec}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ============================================================================
+// Deep Analysis Tab
+// ============================================================================
+
+function DeepAnalysisTab({ branchId, branchName }: { branchId: string; branchName: string }) {
+  const [loading, setLoading] = useState(false);
+  const [analysisType, setAnalysisType] = useState("financial");
+  const [timeRange, setTimeRange] = useState("30");
+  const [dimensions, setDimensions] = useState<string[]>(["trends", "patterns", "anomalies"]);
+  const [result, setResult] = useState<Record<string, unknown> | null>(null);
+  // TODO: Create API action /api/ai/deep-analysis
+
+  const toggleDimension = (dim: string) => {
+    setDimensions(prev =>
+      prev.includes(dim) ? prev.filter(d => d !== dim) : [...prev, dim]
+    );
+  };
+
+  const handleDeepAnalysis = async () => {
+    if (dimensions.length === 0) {
+      toast.error("يرجى اختيار بُعد واحد على الأقل للتحليل");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await apiClient.post("/api/ai/deep-analysis", {
+        branchId,
+        branchName,
+        analysisType,
+        timeRange: parseInt(timeRange),
+        dimensions,
+      });
+      setResult(response.data || response);
+      toast.success("تم إجراء التحليل العميق بنجاح");
+    } catch (error) {
+      toast.error("فشل التحليل");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center justify-center size-10 rounded-full bg-blue-100 dark:bg-blue-900/30">
+            <BarChart3Icon className="size-5 text-blue-600" />
+          </div>
+          <div>
+            <CardTitle>Deep Analysis - التحليل العميق متعدد الأبعاد</CardTitle>
+            <CardDescription>
+              تحليل شامل للبيانات المالية من زوايا متعددة مع رؤى عميقة
+            </CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-900/10 p-4">
+          <div className="flex items-start gap-3">
+            <BarChart3Icon className="size-5 text-blue-600 mt-0.5" />
+            <div className="space-y-2 flex-1">
+              <h4 className="font-semibold text-sm">ميزات التحليل العميق:</h4>
+              <ul className="space-y-1 text-sm text-muted-foreground">
+                <li className="flex items-start gap-2">
+                  <CheckCircle2Icon className="size-4 text-blue-600 mt-0.5 shrink-0" />
+                  <span>تحليل الاتجاهات الزمنية والموسمية</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2Icon className="size-4 text-blue-600 mt-0.5 shrink-0" />
+                  <span>كشف الأنماط المخفية والعلاقات المترابطة</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2Icon className="size-4 text-blue-600 mt-0.5 shrink-0" />
+                  <span>تحديد الشذوذات والقيم الخارجة</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2Icon className="size-4 text-blue-600 mt-0.5 shrink-0" />
+                  <span>التنبؤ بالاتجاهات المستقبلية</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2Icon className="size-4 text-blue-600 mt-0.5 shrink-0" />
+                  <span>مقارنة الأداء مع المعايير التاريخية</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label>نوع التحليل</Label>
+          <select
+            value={analysisType}
+            onChange={(e) => setAnalysisType(e.target.value)}
+            className="w-full rounded-lg border p-2"
+          >
+            <option value="financial">التحليل المالي الشامل</option>
+            <option value="revenue">تحليل الإيرادات</option>
+            <option value="expenses">تحليل المصروفات</option>
+            <option value="payroll">تحليل الرواتب</option>
+            <option value="performance">تحليل الأداء</option>
+          </select>
+        </div>
+
+        <div className="space-y-2">
+          <Label>الفترة الزمنية</Label>
+          <select
+            value={timeRange}
+            onChange={(e) => setTimeRange(e.target.value)}
+            className="w-full rounded-lg border p-2"
+          >
+            <option value="7">آخر 7 أيام</option>
+            <option value="30">آخر 30 يوم</option>
+            <option value="90">آخر 90 يوم</option>
+            <option value="180">آخر 6 شهور</option>
+            <option value="365">آخر سنة</option>
+          </select>
+        </div>
+
+        <div className="space-y-2">
+          <Label>أبعاد التحليل</Label>
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              { id: "trends", label: "الاتجاهات" },
+              { id: "patterns", label: "الأنماط" },
+              { id: "anomalies", label: "الشذوذات" },
+              { id: "predictions", label: "التنبؤات" },
+              { id: "comparisons", label: "المقارنات" },
+              { id: "insights", label: "الرؤى العميقة" },
+            ].map((dim) => (
+              <button
+                key={dim.id}
+                onClick={() => toggleDimension(dim.id)}
+                className={`p-2 rounded-lg border text-sm transition-colors ${
+                  dimensions.includes(dim.id)
+                    ? "bg-blue-100 border-blue-500 text-blue-900 dark:bg-blue-900/30 dark:text-blue-100"
+                    : "bg-background hover:bg-muted"
+                }`}
+              >
+                {dim.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <Button onClick={handleDeepAnalysis} disabled={loading} className="w-full">
+          {loading ? (
+            <>
+              <Loader2Icon className="ml-2 size-4 animate-spin" />
+              جاري التحليل العميق...
+            </>
+          ) : (
+            <>
+              <BarChart3Icon className="ml-2 size-4" />
+              بدء التحليل العميق
+            </>
+          )}
+        </Button>
+
+        {result && (
+          <div className="space-y-4">
+            {result.summary && (
+              <div className="rounded-lg border p-4 bg-blue-50/50 dark:bg-blue-900/10">
+                <h4 className="font-semibold mb-2">الملخص التنفيذي:</h4>
+                <p className="text-sm whitespace-pre-wrap">
+                  {result.summary as string}
+                </p>
+              </div>
+            )}
+
+            {result.dimensions && typeof result.dimensions === "object" && (
+              <div className="space-y-3">
+                {Object.entries(result.dimensions as Record<string, unknown>).map(([key, value]) => (
+                  <div key={key} className="rounded-lg border p-4">
+                    <h4 className="font-semibold mb-2 capitalize">{key}:</h4>
+                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                      {typeof value === "string" ? value : JSON.stringify(value, null, 2)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {result.metrics && Array.isArray(result.metrics) && (
+              <div className="rounded-lg border p-4">
+                <h4 className="font-semibold mb-3">المؤشرات الرئيسية:</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  {result.metrics.map((metric: Record<string, unknown>, idx: number) => (
+                    <div key={idx} className="p-3 rounded-lg bg-muted">
+                      <div className="text-xs text-muted-foreground">
+                        {metric.label as string}
+                      </div>
+                      <div className="text-lg font-bold">
+                        {metric.value as string}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ============================================================================
+// Solveling Tab
+// ============================================================================
+
+function SolvelingTab({ branchId, branchName }: { branchId: string; branchName: string }) {
+  const [loading, setLoading] = useState(false);
+  const [problem, setProblem] = useState("");
+  const [constraints, setConstraints] = useState("");
+  const [priority, setPriority] = useState("high");
+  const [result, setResult] = useState<Record<string, unknown> | null>(null);
+  // TODO: Create API action /api/ai/solve-problem
+
+  const handleSolve = async () => {
+    if (!problem) {
+      toast.error("يرجى وصف المشكلة");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await apiClient.post("/api/ai/solve-problem", {
+        problem,
+        constraints,
+        priority,
+        branchId,
+        branchName,
+      });
+      setResult(response.data || response);
+      toast.success("تم إيجاد الحل بنجاح");
+    } catch (error) {
+      toast.error("فشل إيجاد الحل");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center justify-center size-10 rounded-full bg-green-100 dark:bg-green-900/30">
+            <LightbulbIcon className="size-5 text-green-600" />
+          </div>
+          <div>
+            <CardTitle>Solveling - مساعد حل المشكلات</CardTitle>
+            <CardDescription>
+              حلول ذكية خطوة بخطوة للمشكلات المالية والإدارية
+            </CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="rounded-lg border border-green-200 bg-green-50 dark:bg-green-900/10 p-4">
+          <div className="flex items-start gap-3">
+            <LightbulbIcon className="size-5 text-green-600 mt-0.5" />
+            <div className="space-y-2 flex-1">
+              <h4 className="font-semibold text-sm">كيف يعمل Solveling؟</h4>
+              <ul className="space-y-1 text-sm text-muted-foreground">
+                <li className="flex items-start gap-2">
+                  <CheckCircle2Icon className="size-4 text-green-600 mt-0.5 shrink-0" />
+                  <span>فهم عميق للمشكلة وسياقها</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2Icon className="size-4 text-green-600 mt-0.5 shrink-0" />
+                  <span>تقييم الخيارات المتاحة والمخاطر المحتملة</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2Icon className="size-4 text-green-600 mt-0.5 shrink-0" />
+                  <span>اقتراح حلول متعددة مرتبة حسب الأولوية</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2Icon className="size-4 text-green-600 mt-0.5 shrink-0" />
+                  <span>خطة عمل تفصيلية مع خطوات قابلة للتنفيذ</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2Icon className="size-4 text-green-600 mt-0.5 shrink-0" />
+                  <span>مؤشرات قياس النجاح والمتابعة</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="problem">وصف المشكلة</Label>
+          <Textarea
+            id="problem"
+            placeholder="مثال: انخفاض الإيرادات بنسبة 25% في الشهر الماضي مع زيادة في المصروفات..."
+            value={problem}
+            onChange={(e) => setProblem(e.target.value)}
+            rows={4}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="constraints">القيود والمحددات (اختياري)</Label>
+          <Textarea
+            id="constraints"
+            placeholder="مثال: ميزانية محدودة، فريق صغير، وقت قصير..."
+            value={constraints}
+            onChange={(e) => setConstraints(e.target.value)}
+            rows={3}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label>مستوى الأولوية</Label>
+          <select
+            value={priority}
+            onChange={(e) => setPriority(e.target.value)}
+            className="w-full rounded-lg border p-2"
+          >
+            <option value="critical">حرجة - تحتاج حل فوري</option>
+            <option value="high">عالية - مهمة جداً</option>
+            <option value="medium">متوسطة - يمكن التخطيط</option>
+            <option value="low">منخفضة - للتحسين</option>
+          </select>
+        </div>
+
+        <Button onClick={handleSolve} disabled={loading} className="w-full">
+          {loading ? (
+            <>
+              <Loader2Icon className="ml-2 size-4 animate-spin" />
+              جاري إيجاد الحل...
+            </>
+          ) : (
+            <>
+              <LightbulbIcon className="ml-2 size-4" />
+              إيجاد الحل
+            </>
+          )}
+        </Button>
+
+        {result && (
+          <div className="space-y-4">
+            {result.problemAnalysis && (
+              <div className="rounded-lg border p-4 bg-muted/50">
+                <h4 className="font-semibold mb-2 flex items-center gap-2">
+                  <BrainIcon className="size-4" />
+                  تحليل المشكلة:
+                </h4>
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                  {result.problemAnalysis as string}
+                </p>
+              </div>
+            )}
+
+            {result.solutions && Array.isArray(result.solutions) && (
+              <div className="space-y-3">
+                <h4 className="font-semibold">الحلول المقترحة:</h4>
+                {result.solutions.map((solution: Record<string, unknown>, idx: number) => (
+                  <div key={idx} className="rounded-lg border border-green-200 bg-green-50/50 dark:bg-green-900/10 p-4">
+                    <div className="flex items-start gap-3 mb-2">
+                      <Badge variant="secondary" className="mt-0.5">
+                        الحل {idx + 1}
+                      </Badge>
+                      {solution.recommended && (
+                        <Badge className="bg-green-600 mt-0.5">موصى به</Badge>
+                      )}
+                    </div>
+                    <h5 className="font-semibold mb-1">{solution.title as string}</h5>
+                    <p className="text-sm text-muted-foreground mb-3">
+                      {solution.description as string}
+                    </p>
+                    {solution.steps && Array.isArray(solution.steps) && (
+                      <div className="space-y-1">
+                        <div className="text-xs font-semibold">خطوات التنفيذ:</div>
+                        <ol className="text-sm space-y-1 pr-4">
+                          {solution.steps.map((step: string, stepIdx: number) => (
+                            <li key={stepIdx} className="list-decimal">
+                              {step}
+                            </li>
+                          ))}
+                        </ol>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {result.actionPlan && (
+              <div className="rounded-lg border p-4">
+                <h4 className="font-semibold mb-2">خطة العمل:</h4>
+                <p className="text-sm whitespace-pre-wrap">
+                  {result.actionPlan as string}
+                </p>
+              </div>
+            )}
+
+            {result.successMetrics && Array.isArray(result.successMetrics) && (
+              <div className="rounded-lg border p-4">
+                <h4 className="font-semibold mb-3">مؤشرات النجاح:</h4>
+                <div className="space-y-2">
+                  {result.successMetrics.map((metric: string, idx: number) => (
+                    <div key={idx} className="flex items-start gap-2 text-sm">
+                      <CheckCircle2Icon className="size-4 text-green-600 mt-0.5 shrink-0" />
+                      <span>{metric}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
