@@ -2,6 +2,7 @@
 
 ## 基本信息
 - **文件位置**: improved-claude-code-5.mjs:26881
+  > **Note:** The referenced file 'improved-claude-code-5.mjs' does not exist in this repository. This documentation analyzes external Claude Code source.
 - **函数名**: ga0()
 - **提示词类型**: 核心身份声明
 
