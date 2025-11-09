@@ -4,7 +4,7 @@
  * Shows recent deployments and build information
  */
 
-const ACCOUNT_ID = '85b01d19439ca53d3cfa740d2621a2bd';
+const ACCOUNT_ID = import.meta.env.CLOUDFLARE_ACCOUNT_ID;
 const API_BASE = 'https://api.cloudflare.com/client/v4';
 
 // Get API token from environment
