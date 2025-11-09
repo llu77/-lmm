@@ -8,7 +8,10 @@
  * https://developers.cloudflare.com/api/resources/pages/
  */
 
-const ACCOUNT_ID = '85b01d19439ca53d3cfa740d2621a2bd';
+const ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID;
+if (!ACCOUNT_ID) {
+  throw new Error('Environment variable CLOUDFLARE_ACCOUNT_ID is not set.');
+}
 const API_TOKEN = '2Auk5i5N0_pyBpt8kqnylef3ocAOk9a1tMUA4Gqz';
 const API_BASE = 'https://api.cloudflare.com/client/v4';
 
