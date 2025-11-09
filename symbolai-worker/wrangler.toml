@@ -22,6 +22,8 @@ database_id = "3897ede2-ffc0-4fe8-8217-f9607c89bef2"
 [[kv_namespaces]]
 binding = "SESSIONS"
 id = "your_kv_namespace_id_here"
+# TODO: Create KV namespace with: wrangler kv:namespace create "SESSIONS"
+# Then update this ID with the actual namespace ID from the output
 
 # R2 Bucket for Payroll PDFs
 [[r2_buckets]]
