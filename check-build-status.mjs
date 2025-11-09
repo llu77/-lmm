@@ -6,8 +6,12 @@
  */
 
 const ACCOUNT_ID = '85b01d19439ca53d3cfa740d2621a2bd';
-const API_TOKEN = '2Auk5i5N0_pyBpt8kqnylef3ocAOk9a1tMUA4Gqz';
+const API_TOKEN = process.env.CLOUDFLARE_API_TOKEN;
 
+if (!API_TOKEN) {
+  console.error('❌ Error: CLOUDFLARE_API_TOKEN environment variable is not set.');
+  process.exit(1);
+}
 async function checkBuildStatus() {
   try {
     console.log('🔍 Fetching Cloudflare Pages projects...\n');
