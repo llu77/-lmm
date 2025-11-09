@@ -5,9 +5,13 @@
  * Uses Cloudflare API directly to check deployment status
  */
 
-const ACCOUNT_ID = '85b01d19439ca53d3cfa740d2621a2bd';
-const API_TOKEN = process.env.CLOUDFLARE_API_TOKEN;
+const ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID;
+const API_TOKEN = '2Auk5i5N0_pyBpt8kqnylef3ocAOk9a1tMUA4Gqz';
 
+if (!ACCOUNT_ID) {
+  console.error('❌ Error: CLOUDFLARE_ACCOUNT_ID environment variable is not set.');
+  process.exit(1);
+}
 if (!API_TOKEN) {
   console.error('❌ Error: CLOUDFLARE_API_TOKEN environment variable is not set.');
   process.exit(1);
