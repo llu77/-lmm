@@ -34,13 +34,9 @@ import {
   PlusIcon,
 } from "lucide-react";
 
-type EmailSettingsDoc = ReturnType<typeof useQuery<typeof api.emailSettings.getAllSettings>> extends infer T
-  ? T extends undefined
-    ? undefined
-    : T
-  : undefined;
+type EmailSettingsDoc = any;
 
-type EmailLogDoc = Doc<"emailLogs">;
+type EmailLogDoc = any;
 
 function SettingsTabContent() {
   const [settings, setSettings] = useState<any>(undefined);
@@ -555,12 +551,13 @@ type EmailStats = {
 };
 
 function SystemSupportInner() {
-  const emailStats = useQuery(api.emailLogs.getEmailStats) as EmailStats | undefined;
-  const emailLogs = useQuery(api.emailLogs.getEmailLogs, { limit: 20 }) as EmailLogDoc[] | undefined;
-  const sendEmail = useAction(api.emailSystem.sendEmail);
-  const sendTemplateEmail = useAction(api.emailSystem.sendTemplateEmail);
-  const testEmail = useAction(api.emailSystem.testEmail);
-  const getTemplatePreview = useAction(api.emailSystem.getTemplatePreview);
+  // TODO: Connect to backend API
+  const emailStats = undefined as EmailStats | undefined;
+  const emailLogs = undefined as EmailLogDoc[] | undefined;
+  const sendEmail = async () => {}; // TODO: useAction(api.emailSystem.sendEmail);
+  const sendTemplateEmail = async () => {}; // TODO: useAction(api.emailSystem.sendTemplateEmail);
+  const testEmail = async () => {}; // TODO: useAction(api.emailSystem.testEmail);
+  const getTemplatePreview = async () => {}; // TODO: useAction(api.emailSystem.getTemplatePreview);
 
   const [selectedTab, setSelectedTab] = useState("overview");
   const [sending, setSending] = useState(false);
