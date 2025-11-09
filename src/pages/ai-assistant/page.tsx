@@ -612,7 +612,7 @@ function UltraThinkTab({ branchId, branchName }: { branchId: string; branchName:
         branchId,
         branchName,
       });
-      setResult(response);
+      setResult(response.data || response);
       toast.success("تم التفكير العميق بنجاح");
     } catch (error) {
       toast.error("فشل التحليل");
@@ -780,7 +780,7 @@ function DeepAnalysisTab({ branchId, branchName }: { branchId: string; branchNam
         timeRange: parseInt(timeRange),
         dimensions,
       });
-      setResult(response);
+      setResult(response.data || response);
       toast.success("تم إجراء التحليل العميق بنجاح");
     } catch (error) {
       toast.error("فشل التحليل");
@@ -981,7 +981,7 @@ function SolvelingTab({ branchId, branchName }: { branchId: string; branchName: 
         branchId,
         branchName,
       });
-      setResult(response);
+      setResult(response.data || response);
       toast.success("تم إيجاد الحل بنجاح");
     } catch (error) {
       toast.error("فشل إيجاد الحل");
