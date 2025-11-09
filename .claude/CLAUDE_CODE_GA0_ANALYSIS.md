@@ -94,6 +94,6 @@ if (Z.prependCLISysprompt) {
 - 确保AI助手在复杂对话中不偏离预设角色
 
 ## 参考文档
-- Claude Code Architecture
-- System Prompt Engineering Best Practices
-- AI Identity Management Patterns
+- Claude Code Architecture (external resource)
+- System Prompt Engineering Best Practices (external resource)
+- AI Identity Management Patterns (external resource)
