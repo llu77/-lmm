@@ -45,7 +45,7 @@ export const GET: APIRoute = async ({ request, locals }) => {
     const defaultEndDate = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
 
     // Build query with branch filter
-    let query = `
+    const query = `
       SELECT * FROM expenses
       WHERE date >= ? AND date <= ?
       ${branchFilter ? `AND ${branchFilter}` : ''}

@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 import { colors } from './src/theme/colors.ts';
+import tailwindcssAnimate from 'tailwindcss-animate';
 
 export default {
   darkMode: ["class"],
@@ -195,5 +196,5 @@ export default {
       },
     },
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [tailwindcssAnimate],
 }

@@ -137,7 +137,11 @@ function AIAssistantContent({ branchId, branchName }: { branchId: string; branch
 function OverviewTab({ branchId, branchName }: { branchId: string; branchName: string }) {
   // TODO: Create API endpoint /api/notifications/active
   const [notifications] = useState<any>(undefined);
-  useEffect(() => { if (branchId) { } }, [branchId]);
+  useEffect(() => { 
+    if (branchId) { 
+      // TODO: Fetch notifications for branch
+    } 
+  }, [branchId]);
   const [unreadCount] = useState<number | undefined>(undefined);
 
   return (
