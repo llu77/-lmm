@@ -277,13 +277,13 @@ if (API_TOKEN) {
     ))}
   </div>
 
-  <script define:vars={{ projects, ACCOUNT_ID, API_TOKEN }}>
+  <script define:vars={{ projects, ACCOUNT_ID, API_TOKEN, API_BASE }}>
     // Fetch deployments for each project
     async function loadDeployments() {
       for (const project of projects) {
         try {
           const response = await fetch(
-            `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT_ID}/pages/projects/${project.name}/deployments?per_page=5`,
+            `${API_BASE}/accounts/${ACCOUNT_ID}/pages/projects/${project.name}/deployments?per_page=5`,
             {
               headers: {
                 'Authorization': `Bearer ${API_TOKEN}`,
