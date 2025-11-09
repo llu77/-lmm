@@ -95,8 +95,7 @@ export function BranchSelector({ onBranchSelected }: BranchSelectorProps) {
     if (!branchName) {
       // Failed attempt
       const newAttempts = lockInfo.attempts + 1;
-      // eslint-disable-next-line prefer-const
-      let newLockInfo: LockInfo = { attempts: newAttempts, lockedUntil: null, lockDuration: 0 };
+      const newLockInfo: LockInfo = { attempts: newAttempts, lockedUntil: null, lockDuration: 0 };
 
       if (newAttempts >= MAX_ATTEMPTS) {
         // 5 attempts: lock for 24 hours

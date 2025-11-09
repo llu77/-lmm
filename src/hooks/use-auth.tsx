@@ -71,6 +71,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  /**
+   * Authenticates a user with username and password.
+   * @throws {Error} If login fails or credentials are invalid
+   */
   async function login(username: string, password: string) {
     const response = await apiClient.login(username, password);
 
