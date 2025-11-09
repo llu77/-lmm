@@ -1,10 +1,1 @@
-{
-  "dependencies": {
-    "@astrojs/react": "^4.4.1",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
-  },
-  "devDependencies": {
-    "wrangler": "^4.46.0"
-  }
-}
+{\n  "name": "lmm-monorepo",\n  "version": "1.0.0",\n  "private": true,\n  "type": "module",\n  "workspaces": [\n    "symbolai-worker",\n    "cloudflare-worker",\n    "my-mcp-server-github-auth"\n  ],\n  "scripts": {\n    "build": "npm run build:workers && npm run build:mcp",\n    "build:workers": "cd symbolai-worker && npm run build || true && cd ../cloudflare-worker && npm run build || true",\n    "build:mcp": "cd my-mcp-server-github-auth && npm run build || true",\n    "dev": "npm run dev:workers",\n    "dev:workers": "wrangler dev --config wrangler.toml",\n    "deploy": "npm run build && wrangler deploy",\n    "type-check": "tsc --noEmit",\n    "lint": "eslint . --ext .ts,.tsx,.js,.jsx",\n    "test": "echo 'Tests coming soon' && exit 0",\n    "clean": "rm -rf node_modules && npm run clean:workers && npm run clean:mcp",\n    "clean:workers": "cd symbolai-worker && rm -rf node_modules && cd ../cloudflare-worker && rm -rf node_modules",\n    "clean:mcp": "cd my-mcp-server-github-auth && rm -rf node_modules",\n    "update": "npm update && npm run update:workers && npm run update:mcp",\n    "update:workers": "cd symbolai-worker && npm update && cd ../cloudflare-worker && npm update",\n    "update:mcp": "cd my-mcp-server-github-auth && npm update",\n    "audit": "npm audit && npm run audit:workers && npm run audit:mcp",\n    "audit:workers": "cd symbolai-worker && npm audit || true && cd ../cloudflare-worker && npm audit || true",\n    "audit:mcp": "cd my-mcp-server-github-auth && npm audit || true",\n    "install:all": "npm install && npm run install:workers && npm run install:mcp",\n    "install:workers": "cd symbolai-worker && npm install || true && cd ../cloudflare-worker && npm install || true",\n    "install:mcp": "cd my-mcp-server-github-auth && npm install || true"\n  },\n  "dependencies": {\n    "@astrojs/react": "^4.4.1",\n    "react": "^18.3.1",\n    "react-dom": "^18.3.1"\n  },\n  "devDependencies": {\n    "wrangler": "^4.46.0",\n    "typescript": "^5.9.3",\n    "eslint": "^9.16.0",\n    "@types/node": "^24.10.0",\n    "@types/react": "^18.3.18",\n    "@types/react-dom": "^18.3.5"\n  },\n  "engines": {\n    "node": ">=18.20.8",\n    "npm": ">=9.0.0"\n  }\n}
