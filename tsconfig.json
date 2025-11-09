@@ -25,6 +25,7 @@
     "dist",
     "build",
     ".wrangler",
-    "src/pages/system-support/page.tsx"
+    "src/pages/system-support/page.tsx",
+    "cloudflare-analysis/**"
   ]
 }

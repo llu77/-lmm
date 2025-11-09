@@ -13,6 +13,8 @@ export default [
       '**/*.config.js',
       '**/*.config.ts',
       '.claude/**',
+      'cloudflare-analysis/**',
+      'cloudflare-migration/**',
     ],
   },
   js.configs.recommended,
