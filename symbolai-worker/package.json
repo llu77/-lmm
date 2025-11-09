@@ -40,18 +40,18 @@
     "jspdf": "^3.0.3",
     "jspdf-autotable": "^5.0.2",
     "lucide-react": "^0.552.0",
-    "react": "^19.2.0",
-    "react-dom": "^18.3.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "react-hook-form": "^7.50.0",
     "recharts": "^2.12.0",
     "resend": "^3.2.0",
     "tailwind-merge": "^2.2.0",
     "tailwindcss-animate": "^1.0.7",
-    "zod": "^3.22.0"
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250110.0",
-    "@types/react": "^19.2.2",
+    "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.0",
     "autoprefixer": "^10.4.17",
     "postcss": "^8.4.35",
