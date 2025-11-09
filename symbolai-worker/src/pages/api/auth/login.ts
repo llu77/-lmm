@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { createSession, createSessionCookie } from '@/lib/session';
 import { loadUserPermissions } from '@/lib/permissions';
+import bcrypt from 'bcryptjs';
 
 export const POST: APIRoute = async ({ request, locals }) => {
   try {
@@ -13,21 +14,24 @@ export const POST: APIRoute = async ({ request, locals }) => {
       });
     }
 
-    // Hash password for comparison (SHA-256 - same as user creation)
-    const encoder = new TextEncoder();
-    const data = encoder.encode(password);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const hashedPassword = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-
     // Get user from database (using new users_new table)
     const user = await locals.runtime.env.DB.prepare(`
       SELECT id, username, password, email, full_name, role_id, branch_id, is_active
       FROM users_new
-      WHERE username = ? AND password = ?
-    `).bind(username, hashedPassword).first();
+      WHERE username = ?
+    `).bind(username).first();
 
     if (!user) {
+      return new Response(JSON.stringify({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Verify password using bcrypt
+    const isValidPassword = await bcrypt.compare(password, user.password as string);
+    
+    if (!isValidPassword) {
       return new Response(JSON.stringify({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' }), {
         status: 401,
         headers: { 'Content-Type': 'application/json' }

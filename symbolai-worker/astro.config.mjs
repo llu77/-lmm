@@ -21,7 +21,9 @@ export default defineConfig({
   vite: {
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, './src')
+        '@': path.resolve(__dirname, './src'),
+        'zod/v4': 'zod',
+        'zod/v3': 'zod'
       }
     },
     ssr: {
@@ -32,8 +34,10 @@ export default defineConfig({
         'node:fs/promises',
         'node:stream',
         'node:url',
-        'node:crypto'
-      ]
+        'node:crypto',
+        'agents'
+      ],
+      noExternal: ['@modelcontextprotocol/sdk']
     }
   }
 });
