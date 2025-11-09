@@ -21,8 +21,14 @@ export default defineConfig({
   vite: {
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, './src')
+        '@': path.resolve(__dirname, './src'),
+        // Force using main zod export to avoid versioned import issues
+        'zod/v3': 'zod',
+        'zod/v4': 'zod'
       }
+    },
+    optimizeDeps: {
+      include: ['zod']
     },
     ssr: {
       external: [
@@ -32,7 +38,8 @@ export default defineConfig({
         'node:fs/promises',
         'node:stream',
         'node:url',
-        'node:crypto'
+        'node:crypto',
+        'node:async_hooks'
       ]
     }
   }
