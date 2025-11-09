@@ -22,9 +22,13 @@ export default defineConfig({
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),
-        'zod/v4': 'zod',
-        'zod/v3': 'zod'
+        // Force using main zod export to avoid versioned import issues
+        'zod/v3': 'zod',
+        'zod/v4': 'zod'
       }
+    },
+    optimizeDeps: {
+      include: ['zod']
     },
     ssr: {
       external: [
@@ -35,6 +39,7 @@ export default defineConfig({
         'node:stream',
         'node:url',
         'node:crypto',
+        'node:async_hooks',
         'agents'
       ],
       noExternal: ['@modelcontextprotocol/sdk']
