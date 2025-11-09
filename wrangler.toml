@@ -17,7 +17,7 @@ database_id = "3897ede2-ffc0-4fe8-8217-f9607c89bef2"
 # KV Namespace Bindings
 # ============================================
 [[kv_namespaces]]
-binding = "SESSION"
+binding = "SESSIONS"
 id = "8f91016b728c4a289fdfdec425492aab"
 
 [[kv_namespaces]]
