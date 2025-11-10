@@ -1,4 +1,7 @@
 {
+  "permissions": {
+    "defaultMode": "plan"
+  },
   "mcpServers": {
     "cloudflare-docs": {
       "command": "npx",
