@@ -1,0 +1,164 @@
+{
+  "kind": "collectionType",
+  "collectionName": "employees",
+  "info": {
+    "singularName": "employee",
+    "pluralName": "employees",
+    "displayName": "Employee",
+    "description": "Employee management system"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "employeeId": {
+      "type": "string",
+      "required": true,
+      "unique": true,
+      "minLength": 3,
+      "maxLength": 20
+    },
+    "firstName": {
+      "type": "string",
+      "required": true,
+      "minLength": 2,
+      "maxLength": 50
+    },
+    "lastName": {
+      "type": "string",
+      "required": true,
+      "minLength": 2,
+      "maxLength": 50
+    },
+    "fullNameArabic": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 100
+    },
+    "email": {
+      "type": "email",
+      "required": true,
+      "unique": true
+    },
+    "phone": {
+      "type": "string",
+      "required": true,
+      "minLength": 10,
+      "maxLength": 15
+    },
+    "nationalId": {
+      "type": "string",
+      "unique": true,
+      "minLength": 10,
+      "maxLength": 20
+    },
+    "dateOfBirth": {
+      "type": "date"
+    },
+    "gender": {
+      "type": "enumeration",
+      "enum": [
+        "male",
+        "female"
+      ]
+    },
+    "position": {
+      "type": "string",
+      "required": true,
+      "minLength": 2,
+      "maxLength": 100
+    },
+    "department": {
+      "type": "enumeration",
+      "enum": [
+        "management",
+        "hr",
+        "it",
+        "finance",
+        "sales",
+        "marketing",
+        "operations",
+        "support",
+        "other"
+      ],
+      "required": true
+    },
+    "hireDate": {
+      "type": "date",
+      "required": true
+    },
+    "employmentStatus": {
+      "type": "enumeration",
+      "enum": [
+        "active",
+        "on_leave",
+        "suspended",
+        "terminated"
+      ],
+      "default": "active",
+      "required": true
+    },
+    "salary": {
+      "type": "decimal",
+      "required": true,
+      "min": 0
+    },
+    "contractType": {
+      "type": "enumeration",
+      "enum": [
+        "full_time",
+        "part_time",
+        "contract",
+        "intern"
+      ],
+      "required": true,
+      "default": "full_time"
+    },
+    "address": {
+      "type": "text",
+      "maxLength": 500
+    },
+    "city": {
+      "type": "string",
+      "maxLength": 50
+    },
+    "country": {
+      "type": "string",
+      "maxLength": 50
+    },
+    "emergencyContactName": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "emergencyContactPhone": {
+      "type": "string",
+      "maxLength": 15
+    },
+    "photo": {
+      "type": "media",
+      "multiple": false,
+      "required": false,
+      "allowedTypes": [
+        "images"
+      ]
+    },
+    "documents": {
+      "type": "media",
+      "multiple": true,
+      "required": false,
+      "allowedTypes": [
+        "images",
+        "files"
+      ]
+    },
+    "notes": {
+      "type": "text"
+    },
+    "isActive": {
+      "type": "boolean",
+      "default": true,
+      "required": true
+    }
+  }
+}
