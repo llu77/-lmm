@@ -15,6 +15,7 @@
     "allowSyntheticDefaultImports": true,
     "noEmit": true,
     "isolatedModules": true,
+    "allowImportingTsExtensions": true,
     "paths": {
       "@/*": ["./src/*"]
     }

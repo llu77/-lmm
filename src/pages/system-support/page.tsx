@@ -41,7 +41,8 @@ type EmailLogDoc = any;
 
 function SettingsTabContent() {
   const [settings, setSettings] = useState<any>(undefined);
-  useEffect(() => { // TODO: fetch("/api/email-settings/all").then(r => r.json()).then(setSettings); }, []);
+  // TODO: fetch("/api/email-settings/all").then(r => r.json()).then(setSettings);
+  useEffect(() => { }, []);
   // TODO: API endpoint /api/email-settings/updatesendersettings
   // TODO: API endpoint /api/email-settings/updatedefaultrecipients
   // TODO: API endpoint /api/email-settings/updatedailyschedule

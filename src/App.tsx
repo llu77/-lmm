@@ -30,7 +30,7 @@ function PageLoader() {
   return (
     <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-primary-50 to-secondary-50 dark:from-gray-900 dark:to-gray-800">
       <div className="text-center space-y-4">
-        <Spinner size="lg" className="text-primary-500" />
+        <Spinner className="size-12 text-primary-500" />
         <p className="text-lg font-medium text-gray-700 dark:text-gray-300 animate-pulse">
           جارٍ التحميل...
         </p>

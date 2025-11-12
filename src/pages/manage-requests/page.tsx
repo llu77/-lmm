@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { ClipboardListIcon, CheckCircleIcon, XCircleIcon, ClockIcon, EyeIcon, PackageIcon } from "lucide-react";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
