@@ -333,7 +333,7 @@ function PatternsTab({ branchId, branchName }: { branchId: string; branchName: s
     setLoading(true);
     try {
       const analysis = await apiClient.post("/api/ai/analyze-revenue",{ branchId, branchName });
-      setResult(analysis);
+      setResult((analysis.data || analysis) as Record<string, unknown>);
       toast.success("تم تحليل الأنماط بنجاح");
     } catch (error) {
       toast.error("فشل التحليل");
@@ -380,8 +380,8 @@ function PatternsTab({ branchId, branchName }: { branchId: string; branchName: s
                 <div className="space-y-2">
                   {result.patterns.map((pattern: Record<string, unknown>, idx: number) => (
                     <div key={idx} className="text-sm flex items-start gap-2">
-                      <Badge variant="secondary">{pattern.type as string}</Badge>
-                      <span className="text-muted-foreground">{pattern.description as string}</span>
+                      <Badge variant="secondary">{String(pattern.type)}</Badge>
+                      <span className="text-muted-foreground">{String(pattern.description)}</span>
                     </div>
                   ))}
                 </div>
@@ -418,7 +418,7 @@ function ContentTab({ branchId, branchName }: { branchId: string; branchName: st
         contentType,
         context: { branchName, data, purpose },
       });
-      setResult(content.content);
+      setResult((content.data?.content || content.data || content) as Record<string, unknown>);
       toast.success("تم توليد المحتوى بنجاح");
     } catch (error) {
       toast.error("فشل توليد المحتوى");
@@ -702,30 +702,30 @@ function UltraThinkTab({ branchId, branchName }: { branchId: string; branchName:
 
         {result && (
           <div className="space-y-4">
-            {result.thinking && (
+            {Boolean(result.thinking) && (
               <div className="rounded-lg border p-4 bg-muted/50">
                 <h4 className="font-semibold mb-2 flex items-center gap-2">
                   <BrainIcon className="size-4" />
                   عملية التفكير:
                 </h4>
                 <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                  {result.thinking as string}
+                  {String(result.thinking)}
                 </p>
               </div>
             )}
 
-            {result.analysis && (
+            {Boolean(result.analysis) && (
               <div className="rounded-lg border border-purple-200 bg-purple-50/50 dark:bg-purple-900/10 p-4">
                 <h4 className="font-semibold mb-2 text-purple-900 dark:text-purple-100">
                   التحليل المتعمق:
                 </h4>
                 <p className="text-sm whitespace-pre-wrap">
-                  {result.analysis as string}
+                  {String(result.analysis)}
                 </p>
               </div>
             )}
 
-            {result.recommendations && Array.isArray(result.recommendations) && (
+            {Boolean(result.recommendations) && Array.isArray(result.recommendations) && (
               <div className="rounded-lg border p-4">
                 <h4 className="font-semibold mb-3">التوصيات:</h4>
                 <div className="space-y-2">
@@ -908,16 +908,16 @@ function DeepAnalysisTab({ branchId, branchName }: { branchId: string; branchNam
 
         {result && (
           <div className="space-y-4">
-            {result.summary && (
+            {Boolean(result.summary) && (
               <div className="rounded-lg border p-4 bg-blue-50/50 dark:bg-blue-900/10">
                 <h4 className="font-semibold mb-2">الملخص التنفيذي:</h4>
                 <p className="text-sm whitespace-pre-wrap">
-                  {result.summary as string}
+                  {String(result.summary)}
                 </p>
               </div>
             )}
 
-            {result.dimensions && typeof result.dimensions === "object" && (
+            {Boolean(result.dimensions) && typeof result.dimensions === "object" && (
               <div className="space-y-3">
                 {Object.entries(result.dimensions as Record<string, unknown>).map(([key, value]) => (
                   <div key={key} className="rounded-lg border p-4">
@@ -930,17 +930,17 @@ function DeepAnalysisTab({ branchId, branchName }: { branchId: string; branchNam
               </div>
             )}
 
-            {result.metrics && Array.isArray(result.metrics) && (
+            {Boolean(result.metrics) && Array.isArray(result.metrics) && (
               <div className="rounded-lg border p-4">
                 <h4 className="font-semibold mb-3">المؤشرات الرئيسية:</h4>
                 <div className="grid grid-cols-2 gap-3">
                   {result.metrics.map((metric: Record<string, unknown>, idx: number) => (
                     <div key={idx} className="p-3 rounded-lg bg-muted">
                       <div className="text-xs text-muted-foreground">
-                        {metric.label as string}
+                        {String(metric.label)}
                       </div>
                       <div className="text-lg font-bold">
-                        {metric.value as string}
+                        {String(metric.value)}
                       </div>
                     </div>
                   ))}
@@ -1089,19 +1089,19 @@ function SolvelingTab({ branchId, branchName }: { branchId: string; branchName: 
 
         {result && (
           <div className="space-y-4">
-            {result.problemAnalysis && (
+            {Boolean(result.problemAnalysis) && (
               <div className="rounded-lg border p-4 bg-muted/50">
                 <h4 className="font-semibold mb-2 flex items-center gap-2">
                   <BrainIcon className="size-4" />
                   تحليل المشكلة:
                 </h4>
                 <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                  {result.problemAnalysis as string}
+                  {String(result.problemAnalysis)}
                 </p>
               </div>
             )}
 
-            {result.solutions && Array.isArray(result.solutions) && (
+            {Boolean(result.solutions) && Array.isArray(result.solutions) && (
               <div className="space-y-3">
                 <h4 className="font-semibold">الحلول المقترحة:</h4>
                 {result.solutions.map((solution: Record<string, unknown>, idx: number) => (
@@ -1110,15 +1110,15 @@ function SolvelingTab({ branchId, branchName }: { branchId: string; branchName: 
                       <Badge variant="secondary" className="mt-0.5">
                         الحل {idx + 1}
                       </Badge>
-                      {solution.recommended && (
+                      {Boolean(solution.recommended) && (
                         <Badge className="bg-green-600 mt-0.5">موصى به</Badge>
                       )}
                     </div>
-                    <h5 className="font-semibold mb-1">{solution.title as string}</h5>
+                    <h5 className="font-semibold mb-1">{String(solution.title)}</h5>
                     <p className="text-sm text-muted-foreground mb-3">
-                      {solution.description as string}
+                      {String(solution.description)}
                     </p>
-                    {solution.steps && Array.isArray(solution.steps) && (
+                    {Boolean(solution.steps) && Array.isArray(solution.steps) && (
                       <div className="space-y-1">
                         <div className="text-xs font-semibold">خطوات التنفيذ:</div>
                         <ol className="text-sm space-y-1 pr-4">
@@ -1135,16 +1135,16 @@ function SolvelingTab({ branchId, branchName }: { branchId: string; branchName: 
               </div>
             )}
 
-            {result.actionPlan && (
+            {Boolean(result.actionPlan) && (
               <div className="rounded-lg border p-4">
                 <h4 className="font-semibold mb-2">خطة العمل:</h4>
                 <p className="text-sm whitespace-pre-wrap">
-                  {result.actionPlan as string}
+                  {String(result.actionPlan)}
                 </p>
               </div>
             )}
 
-            {result.successMetrics && Array.isArray(result.successMetrics) && (
+            {Boolean(result.successMetrics) && Array.isArray(result.successMetrics) && (
               <div className="rounded-lg border p-4">
                 <h4 className="font-semibold mb-3">مؤشرات النجاح:</h4>
                 <div className="space-y-2">

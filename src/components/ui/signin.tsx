@@ -67,7 +67,7 @@ export const SignInButton = forwardRef<HTMLButtonElement, SignInButtonProps>(
     useEffect(() => {
       if (error) {
         toast.error("Login error", {
-          description: error,
+          description: error.message || String(error),
         });
         console.error("Login error", error);
       }
