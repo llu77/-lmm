@@ -45,3 +45,8 @@ coverage/
 # Sensitive SQL files
 *password*.sql
 update-admin*.sql
+
+# Secrets inventory and sensitive docs
+SECRETS_INVENTORY.md
+*secrets*.txt
+*credentials*.txt
