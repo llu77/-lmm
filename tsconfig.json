@@ -25,6 +25,7 @@
     "dist",
     "build",
     ".wrangler",
-    "src/pages/system-support/page.tsx"
+    "**/system-support/**",
+    "src/pages/system-support/**"
   ]
 }

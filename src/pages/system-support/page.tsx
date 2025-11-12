@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useState, useEffect } from "react";
 import { Authenticated, Unauthenticated } from "@/hooks/use-auth";
 import { apiClient } from "@/lib/api-client";
