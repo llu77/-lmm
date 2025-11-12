@@ -1,8 +1,11 @@
 #!/bin/bash
-# Interactive Setup Script for Cloudflare Secrets
+# Interactive Setup Script for Cloudflare Pages Secrets
 # SymbolAI Financial Management System
+# Project: lkm-hr-system
 
 set -e
+
+PROJECT="lkm-hr-system"
 
 # Colors for output
 RED='\033[0;31m'
@@ -45,12 +48,9 @@ check_wrangler() {
 
 # Function to list current secrets
 list_secrets() {
-    echo -e "${CYAN}→ Checking existing secrets...${NC}"
-    if command -v wrangler &> /dev/null; then
-        wrangler secret list 2>/dev/null || echo -e "${YELLOW}⚠ Could not list secrets (authentication may be required)${NC}"
-    else
-        npx wrangler secret list 2>/dev/null || echo -e "${YELLOW}⚠ Could not list secrets (authentication may be required)${NC}"
-    fi
+    echo -e "${CYAN}→ Checking existing secrets for project: $PROJECT...${NC}"
+    npx wrangler pages secret list --project-name=$PROJECT 2>/dev/null || \
+        echo -e "${YELLOW}⚠ Could not list secrets (authentication may be required)${NC}"
 }
 
 # Function to set a secret
@@ -64,14 +64,15 @@ set_secret() {
     echo -e "${CYAN}Setting: ${YELLOW}$secret_name${NC}"
     echo -e "${PURPLE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo -e "${BLUE}Description:${NC} $description"
+    echo -e "${BLUE}Project:${NC} $PROJECT"
     echo ""
 
     if [ -n "$secret_value" ]; then
         echo -e "${YELLOW}Value provided: ${secret_value:0:10}...${NC}"
-        echo "$secret_value" | npx wrangler secret put "$secret_name" 2>&1
+        echo "$secret_value" | npx wrangler pages secret put "$secret_name" --project-name=$PROJECT 2>&1
     else
         echo -e "${YELLOW}Please enter the value for $secret_name:${NC}"
-        npx wrangler secret put "$secret_name" 2>&1
+        npx wrangler pages secret put "$secret_name" --project-name=$PROJECT 2>&1
     fi
 
     if [ $? -eq 0 ]; then
