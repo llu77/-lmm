@@ -41,3 +41,7 @@ coverage/
 # Cloudflare
 .wrangler/
 .mf/
+
+# Sensitive SQL files
+*password*.sql
+update-admin*.sql
