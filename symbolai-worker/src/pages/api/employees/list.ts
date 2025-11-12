@@ -1,20 +1,76 @@
 import type { APIRoute } from 'astro';
-import { requireAuth } from '@/lib/session';
+import { requireAuthWithPermissions, requirePermission, validateBranchAccess, getBranchFilterSQL } from '@/lib/permissions';
 import { employeeQueries } from '@/lib/db';
 
 export const GET: APIRoute = async ({ request, locals }) => {
-  // Check authentication
-  const authResult = await requireAuth(locals.runtime.env.SESSIONS, request);
+  // Check authentication with permissions
+  const authResult = await requireAuthWithPermissions(
+    locals.runtime.env.SESSIONS,
+    locals.runtime.env.DB,
+    request
+  );
+
   if (authResult instanceof Response) {
     return authResult;
   }
 
+  // Check permission to view reports/employees
+  const permError = requirePermission(authResult, 'canViewReports');
+  if (permError) {
+    return permError;
+  }
+
   try {
     const url = new URL(request.url);
-    const branchId = url.searchParams.get('branchId') || 'BR001';
+    let branchId = url.searchParams.get('branchId');
     const includeInactive = url.searchParams.get('includeInactive') === 'true';
 
-    const result = await employeeQueries.getByBranch(locals.runtime.env.DB, branchId);
+    // If no branchId provided, use user's branch (for non-admins)
+    if (!branchId) {
+      if (!authResult.permissions.canViewAllBranches) {
+        branchId = authResult.branchId;
+      }
+    } else {
+      // Validate branch access if branchId is specified
+      const branchError = validateBranchAccess(authResult, branchId);
+      if (branchError) {
+        return branchError;
+      }
+    }
+
+    // Build query with branch isolation
+    let query = `SELECT * FROM employees WHERE 1=1`;
+    const params: any[] = [];
+
+    // Apply branch filtering
+    if (branchId) {
+      query += ` AND branch_id = ?`;
+      params.push(branchId);
+    } else if (!authResult.permissions.canViewAllBranches) {
+      // Non-admin without branch can't see any employees
+      return new Response(
+        JSON.stringify({
+          success: true,
+          employees: [],
+          count: 0,
+          totalSalaryCost: 0
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
+    }
+
+    // Filter by active status
+    if (!includeInactive) {
+      query += ` AND is_active = 1`;
+    }
+
+    query += ` ORDER BY employee_name`;
+
+    const stmt = locals.runtime.env.DB.prepare(query);
+    const result = params.length > 0 ? await stmt.bind(...params).all() : await stmt.all();
 
     let employees = result.results || [];
 
