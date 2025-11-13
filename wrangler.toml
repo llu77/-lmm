@@ -70,19 +70,13 @@ binding = "OAUTH_KV"
 id = "797b75482e6c4408bb40f6d72f2512af"
 binding = "RATE_LIMIT"
 
-[[env.production.kv_namespaces]]
-id = "8f91016b728c4a289fdfdec425492aab"
-binding = "SESSIONS"
-
-[[env.production.d1_databases]]
-database_id = "3897ede2-ffc0-4fe8-8217-f9607c89bef2"
-binding = "DB"
-database_name = "symbolai-financial-db"  # Production database
-
-[[env.production.r2_buckets]]
-bucket_name = "symbolai-payrolls"
-binding = "PAYROLL_BUCKET"
-
-[[env.production.r2_buckets]]
-bucket_name = "erp-storage"
-binding = "STORAGE"
+# ============================================
+# Environment Variables
+# ============================================
+[vars]
+ENVIRONMENT = "production"
+AI_GATEWAY_ACCOUNT_ID = "85b01d19439ca53d3cfa740d2621a2bd"
+AI_GATEWAY_NAME = "symbolai-gateway"
+EMAIL_FROM = "info@symbolai.net"
+EMAIL_FROM_NAME = "SymbolAI"
+ADMIN_EMAIL = "admin@symbolai.net"
