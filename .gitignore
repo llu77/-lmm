@@ -41,3 +41,14 @@ coverage/
 # Cloudflare
 .wrangler/
 .mf/
+
+# Sensitive SQL files
+*password*.sql
+update-admin*.sql
+
+# Secrets inventory and sensitive docs
+SECRETS_INVENTORY.md
+ALL_SECRETS_SUMMARY.md
+SECRETS_FOUND_UPDATE.md
+*secrets*.txt
+*credentials*.txt
