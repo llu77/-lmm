@@ -28,6 +28,10 @@ interface RuntimeEnv {
 
   // KV Namespace Bindings
   SESSIONS: KVNamespace;
+  CACHE: KVNamespace;
+  FILES: KVNamespace;
+  RATE_LIMIT: KVNamespace;
+  OAUTH_KV: KVNamespace;
 
   // R2 Bucket Bindings
   PAYROLL_PDFS: R2Bucket;
