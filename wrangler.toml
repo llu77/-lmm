@@ -1,4 +1,8 @@
-name = "lkm-hr-system"
+# ============================================
+# Cloudflare Pages Configuration
+# Generated and synced with Dashboard: 2025-11-11
+# ============================================
+name = "lmmm"
 pages_build_output_dir = "symbolai-worker/dist"
 compatibility_date = "2025-01-01"
 
@@ -6,54 +10,65 @@ compatibility_date = "2025-01-01"
 # Pages ignores it and may error with: "does not support build"
 
 # ============================================
-# D1 Database Bindings
-# ============================================
-[[d1_databases]]
-binding = "DB"
-database_name = "symbolai-financial-db"
-database_id = "3897ede2-ffc0-4fe8-8217-f9607c89bef2"
-
-# ============================================
 # KV Namespace Bindings
 # ============================================
 [[kv_namespaces]]
-binding = "SESSIONS"
-id = "8f91016b728c4a289fdfdec425492aab"
-
-[[kv_namespaces]]
-binding = "CACHE"
 id = "a497973607cf45bbbee76b64da9ac947"
+binding = "CACHE"  # Application cache storage
 
 [[kv_namespaces]]
-binding = "FILES"
 id = "d9961a2085d44c669bbe6c175f3611c1"
+binding = "FILES"  # File metadata storage
 
 [[kv_namespaces]]
-binding = "RATE_LIMIT"
-id = "797b75482e6c4408bb40f6d72f2512af"
-
-[[kv_namespaces]]
-binding = "OAUTH_KV"
 id = "57a4eb48d4f047e7aea6b4692e174894"
+binding = "OAUTH_KV"  # OAuth tokens and state
+
+[[kv_namespaces]]
+id = "797b75482e6c4408bb40f6d72f2512af"
+binding = "RATE_LIMIT"  # Rate limiting data
+
+[[kv_namespaces]]
+id = "8f91016b728c4a289fdfdec425492aab"
+binding = "SESSIONS"  # User sessions
+
+# ============================================
+# D1 Database Bindings
+# ============================================
+[[d1_databases]]
+database_id = "3897ede2-ffc0-4fe8-8217-f9607c89bef2"
+binding = "DB"
+database_name = "symbolai-financial-db"  # Main financial database
 
 # ============================================
 # R2 Bucket Bindings
 # ============================================
 [[r2_buckets]]
-binding = "PAYROLL_BUCKET"
 bucket_name = "symbolai-payrolls"
+binding = "PAYROLL_BUCKET"  # Payroll PDFs and documents
 
 [[r2_buckets]]
-binding = "STORAGE"
 bucket_name = "erp-storage"
+binding = "STORAGE"  # General ERP file storage
 
 # ============================================
-# Durable Objects (إذا كنت تستخدمها)
+# Production Environment Overrides
 # ============================================
-# [[durable_objects.bindings]]
-# name = "MY_DURABLE_OBJECT"
-# class_name = "MyDurableObject"
-# script_name = "worker-script-name"
+[[env.production.kv_namespaces]]
+id = "a497973607cf45bbbee76b64da9ac947"
+binding = "CACHE"
+
+[[env.production.kv_namespaces]]
+id = "d9961a2085d44c669bbe6c175f3611c1"
+binding = "FILES"
+
+[[env.production.kv_namespaces]]
+id = "57a4eb48d4f047e7aea6b4692e174894"
+binding = "OAUTH_KV"
+
+[[env.production.kv_namespaces]]
+id = "797b75482e6c4408bb40f6d72f2512af"
+binding = "RATE_LIMIT"
 
 # ============================================
 # Environment Variables

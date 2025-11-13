@@ -46,19 +46,8 @@
 
 ## 🛠 التقنيات المستخدمة
 
-### Frontend
-- **React 18** - مكتبة UI
-- **TypeScript** - Type safety
-- **Tailwind CSS** - Styling framework
-- **React Router** - Client-side routing
-- **React Hook Form** - Form management
-- **Recharts** - Data visualization
-- **Lucide React** - Icon library
-- **Sonner** - Toast notifications
 
-### Backend & Database
-- **Convex** - Real-time database
-- **Convex Auth** - OAuth authentication
+
 
 ### PDF Generation
 - **jsPDF** - PDF creation
@@ -219,10 +208,7 @@ xs: 2px → 3xl: 24px + full (circular)
 
 ## 🔐 المصادقة والأمان
 
-### Convex Auth
-- OAuth authentication (Google, GitHub)
-- Session management
-- Protected routes
+
 
 ### Branch Security
 - Lock mechanism after failed attempts:

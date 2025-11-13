@@ -15,6 +15,7 @@
     "allowSyntheticDefaultImports": true,
     "noEmit": true,
     "isolatedModules": true,
+    "allowImportingTsExtensions": true,
     "paths": {
       "@/*": ["./src/*"]
     }
@@ -25,6 +26,7 @@
     "dist",
     "build",
     ".wrangler",
-    "src/pages/system-support/page.tsx"
+    "**/system-support/**",
+    "src/pages/system-support/**"
   ]
 }

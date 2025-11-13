@@ -34,9 +34,13 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   authenticated: boolean;
+  isAuthenticated: boolean; // Alias for authenticated
+  isLoading: boolean; // Alias for loading
+  error: Error | null;
   login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   signoutRedirect: () => Promise<void>;
+  signinRedirect: () => Promise<void>; // Alias for login navigation
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -45,6 +49,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [authenticated, setAuthenticated] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
 
   // Check session on mount
   useEffect(() => {
@@ -105,15 +110,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await logout();
   }
 
+  async function signinRedirect() {
+    // Navigate to login page or trigger OAuth flow
+    window.location.href = '/login';
+  }
+
   return (
     <AuthContext.Provider
       value={{
         user,
         loading,
         authenticated,
+        isAuthenticated: authenticated,
+        isLoading: loading,
+        error,
         login,
         logout,
         signoutRedirect,
+        signinRedirect,
       }}
     >
       {children}
