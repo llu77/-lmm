@@ -1,74 +1,60 @@
 import type { APIRoute } from 'astro';
-import { requireAuthWithPermissions, requirePermission, validateBranchAccess } from '@/lib/permissions';
+import {
+  authenticateRequest,
+  resolveBranchFilter,
+  calculateStatusStats,
+  createSuccessResponse,
+  withErrorHandling
+} from '@/lib/api-helpers';
 import { employeeRequestQueries } from '@/lib/db';
 
-export const GET: APIRoute = async ({ request, locals }) => {
-  // Check authentication with permissions
-  const authResult = await requireAuthWithPermissions(
-    locals.runtime.env.SESSIONS,
-    locals.runtime.env.DB,
-    request
-  );
+export const GET: APIRoute = withErrorHandling(async ({ request, locals }) => {
+  // Authenticate request with required permission
+  const authResult = await authenticateRequest({
+    kv: locals.runtime.env.SESSIONS,
+    db: locals.runtime.env.DB,
+    request,
+    requiredPermission: 'canManageRequests'
+  });
 
   if (authResult instanceof Response) {
     return authResult;
   }
 
-  // Check permission to manage requests
-  const permError = requirePermission(authResult, 'canManageRequests');
-  if (permError) {
-    return permError;
+  // Extract query parameters
+  const url = new URL(request.url);
+  const requestedBranchId = url.searchParams.get('branchId');
+  const status = url.searchParams.get('status');
+
+  // Resolve branch filtering (use session branch if not provided)
+  const branchId = await resolveBranchFilter({
+    session: authResult,
+    requestedBranchId: requestedBranchId || authResult.branchId || 'BR001'
+  });
+
+  if (branchId instanceof Response) {
+    return branchId;
   }
 
-  try {
-    const url = new URL(request.url);
-    let branchId = url.searchParams.get('branchId');
-    const status = url.searchParams.get('status'); // optional filter
+  // Get requests by branch
+  const result = await employeeRequestQueries.getByBranch(
+    locals.runtime.env.DB,
+    branchId as string,
+    status && status !== 'all' ? status : undefined
+  );
 
-    // If no branchId provided, use user's branch
-    if (!branchId) {
-      branchId = authResult.permissions.branchId || 'BR001';
+  const requests = result.results || [];
+
+  // Calculate statistics by status
+  const stats = calculateStatusStats(requests);
+
+  return createSuccessResponse({
+    requests,
+    count: requests.length,
+    stats: {
+      pending: stats.pending,
+      approved: stats.approved,
+      rejected: stats.rejected
     }
-
-    // Validate branch access
-    const branchError = validateBranchAccess(authResult, branchId);
-    if (branchError) {
-      return branchError;
-    }
-
-    const result = await employeeRequestQueries.getByBranch(
-      locals.runtime.env.DB,
-      branchId,
-      status && status !== 'all' ? status : undefined
-    );
-
-    const requests = result.results || [];
-
-    // Count by status
-    const pending = requests.filter((r: any) => r.status === 'pending').length;
-    const approved = requests.filter((r: any) => r.status === 'approved').length;
-    const rejected = requests.filter((r: any) => r.status === 'rejected').length;
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        requests,
-        count: requests.length,
-        stats: { pending, approved, rejected }
-      }),
-      {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    );
-  } catch (error) {
-    console.error('Get all requests error:', error);
-    return new Response(
-      JSON.stringify({ error: 'حدث خطأ أثناء جلب البيانات' }),
-      {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    );
-  }
-};
+  });
+});
