@@ -3,6 +3,17 @@ import { getSessionTokenFromCookie, getSession } from '@/lib/session';
 
 export const GET: APIRoute = async ({ request, locals }) => {
   try {
+    // Check if runtime bindings are available
+    if (!locals.runtime?.env?.SESSIONS) {
+      return new Response(
+        JSON.stringify({ authenticated: false }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
+    }
+
     const cookieHeader = request.headers.get('Cookie');
     const token = getSessionTokenFromCookie(cookieHeader);
 

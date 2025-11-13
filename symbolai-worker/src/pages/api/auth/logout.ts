@@ -6,7 +6,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const cookieHeader = request.headers.get('Cookie');
     const token = getSessionTokenFromCookie(cookieHeader);
 
-    if (token) {
+    if (token && locals.runtime?.env?.SESSIONS) {
       // Delete session from KV
       await deleteSession(locals.runtime.env.SESSIONS, token);
     }
