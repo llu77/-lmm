@@ -1,121 +1,102 @@
-# ⚡ Environment Variables - Quick Reference
-## مرجع سريع للمتغيرات البيئية
+# 🚀 Environment Variables - Quick Reference
+
+## ✅ Currently Configured (wrangler.toml)
+
+| Variable | Value | Description |
+|----------|-------|-------------|
+| `ENVIRONMENT` | `"production"` | Environment identifier |
+| `AI_GATEWAY_ACCOUNT_ID` | `"85b01d19439ca53d3cfa740d2621a2bd"` | Cloudflare AI Gateway account |
+| `AI_GATEWAY_NAME` | `"symbolai-gateway"` | AI Gateway name |
+| `EMAIL_FROM` | `"info@symbolai.net"` | Default sender email |
+| `EMAIL_FROM_NAME` | `"SymbolAI"` | Sender display name |
+| `ADMIN_EMAIL` | `"admin@symbolai.net"` | Admin notification email |
 
 ---
 
-## 📦 Variables in wrangler.toml (6)
+## ⚠️ Secrets to Configure
 
-Add this `[vars]` section to your `wrangler.toml`:
-
-```toml
-[vars]
-ENVIRONMENT = "production"
-AI_GATEWAY_ACCOUNT_ID = "85b01d19439ca53d3cfa740d2621a2bd"
-AI_GATEWAY_NAME = "symbolai-gateway"
-EMAIL_FROM = "info@symbolai.net"
-EMAIL_FROM_NAME = "SymbolAI"
-ADMIN_EMAIL = "admin@symbolai.net"
-```
-
----
-
-## 🔐 Required Secrets (2)
+### Required (Email Functionality)
 
 ```bash
-# 1. Email Service (CRITICAL)
+# RESEND_API_KEY - Required for email
 npx wrangler secret put RESEND_API_KEY
 # Get from: https://resend.com/api-keys
-# Format: re_xxxxxxxxxxxxxxxxxx
-
-# 2. Session Encryption (RECOMMENDED)
-npx wrangler secret put SESSION_SECRET
-# Generate: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
----
-
-## 🔐 Optional Secrets (3)
+### Recommended (Security)
 
 ```bash
-# AI Features
+# SESSION_SECRET - Recommended for production
+npx wrangler secret put SESSION_SECRET
+# Generate: openssl rand -base64 32
+```
+
+### Optional (Features)
+
+```bash
+# ANTHROPIC_API_KEY - For AI features
 npx wrangler secret put ANTHROPIC_API_KEY
 
-# Zapier Integration
+# ZAPIER_WEBHOOK_URL - For Zapier automation
 npx wrangler secret put ZAPIER_WEBHOOK_URL
 
-# Resend Webhooks
+# RESEND_WEBHOOK_SECRET - For email webhook validation
 npx wrangler secret put RESEND_WEBHOOK_SECRET
 ```
 
 ---
 
-## ✅ Quick Commands
+## 🔍 Usage in Code
+
+### Email Variables
+- **Used in**: `src/lib/email.ts`, `src/lib/email-error-handler.ts`, `src/lib/email-triggers.ts`
+- **Purpose**: Send emails via Resend API
+- **Required**: `RESEND_API_KEY`, `EMAIL_FROM`, `EMAIL_FROM_NAME`, `ADMIN_EMAIL`
+
+### Session Variables
+- **Used in**: `src/lib/session.ts`
+- **Purpose**: Session management with KV
+- **Required**: `SESSIONS` (KV namespace)
+- **Optional**: `SESSION_SECRET`
+
+### AI Variables
+- **Used in**: AI-powered features
+- **Purpose**: Claude API integration
+- **Optional**: `ANTHROPIC_API_KEY`
+
+---
+
+## ❌ Not Used
+
+- `NODE_ENV` → Use `ENVIRONMENT` instead
+- `BASE_URL` → Configured via routes in wrangler.toml
+- `jwt_secret` → Using session-based auth, not JWT
+
+---
+
+## 🛠️ Quick Setup
 
 ```bash
-# List all secrets
+# Interactive setup
+cd symbolai-worker
+./setup-secrets.sh
+
+# Or manually
+npx wrangler secret put RESEND_API_KEY
+npx wrangler secret put SESSION_SECRET
+
+# List secrets
 npx wrangler secret list
 
-# Generate SESSION_SECRET
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-
-# Delete a secret
-npx wrangler secret delete SECRET_NAME
-
 # Deploy
-npx wrangler pages deploy symbolai-worker/dist
-
-# Test deployment
-curl https://symbolai.net/api/health
+npm run build
+npx wrangler deploy
 ```
 
 ---
 
-## 🔗 Cloudflare Bindings (Already Configured)
+## 📚 Documentation
 
-| Type | Binding | ID/Name |
-|------|---------|---------|
-| D1 | `DB` | `symbolai-financial-db` |
-| KV | `SESSIONS` | `8f91016b...492aab` |
-| KV | `CACHE` | `a497973...9ac947` |
-| KV | `FILES` | `d9961a2...f3611c1` |
-| KV | `RATE_LIMIT` | `797b754...2512af` |
-| KV | `OAUTH_KV` | `57a4eb4...e174894` |
-| R2 | `PAYROLL_BUCKET` | `symbolai-payrolls` |
-| R2 | `STORAGE` | `erp-storage` |
-
----
-
-## 📋 Status Checklist
-
-```
-✅ wrangler.toml configured
-✅ D1 database created
-✅ KV namespaces created
-✅ R2 buckets created
-⚠️ Set RESEND_API_KEY
-⚠️ Set SESSION_SECRET
-```
-
----
-
-## 🆘 Troubleshooting
-
-| Issue | Solution |
-|-------|----------|
-| "RESEND_API_KEY undefined" | `npx wrangler secret put RESEND_API_KEY` |
-| "Cannot find binding DB" | Check `wrangler.toml` D1 binding |
-| "Session encryption failed" | `npx wrangler secret put SESSION_SECRET` |
-| Variables not loading | Redeploy: `npx wrangler pages deploy` |
-
----
-
-## 🔗 Resources
-
-- Full docs: `ENVIRONMENT_VARIABLES_COMPLETE.md`
-- Setup wizard: `./setup-secrets.sh`
-- Resend Dashboard: https://resend.com
-- Cloudflare Dashboard: https://dash.cloudflare.com
-
----
-
-**Quick Setup:** Run `./setup-secrets.sh` for interactive configuration wizard
+- Full details: `ENVIRONMENT_VARIABLES_VERIFICATION.md`
+- Setup script: `symbolai-worker/setup-secrets.sh`
+- Type definitions: `symbolai-worker/src/env.d.ts`
