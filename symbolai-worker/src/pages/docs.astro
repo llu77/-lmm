@@ -1,0 +1,76 @@
+---
+/**
+ * Documentation Page - Example of Content Collection Usage
+ * 
+ * Demonstrates Astro 5.x Content Layer API with the new glob() loader
+ * and type-safe content queries.
+ */
+
+import MainLayout from '@/layouts/MainLayout.astro';
+import { getCollection } from 'astro:content';
+
+// Type-safe query using auto-generated types
+const allDocs = await getCollection('docs', ({ data }) => {
+  // Filter out draft documents
+  return data.draft === false;
+});
+
+// Sort by publication date (newest first)
+const sortedDocs = allDocs.sort(
+  (a, b) => b.data.pubDate.getTime() - a.data.pubDate.getTime()
+);
+---
+
+<MainLayout 
+  title="الوثائق - SymbolAI" 
+  description="وثائق نظام الإدارة المالية"
+>
+  <div class="container mx-auto py-8">
+    <h1 class="text-4xl font-bold mb-8 text-center">الوثائق</h1>
+    
+    <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      {sortedDocs.map((doc) => (
+        <article class="border rounded-lg p-6 hover:shadow-lg transition-shadow">
+          <h2 class="text-2xl font-semibold mb-2">
+            <a href={`/docs/${doc.id}`} class="hover:text-primary-600">
+              {doc.data.title}
+            </a>
+          </h2>
+          
+          {doc.data.description && (
+            <p class="text-muted-foreground mb-4">
+              {doc.data.description}
+            </p>
+          )}
+          
+          <div class="flex items-center justify-between text-sm text-muted-foreground">
+            <span>{doc.data.author}</span>
+            <time datetime={doc.data.pubDate.toISOString()}>
+              {doc.data.pubDate.toLocaleDateString('ar-EG', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+              })}
+            </time>
+          </div>
+          
+          {doc.data.tags && doc.data.tags.length > 0 && (
+            <div class="mt-4 flex flex-wrap gap-2">
+              {doc.data.tags.map((tag) => (
+                <span class="inline-block bg-primary-100 text-primary-800 text-xs px-2 py-1 rounded">
+                  {tag}
+                </span>
+              ))}
+            </div>
+          )}
+        </article>
+      ))}
+    </div>
+    
+    {sortedDocs.length === 0 && (
+      <div class="text-center py-12">
+        <p class="text-muted-foreground text-lg">لا توجد وثائق متاحة حالياً.</p>
+      </div>
+    )}
+  </div>
+</MainLayout>

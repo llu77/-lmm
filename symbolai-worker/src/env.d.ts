@@ -1,4 +1,4 @@
-/// <reference types="astro/client" />
+/// <reference path="../.astro/types.d.ts" />
 /// <reference types="@cloudflare/workers-types" />
 
 /**
@@ -6,6 +6,9 @@
  *
  * This file defines the types for the Cloudflare Workers runtime environment
  * including bindings for D1, KV, R2, AI, and other Cloudflare services.
+ *
+ * Note: Astro 5.x auto-generates types in .astro/types.d.ts
+ * Run `astro sync` to update type definitions.
  */
 
 type D1Database = import('@cloudflare/workers-types').D1Database;

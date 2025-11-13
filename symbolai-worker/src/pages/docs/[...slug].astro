@@ -1,0 +1,130 @@
+---
+/**
+ * Dynamic Documentation Page
+ * 
+ * Renders individual documentation entries using Astro 5.x Content Collections
+ * with the new Content Layer API and type-safe queries.
+ */
+
+import MainLayout from '@/layouts/MainLayout.astro';
+import { getCollection, getEntry, render } from 'astro:content';
+
+// Generate static paths for all documentation entries
+export async function getStaticPaths() {
+  const docs = await getCollection('docs');
+  return docs.map((doc) => ({
+    params: { slug: doc.id },
+    props: { doc },
+  }));
+}
+
+const { slug } = Astro.params;
+const { doc } = Astro.props;
+
+// Render the markdown content
+const { Content, headings } = await render(doc);
+---
+
+<MainLayout 
+  title={`${doc.data.title} - SymbolAI`}
+  description={doc.data.description || doc.data.title}
+>
+  <article class="container mx-auto py-8 max-w-4xl">
+    <!-- Header -->
+    <header class="mb-8">
+      <h1 class="text-4xl font-bold mb-4">{doc.data.title}</h1>
+      
+      {doc.data.description && (
+        <p class="text-xl text-muted-foreground mb-4">
+          {doc.data.description}
+        </p>
+      )}
+      
+      <div class="flex items-center gap-4 text-sm text-muted-foreground border-t border-b py-4">
+        <span>الكاتب: {doc.data.author}</span>
+        <span>•</span>
+        <time datetime={doc.data.pubDate.toISOString()}>
+          {doc.data.pubDate.toLocaleDateString('ar-EG', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+          })}
+        </time>
+        {doc.data.updatedDate && (
+          <>
+            <span>•</span>
+            <span>
+              آخر تحديث: {doc.data.updatedDate.toLocaleDateString('ar-EG', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+              })}
+            </span>
+          </>
+        )}
+      </div>
+      
+      {doc.data.tags && doc.data.tags.length > 0 && (
+        <div class="mt-4 flex flex-wrap gap-2">
+          {doc.data.tags.map((tag) => (
+            <span class="inline-block bg-primary-100 text-primary-800 text-xs px-3 py-1 rounded-full">
+              {tag}
+            </span>
+          ))}
+        </div>
+      )}
+    </header>
+    
+    <!-- Table of Contents (if headings exist) -->
+    {headings.length > 0 && (
+      <aside class="mb-8 p-4 bg-muted rounded-lg">
+        <h2 class="text-lg font-semibold mb-2">المحتويات</h2>
+        <nav>
+          <ul class="space-y-1">
+            {headings.map((heading) => (
+              <li 
+                class={`ps-${(heading.depth - 1) * 4}`}
+                style={`padding-inline-start: ${(heading.depth - 1) * 1}rem`}
+              >
+                <a 
+                  href={`#${heading.slug}`}
+                  class="text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {heading.text}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      </aside>
+    )}
+    
+    <!-- Content -->
+    <div class="prose prose-lg max-w-none dark:prose-invert
+                prose-headings:font-bold
+                prose-h1:text-3xl prose-h1:mb-4
+                prose-h2:text-2xl prose-h2:mb-3 prose-h2:mt-8
+                prose-h3:text-xl prose-h3:mb-2 prose-h3:mt-6
+                prose-p:mb-4 prose-p:leading-relaxed
+                prose-a:text-primary-600 prose-a:no-underline hover:prose-a:underline
+                prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded
+                prose-pre:bg-muted prose-pre:p-4 prose-pre:rounded-lg
+                prose-img:rounded-lg prose-img:shadow-md
+                prose-blockquote:border-s-4 prose-blockquote:border-primary-500 
+                prose-blockquote:bg-muted prose-blockquote:p-4 prose-blockquote:rounded">
+      <Content />
+    </div>
+    
+    <!-- Footer Navigation -->
+    <footer class="mt-12 pt-8 border-t">
+      <div class="flex justify-between items-center">
+        <a 
+          href="/docs" 
+          class="text-primary-600 hover:text-primary-700 hover:underline"
+        >
+          ← العودة إلى الوثائق
+        </a>
+      </div>
+    </footer>
+  </article>
+</MainLayout>
