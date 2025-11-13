@@ -34,7 +34,7 @@
     "@radix-ui/react-tabs": "^1.1.0",
     "@radix-ui/react-toast": "^1.2.0",
     "agents": "^0.2.20",
-    "astro": "^5.15.3",
+    "astro": "^5.15.6",
     "bcryptjs": "^3.0.2",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
