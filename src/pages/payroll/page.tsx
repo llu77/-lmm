@@ -427,7 +427,7 @@ function PDFExportButton({ payrollId }: { payrollId: string }) {
     try {
       toast.loading("🔄 جاري إنشاء PDF عبر PDF.co...");
       // TODO: Create API endpoint /api/pdf/generate-payroll
-      const result = await apiClient.post('/api/pdf/generate-payroll', { payrollId });
+      const result = await apiClient.post<{ url?: string }>('/api/pdf/generate-payroll', { payrollId });
       toast.dismiss();
       if (result.success && result.data?.url) {
         window.open(result.data.url, "_blank");

@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge.tsx";
 import { useBranch } from "@/hooks/use-branch";
 import { BranchSelector } from "@/components/branch-selector.tsx";
 import Navbar from "@/components/navbar.tsx";
-import { CheckCircle2, XCircle, CalendarIcon, TrendingUpIcon, CoinsIcon, UsersIcon } from "lucide-react";
+import { CheckCircle2, XCircle, CalendarIcon, CoinsIcon, UsersIcon } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";

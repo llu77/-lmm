@@ -37,7 +37,7 @@ export const GET: APIRoute = withErrorHandling(async ({ request, locals }) => {
   }
 
   // Build query with branch filtering
-  let baseQuery = `SELECT * FROM payroll_records WHERE 1=1`;
+  const baseQuery = `SELECT * FROM payroll_records WHERE 1=1`;
   const { baseQuery: query, params } = buildBranchFilteredQuery(
     baseQuery,
     authResult,

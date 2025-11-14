@@ -77,17 +77,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function login(username: string, password: string) {
-    try {
-      const response = await apiClient.login(username, password);
+    const response = await apiClient.login(username, password);
 
-      if (response.success && response.user) {
-        setUser(response.user);
-        setAuthenticated(true);
-      } else {
-        throw new Error(response.error || 'فشل تسجيل الدخول');
-      }
-    } catch (error) {
-      throw error;
+    if (response.success && response.user) {
+      setUser(response.user);
+      setAuthenticated(true);
+    } else {
+      throw new Error(response.error || 'فشل تسجيل الدخول');
     }
   }
 

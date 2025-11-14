@@ -18,7 +18,6 @@ import {
   AlertTriangleIcon,
   Loader2Icon,
   CheckCircle2Icon,
-  XCircleIcon,
   ZapIcon,
   BarChart3Icon,
   LightbulbIcon,
@@ -135,9 +134,13 @@ function AIAssistantContent({ branchId, branchName }: { branchId: string; branch
 // ============================================================================
 
 function OverviewTab({ branchId, branchName }: { branchId: string; branchName: string }) {
-  // TODO: Create API endpoint /api/notifications/active
   const [notifications] = useState<any>(undefined);
-  useEffect(() => { if (branchId) { } }, [branchId]);
+  useEffect(() => { 
+    // TODO: Fetch active notifications when API endpoint is ready
+    if (branchId) { 
+      // API call will go here
+    } 
+  }, [branchId]);
   const [unreadCount] = useState<number | undefined>(undefined);
 
   return (
@@ -418,7 +421,8 @@ function ContentTab({ branchId, branchName }: { branchId: string; branchName: st
         contentType,
         context: { branchName, data, purpose },
       });
-      setResult((content.data?.content || content.data || content) as Record<string, unknown>);
+      const resultData = content.data as { content?: Record<string, unknown> } | undefined;
+      setResult((resultData?.content || content.data || content) as Record<string, unknown>);
       toast.success("تم توليد المحتوى بنجاح");
     } catch (error) {
       toast.error("فشل توليد المحتوى");
@@ -612,7 +616,7 @@ function UltraThinkTab({ branchId, branchName }: { branchId: string; branchName:
         branchId,
         branchName,
       });
-      setResult(response.data || response);
+      setResult((response.data || response) as Record<string, unknown>);
       toast.success("تم التفكير العميق بنجاح");
     } catch (error) {
       toast.error("فشل التحليل");
@@ -780,7 +784,7 @@ function DeepAnalysisTab({ branchId, branchName }: { branchId: string; branchNam
         timeRange: parseInt(timeRange),
         dimensions,
       });
-      setResult(response.data || response);
+      setResult((response.data || response) as Record<string, unknown>);
       toast.success("تم إجراء التحليل العميق بنجاح");
     } catch (error) {
       toast.error("فشل التحليل");
@@ -981,7 +985,7 @@ function SolvelingTab({ branchId, branchName }: { branchId: string; branchName: 
         branchId,
         branchName,
       });
-      setResult(response.data || response);
+      setResult((response.data || response) as Record<string, unknown>);
       toast.success("تم إيجاد الحل بنجاح");
     } catch (error) {
       toast.error("فشل إيجاد الحل");
