@@ -44,7 +44,7 @@ export const GET: APIRoute = withErrorHandling(async ({ request, locals }) => {
   }
 
   // Build query with date range and branch filtering
-  let baseQuery = `SELECT * FROM expenses WHERE date >= ? AND date <= ?`;
+  const baseQuery = `SELECT * FROM expenses WHERE date >= ? AND date <= ?`;
   const dateParams = [finalStartDate, finalEndDate];
 
   const { baseQuery: query, params } = buildBranchFilteredQuery(

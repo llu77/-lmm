@@ -592,8 +592,8 @@ function RevenuesContent({ branchId, branchName }: { branchId: string; branchNam
                         })),
                       });
 
-                      if (result.success && result.data?.pdfUrl) {
-                        window.open(result.data.pdfUrl, '_blank');
+                      if (result.success && (result.data as { pdfUrl?: string })?.pdfUrl) {
+                        window.open((result.data as { pdfUrl: string }).pdfUrl, '_blank');
                         toast.success("✅ تم إنشاء التقرير بنجاح!");
 
                         // TODO: Trigger Zapier webhook with new backend
@@ -651,8 +651,8 @@ function RevenuesContent({ branchId, branchName }: { branchId: string; branchNam
                         })),
                       });
 
-                      if (result.success && result.data?.pdfUrl) {
-                        const printWindow = window.open(result.data.pdfUrl, '_blank');
+                      if (result.success && (result.data as { pdfUrl?: string })?.pdfUrl) {
+                        const printWindow = window.open((result.data as { pdfUrl: string }).pdfUrl, '_blank');
                         if (printWindow) {
                           printWindow.focus();
                           setTimeout(() => {
