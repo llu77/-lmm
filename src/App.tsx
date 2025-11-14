@@ -5,6 +5,7 @@ import { Spinner } from "./components/ui/spinner";
 
 // Import critical pages normally (shown immediately)
 import AuthCallback from "./pages/auth/Callback";
+import Login from "./pages/auth/Login";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 
@@ -46,6 +47,7 @@ export default function App() {
         <Suspense fallback={<PageLoader />}>
           <Routes>
             <Route path="/" element={<Index />} />
+            <Route path="/login" element={<Login />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/revenues" element={<Revenues />} />
             <Route path="/expenses" element={<Expenses />} />
