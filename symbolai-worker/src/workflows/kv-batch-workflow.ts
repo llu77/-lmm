@@ -11,7 +11,7 @@
  * @see https://developers.cloudflare.com/workflows
  */
 
-import { WorkflowEntrypoint, WorkflowStep, WorkflowEvent } from 'cloudflare:workers';
+import { WorkflowEntrypoint, WorkflowStep, type WorkflowEvent } from 'cloudflare:workers';
 
 /**
  * KV operation type
