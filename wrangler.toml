@@ -3,6 +3,7 @@
 # Generated and synced with Dashboard: 2025-11-11
 # ============================================
 name = "lmmm"
+main = "src/index.ts"
 pages_build_output_dir = "symbolai-worker/dist"
 compatibility_date = "2025-01-01"
 
@@ -12,6 +13,10 @@ compatibility_date = "2025-01-01"
 # ============================================
 # KV Namespace Bindings
 # ============================================
+[[kv_namespaces]]
+id = "797b75482e6c4408bb40f6d72f2512af"
+binding = "KV"  # Main KV storage for worker operations
+
 [[kv_namespaces]]
 id = "a497973607cf45bbbee76b64da9ac947"
 binding = "CACHE"  # Application cache storage
