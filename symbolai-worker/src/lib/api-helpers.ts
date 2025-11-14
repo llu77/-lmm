@@ -283,7 +283,7 @@ export function calculateStatusStats<T extends { status: string }>(
   };
 
   items.forEach(item => {
-    if (item.status && stats.hasOwnProperty(item.status)) {
+    if (item.status && Object.prototype.hasOwnProperty.call(stats, item.status)) {
       stats[item.status]++;
     }
   });
