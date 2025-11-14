@@ -19,5 +19,12 @@
 			"database_name": "symbolai-financial-db",
 			"database_id": "3897ede2-ffc0-4fe8-8217-f9607c89bef2"
 		}
-	]
+	],
+	"vars": {
+		"CLOUDFLARE_GATEWAY_ID": "3c9bde8186fe4c868defcc441f28ca5e",
+		"CLOUDFLARE_GATEWAY_DOMAIN": "xnoojzri3g.cloudflare-gateway.com",
+		"CLOUDFLARE_GATEWAY_DOH": "https://xnoojzri3g.cloudflare-gateway.com/dns-query",
+		"CLOUDFLARE_GATEWAY_IPV4": "172.64.36.1",
+		"CLOUDFLARE_GATEWAY_IPV6": "2a06:98c1:54::20:bbc0"
+	}
 }
