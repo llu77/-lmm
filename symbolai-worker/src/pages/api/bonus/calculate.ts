@@ -141,16 +141,21 @@ function getWeekDateRange(month: string, year: number, weekNumber: number): { st
   };
 }
 
-// Helper: Calculate bonus per employee based on their revenue
+// Helper: Calculate bonus per employee based on tiered thresholds
 function calculateEmployeeBonuses(revenues: any[], employees: any[]): Array<{
   employeeId: string;
   employeeName: string;
   totalRevenue: number;
   bonusAmount: number;
-  bonusPercentage: number;
+  bonusStatus: string;
+  threshold: number;
 }> {
-  // Default bonus: 10% of employee's revenue contribution
-  const BONUS_PERCENTAGE = 0.10;
+  // Tiered bonus system (SAR)
+  const BONUS_TIERS = [
+    { threshold: 2400, bonus: 175, label: 'مستحق 175 ريال' },
+    { threshold: 1800, bonus: 100, label: 'مستحق 100 ريال' },
+    { threshold: 1300, bonus: 50, label: 'مستحق 50 ريال' }
+  ];
 
   const employeeBonuses: Map<string, { name: string; revenue: number }> = new Map();
 
@@ -172,13 +177,14 @@ function calculateEmployeeBonuses(revenues: any[], employees: any[]): Array<{
     }
   });
 
-  // Match with employee IDs and calculate bonus
+  // Match with employee IDs and calculate bonus based on tiers
   const result: Array<{
     employeeId: string;
     employeeName: string;
     totalRevenue: number;
     bonusAmount: number;
-    bonusPercentage: number;
+    bonusStatus: string;
+    threshold: number;
   }> = [];
 
   employeeBonuses.forEach((data, employeeName) => {
@@ -187,14 +193,27 @@ function calculateEmployeeBonuses(revenues: any[], employees: any[]): Array<{
     );
 
     if (employee) {
-      const bonusAmount = data.revenue * BONUS_PERCENTAGE;
+      // Determine bonus tier
+      let bonusAmount = 0;
+      let bonusStatus = `غير مستحق (${data.revenue.toFixed(2)} ريال)`;
+      let threshold = 1300;
+
+      for (const tier of BONUS_TIERS) {
+        if (data.revenue >= tier.threshold) {
+          bonusAmount = tier.bonus;
+          bonusStatus = tier.label;
+          threshold = tier.threshold;
+          break;
+        }
+      }
 
       result.push({
         employeeId: employee.id,
         employeeName: employee.employee_name,
         totalRevenue: data.revenue,
-        bonusAmount: Math.round(bonusAmount * 100) / 100, // Round to 2 decimals
-        bonusPercentage: BONUS_PERCENTAGE * 100
+        bonusAmount,
+        bonusStatus,
+        threshold
       });
     }
   });

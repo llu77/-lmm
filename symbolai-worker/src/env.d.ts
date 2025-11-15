@@ -31,8 +31,8 @@ export interface RuntimeEnv {
   SESSIONS: KVNamespace;
   CACHE: KVNamespace;
   FILES: KVNamespace;
-  OAUTH_KV: KVNamespace;
   RATE_LIMIT: KVNamespace;
+  OAUTH_KV: KVNamespace;
 
   // R2 Bucket Bindings
   PAYROLL_BUCKET: R2Bucket;

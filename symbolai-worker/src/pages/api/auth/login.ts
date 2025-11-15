@@ -4,6 +4,19 @@ import { loadUserPermissions } from '@/lib/permissions';
 
 export const POST: APIRoute = async ({ request, locals }) => {
   try {
+    // Check if runtime bindings are available
+    if (!locals.runtime?.env?.DB || !locals.runtime?.env?.SESSIONS) {
+      console.error('Runtime bindings not available:', {
+        hasRuntime: !!locals.runtime,
+        hasDB: !!locals.runtime?.env?.DB,
+        hasSESSIONS: !!locals.runtime?.env?.SESSIONS
+      });
+      return new Response(JSON.stringify({ error: 'خطأ في تهيئة النظام - يرجى المحاولة لاحقاً' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
     const { username, password } = await request.json();
 
     if (!username || !password) {
