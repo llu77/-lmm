@@ -29,7 +29,8 @@
     "audit:mcp": "cd my-mcp-server-github-auth && npm audit || true",
     "install:all": "npm install && npm run install:workers && npm run install:mcp",
     "install:workers": "cd symbolai-worker && npm install || true && cd ../cloudflare-worker && npm install || true",
-    "install:mcp": "cd my-mcp-server-github-auth && npm install || true"
+    "install:mcp": "cd my-mcp-server-github-auth && npm install || true",
+    "postinstall": "npm run install:workers && npm run install:mcp"
   },
   "dependencies": {
     "@astrojs/react": "^4.4.1",
