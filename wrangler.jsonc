@@ -1,6 +1,6 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "lmmm-worker",
+	"name": "hj",
 	"main": "src/index.ts",
 	"compatibility_date": "2025-02-04",
 	"observability": {
