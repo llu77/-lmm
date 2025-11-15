@@ -1,6 +1,6 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "my-cloudflare-worker",
+	"name": "symbolai-worker",
 	"main": "src/index.ts",
 	"compatibility_date": "2025-02-04",
 	"observability": {
