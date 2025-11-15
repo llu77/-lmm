@@ -3,6 +3,7 @@
  * Reusable utilities for API endpoints to reduce code duplication
  */
 
+import type { APIContext } from 'astro';
 import type { D1Database, KVNamespace } from '@cloudflare/workers-types';
 import type { EnhancedSession } from './permissions';
 import {
@@ -283,7 +284,7 @@ export function calculateStatusStats<T extends { status: string }>(
   };
 
   items.forEach(item => {
-    if (item.status && stats.hasOwnProperty(item.status)) {
+    if (item.status && Object.prototype.hasOwnProperty.call(stats, item.status)) {
       stats[item.status]++;
     }
   });
@@ -360,15 +361,17 @@ export function validateRequiredFields<T extends Record<string, any>>(
 // Error Handling
 // =====================================================
 
+import type { APIContext } from 'astro';
+
 /**
  * Wrap async API handler with error handling
  */
 export function withErrorHandling(
-  handler: (request: Request, locals: any) => Promise<Response>
+  handler: (context: APIContext) => Promise<Response>
 ) {
-  return async (request: Request, locals: any): Promise<Response> => {
+  return async (context: APIContext): Promise<Response> => {
     try {
-      return await handler(request, locals);
+      return await handler(context);
     } catch (error) {
       console.error('API Error:', error);
       return createErrorResponse('حدث خطأ أثناء معالجة الطلب');

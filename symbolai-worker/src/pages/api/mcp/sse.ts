@@ -358,12 +358,12 @@ async function handleMCPMethod(
           id,
         };
 
-      case 'tools/call':
+      case 'tools/call': {
         const toolName = params?.name;
         const toolArgs = params?.arguments || {};
 
         switch (toolName) {
-          case 'd1_list_databases':
+          case 'd1_list_databases': {
             const databases = await mcpClient.listD1Databases();
             return {
               jsonrpc: '2.0',
@@ -377,8 +377,9 @@ async function handleMCPMethod(
               },
               id,
             };
+          }
 
-          case 'd1_query':
+          case 'd1_query': {
             const queryResult = await mcpClient.queryD1Database(
               toolArgs.databaseId,
               toolArgs.sql,
@@ -396,8 +397,9 @@ async function handleMCPMethod(
               },
               id,
             };
+          }
 
-          case 'kv_list_namespaces':
+          case 'kv_list_namespaces': {
             const namespaces = await mcpClient.listKVNamespaces();
             return {
               jsonrpc: '2.0',
@@ -411,8 +413,9 @@ async function handleMCPMethod(
               },
               id,
             };
+          }
 
-          case 'r2_list_buckets':
+          case 'r2_list_buckets': {
             const buckets = await mcpClient.listR2Buckets();
             return {
               jsonrpc: '2.0',
@@ -426,8 +429,9 @@ async function handleMCPMethod(
               },
               id,
             };
+          }
 
-          case 'workers_list':
+          case 'workers_list': {
             const workers = await mcpClient.listWorkers();
             return {
               jsonrpc: '2.0',
@@ -441,8 +445,9 @@ async function handleMCPMethod(
               },
               id,
             };
+          }
 
-          case 'builds_list':
+          case 'builds_list': {
             await mcpClient.setActiveWorker(
               toolArgs.worker || 'symbolai-worker'
             );
@@ -459,6 +464,7 @@ async function handleMCPMethod(
               },
               id,
             };
+          }
 
           default:
             return {
@@ -470,6 +476,7 @@ async function handleMCPMethod(
               id,
             };
         }
+      }
 
       case 'resources/list':
         return {
@@ -499,7 +506,7 @@ async function handleMCPMethod(
           id,
         };
 
-      case 'resources/read':
+      case 'resources/read': {
         const uri = params?.uri;
         if (!uri) {
           return {
@@ -538,6 +545,7 @@ async function handleMCPMethod(
           },
           id,
         };
+      }
 
       default:
         return {

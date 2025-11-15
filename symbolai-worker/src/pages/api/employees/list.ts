@@ -64,7 +64,7 @@ export const GET: APIRoute = withErrorHandling(async ({ request, locals }) => {
   const stmt = locals.runtime.env.DB.prepare(finalQuery);
   const result = params.length > 0 ? await stmt.bind(...params).all() : await stmt.all();
 
-  let employees = result.results || [];
+  const employees = result.results || [];
 
   // Calculate total salary cost
   const totalSalaryCost = employees.reduce((sum: number, e: any) => {

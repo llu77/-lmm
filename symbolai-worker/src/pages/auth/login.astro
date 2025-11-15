@@ -93,7 +93,7 @@ import '@/styles/globals.css';
           body: JSON.stringify({ username, password }),
         });
 
-        const data = await response.json();
+        const data = await response.json() as { success?: boolean; error?: string };
 
         if (response.ok && data.success) {
           // Redirect to dashboard

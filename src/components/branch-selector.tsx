@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button.tsx";
 import { Input } from "@/components/ui/input.tsx";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
 import { Label } from "@/components/ui/label.tsx";
-import { BuildingIcon, CheckCircle2Icon, LockIcon, AlertTriangleIcon } from "lucide-react";
+import { CheckCircle2Icon, AlertTriangleIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert.tsx";
 
