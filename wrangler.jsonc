@@ -1,6 +1,6 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "gentle-wave-6e0d",
+	"name": "my-cloudflare-worker",
 	"main": "src/index.ts",
 	"compatibility_date": "2025-02-04",
 	"observability": {
