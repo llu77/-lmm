@@ -139,7 +139,7 @@ function encodeUrl(url: string): string | null {
     // Reconstruct URL with encoded parameters
     const encodedUrl = queryString ? `${baseUrl}?${queryString}` : baseUrl;
     return encodedUrl;
-  } catch (error) {
+  } catch {
     // If URL parsing fails, return null
     return null;
   }
