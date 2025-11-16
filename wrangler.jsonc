@@ -20,6 +20,13 @@
 			"database_id": "3897ede2-ffc0-4fe8-8217-f9607c89bef2"
 		}
 	],
+	"vpc_services": [
+		{
+			"binding": "VPC_SERVICE",
+			"service_id": "019a6a59-cbb4-7031-9840-e79c64aeae7f",
+			"remote": true
+		}
+	],
 	"vars": {
 		"CLOUDFLARE_GATEWAY_ID": "3c9bde8186fe4c868defcc441f28ca5e",
 		"CLOUDFLARE_GATEWAY_DOMAIN": "xnoojzri3g.cloudflare-gateway.com",
