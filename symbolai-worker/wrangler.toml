@@ -50,6 +50,12 @@ id = "57a4eb48d4f047e7aea6b4692e174894"
 binding = "PAYROLL_PDFS"
 bucket_name = "symbolai-payrolls"
 
+# VPC Services (Cloudflare Tunnel)
+[[vpc_services]]
+binding = "VPC_SERVICE"
+service_id = "019a6a59-cbb4-7031-9840-e79c64aeae7f"
+remote = true
+
 # Workflows Binding
 [[workflows]]
 binding = "WORKFLOWS"

@@ -28,6 +28,23 @@ Database ID: 3897ede2-ffc0-4fe8-8217-f9607c89bef2
 - **IP**: 198.185.159.144
 - **Tunnel ID**: 2162ca9b-b651-44d0-9e7a-e930a15b76b3
 
+### Cloudflare Tunnel Setup Commands
+
+To install and run Cloudflare Tunnel (cloudflared):
+
+```bash
+# Install cloudflared (macOS with Homebrew)
+brew install cloudflared
+
+# Install cloudflared as a service with authentication token
+sudo cloudflared service install eyJhIjoiODViMDFkMTk0MzljYTUzZDNjZmE3NDBkMjYyMWEyYmQiLCJ0IjoiMjE2MmNhOWItYjY1MS00NGQwLTllN2EtZTkzMGExNWI3NmIzIiwicyI6Ik5qazVOak14Wm1FdE0yTmpOQzAwTURKbUxXSTBNVFl0WkRJM056Y3pNMkU1WVdNMSJ9
+
+# Or run the tunnel directly (without installing as a service)
+cloudflared tunnel run --token eyJhIjoiODViMDFkMTk0MzljYTUzZDNjZmE3NDBkMjYyMWEyYmQiLCJ0IjoiMjE2MmNhOWItYjY1MS00NGQwLTllN2EtZTkzMGExNWI3NmIzIiwicyI6Ik5qazVOak14Wm1FdE0yTmpOQzAwTURKbUxXSTBNVFl0WkRJM056Y3pNMkU1WVdNMSJ9
+```
+
+**Note**: The VPC services configuration has been added to all wrangler.toml and wrangler.jsonc files to enable connectivity through the Cloudflare Tunnel.
+
 ---
 
 ## ✅ ما تم التحقق منه محلياً

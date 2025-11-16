@@ -48,6 +48,13 @@
 	"ai": {
 		"binding": "AI"
 	},
+	"vpc_services": [
+		{
+			"binding": "VPC_SERVICE",
+			"service_id": "019a6a59-cbb4-7031-9840-e79c64aeae7f",
+			"remote": true
+		}
+	],
 	"observability": {
 		"enabled": true
 	},

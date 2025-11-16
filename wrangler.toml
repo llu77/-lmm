@@ -57,6 +57,14 @@ bucket_name = "erp-storage"
 binding = "STORAGE"  # General ERP file storage
 
 # ============================================
+# VPC Services (Cloudflare Tunnel)
+# ============================================
+[[vpc_services]]
+binding = "VPC_SERVICE"
+service_id = "019a6a59-cbb4-7031-9840-e79c64aeae7f"
+remote = true
+
+# ============================================
 # Production Environment Overrides
 # ============================================
 [[env.production.kv_namespaces]]
