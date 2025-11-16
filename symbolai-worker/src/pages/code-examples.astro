@@ -1,0 +1,305 @@
+---
+import MainLayout from '../layouts/MainLayout.astro';
+import { GitHubCode } from '../components/GitHubCode';
+import { CodeBlock } from '../components/CodeBlock';
+---
+
+<MainLayout 
+  title="أمثلة على مكونات الكود - Cloudflare Style"
+  description="أمثلة تفاعلية على استخدام مكونات GitHubCode و CodeBlock المطورة وفقاً لدليل أنماط Cloudflare"
+>
+  <div class="container mx-auto px-4 py-8 max-w-4xl" dir="rtl">
+    <!-- Hero Section -->
+    <div class="mb-12">
+      <h1 class="text-4xl font-bold text-gray-900 dark:text-white mb-4">
+        مكونات الكود المتوافقة مع Cloudflare
+      </h1>
+      <p class="text-lg text-gray-600 dark:text-gray-400">
+        أمثلة تفاعلية على استخدام مكونات GitHubCode و CodeBlock المطورة وفقاً لدليل أنماط Cloudflare
+      </p>
+    </div>
+
+    <!-- GitHubCode Examples -->
+    <section class="mb-16">
+      <h2 class="text-3xl font-bold text-gray-900 dark:text-white mb-6">
+        مكون GitHubCode
+      </h2>
+      
+      <div class="space-y-8">
+        <!-- Example 1: Basic -->
+        <div>
+          <h3 class="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-3">
+            1. مثال أساسي - عرض ملف كامل
+          </h3>
+          <p class="text-gray-600 dark:text-gray-400 mb-4">
+            عرض مكون GitHubCode من هذا المستودع:
+          </p>
+          <GitHubCode
+            client:load
+            repo="llu77/-lmm"
+            path="symbolai-worker/astro.config.mjs"
+            title="Astro Configuration"
+          />
+        </div>
+
+        <!-- Example 2: With Line Numbers -->
+        <div>
+          <h3 class="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-3">
+            2. عرض أسطر محددة
+          </h3>
+          <p class="text-gray-600 dark:text-gray-400 mb-4">
+            عرض الأسطر من 10 إلى 20 فقط من الملف:
+          </p>
+          <GitHubCode
+            client:load
+            repo="llu77/-lmm"
+            path="symbolai-worker/package.json"
+            startLine={10}
+            endLine={20}
+            title="Package.json Scripts"
+            showLineNumbers={true}
+          />
+        </div>
+
+        <!-- Example 3: Collapsible -->
+        <div>
+          <h3 class="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-3">
+            3. كود قابل للطي
+          </h3>
+          <p class="text-gray-600 dark:text-gray-400 mb-4">
+            كود مع إمكانية الإخفاء والإظهار:
+          </p>
+          <GitHubCode
+            client:load
+            repo="llu77/-lmm"
+            path="symbolai-worker/tsconfig.json"
+            collapse={true}
+            title="TypeScript Configuration"
+          />
+        </div>
+      </div>
+    </section>
+
+    <!-- CodeBlock Examples -->
+    <section class="mb-16">
+      <h2 class="text-3xl font-bold text-gray-900 dark:text-white mb-6">
+        مكون CodeBlock
+      </h2>
+      
+      <div class="space-y-8">
+        <!-- Example 1: TypeScript -->
+        <div>
+          <h3 class="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-3">
+            1. كود TypeScript مع أرقام الأسطر
+          </h3>
+          <CodeBlock
+            client:load
+            lang="typescript"
+            showLineNumbers={true}
+            title="React Component Example"
+          >
+{`import { useState } from 'react';
+
+interface CounterProps {
+  initialValue?: number;
+}
+
+export function Counter({ initialValue = 0 }: CounterProps) {
+  const [count, setCount] = useState(initialValue);
+  
+  return (
+    <div className="flex gap-2">
+      <button onClick={() => setCount(count - 1)}>-</button>
+      <span>{count}</span>
+      <button onClick={() => setCount(count + 1)}>+</button>
+    </div>
+  );
+}`}
+          </CodeBlock>
+        </div>
+
+        <!-- Example 2: With Highlighting -->
+        <div>
+          <h3 class="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-3">
+            2. كود مع تمييز أسطر محددة
+          </h3>
+          <p class="text-gray-600 dark:text-gray-400 mb-4">
+            الأسطر 3 و 4 و 5 مميزة باللون الأصفر:
+          </p>
+          <CodeBlock
+            client:load
+            lang="javascript"
+            showLineNumbers={true}
+            highlight={[3, 4, 5]}
+            title="Event Handler"
+          >
+{`function handleSubmit(event) {
+  event.preventDefault();
+  // هذه الأسطر مميزة
+  const data = new FormData(event.target);
+  const values = Object.fromEntries(data.entries());
+  
+  console.log('Form submitted:', values);
+}`}
+          </CodeBlock>
+        </div>
+
+        <!-- Example 3: JSON -->
+        <div>
+          <h3 class="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-3">
+            3. ملف JSON
+          </h3>
+          <CodeBlock
+            client:load
+            lang="json"
+            showLineNumbers={true}
+            title="wrangler.toml Configuration"
+          >
+{`{
+  "name": "symbolai-worker",
+  "main": "dist/index.js",
+  "compatibility_date": "2024-01-01",
+  "node_compat": true,
+  "vars": {
+    "ENVIRONMENT": "production"
+  }
+}`}
+          </CodeBlock>
+        </div>
+
+        <!-- Example 4: Bash Commands -->
+        <div>
+          <h3 class="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-3">
+            4. أوامر Shell (بدون $)
+          </h3>
+          <p class="text-gray-600 dark:text-gray-400 mb-4">
+            وفقاً لمعايير Cloudflare، لا نستخدم $ قبل الأوامر:
+          </p>
+          <CodeBlock
+            client:load
+            lang="bash"
+            title="Installation Commands"
+          >
+{`npm install
+npm run build
+wrangler deploy`}
+          </CodeBlock>
+        </div>
+
+        <!-- Example 5: Collapsible -->
+        <div>
+          <h3 class="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-3">
+            5. كود طويل قابل للطي
+          </h3>
+          <CodeBlock
+            client:load
+            lang="typescript"
+            collapse={true}
+            showLineNumbers={true}
+            title="Type Definitions"
+          >
+{`interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+type UserRole = 'admin' | 'user' | 'guest';
+
+interface LoginResponse {
+  user: User;
+  token: string;
+  expiresIn: number;
+}
+
+interface ApiError {
+  message: string;
+  code: string;
+  statusCode: number;
+}`}
+          </CodeBlock>
+        </div>
+
+        <!-- Example 6: Wrapped Text -->
+        <div>
+          <h3 class="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-3">
+            6. نص طويل مع التفاف
+          </h3>
+          <CodeBlock
+            client:load
+            lang="text"
+            wrap={true}
+            title="Long Text Example"
+          >
+{`هذا مثال على نص طويل جداً يتجاوز عرض الشاشة. مع تفعيل خاصية wrap، سيتم التفاف النص تلقائياً بدلاً من ظهور شريط التمرير الأفقي. هذا مفيد للنصوص الطويلة أو الأوامر الطويلة التي يجب قراءتها بالكامل.`}
+          </CodeBlock>
+        </div>
+      </div>
+    </section>
+
+    <!-- Code Formatting Standards -->
+    <section class="mb-16">
+      <h2 class="text-3xl font-bold text-gray-900 dark:text-white mb-6">
+        معايير تنسيق الكود
+      </h2>
+      
+      <div class="prose dark:prose-invert max-w-none">
+        <h3 class="text-xl font-semibold mb-3">استخدام الرموز</h3>
+        
+        <div class="space-y-4">
+          <div class="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+            <h4 class="font-semibold mb-2">الأقواس الزاوية &lt; &gt;</h4>
+            <p class="text-sm mb-2">تُستخدم للعناصر التي يجب استبدالها:</p>
+            <CodeBlock client:load lang="bash">
+{`wrangler secret put <SECRET_NAME>
+curl https://api.example.com/<endpoint>`}
+            </CodeBlock>
+          </div>
+
+          <div class="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+            <h4 class="font-semibold mb-2">الأقواس المربعة [ ]</h4>
+            <p class="text-sm mb-2">تُستخدم للخيارات الاختيارية:</p>
+            <CodeBlock client:load lang="bash">
+{`npx wrangler deploy [OPTIONS]
+git commit -m "message" [--amend]`}
+            </CodeBlock>
+          </div>
+
+          <div class="p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
+            <h4 class="font-semibold mb-2">الخط الأحادي (Monospace)</h4>
+            <p class="text-sm mb-2">استخدم backticks لـ:</p>
+            <ul class="list-disc list-inside text-sm">
+              <li>أسماء الملفات: <code class="px-1 py-0.5 bg-gray-200 dark:bg-gray-800 rounded">package.json</code></li>
+              <li>أوامر API: <code class="px-1 py-0.5 bg-gray-200 dark:bg-gray-800 rounded">GET /api/users</code></li>
+              <li>قيم المتغيرات: <code class="px-1 py-0.5 bg-gray-200 dark:bg-gray-800 rounded">NODE_ENV=production</code></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Documentation Link -->
+    <section class="border-t border-gray-200 dark:border-gray-800 pt-8">
+      <div class="bg-gradient-to-r from-cyan-50 to-blue-50 dark:from-cyan-900/20 dark:to-blue-900/20 rounded-lg p-6">
+        <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+          📚 الوثائق الكاملة
+        </h3>
+        <p class="text-gray-600 dark:text-gray-400 mb-4">
+          للمزيد من التفاصيل والأمثلة، راجع الوثائق الكاملة
+        </p>
+        <a 
+          href="/docs/cloudflare-code-components"
+          class="inline-flex items-center gap-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg transition-colors"
+        >
+          <span>عرض الوثائق</span>
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+          </svg>
+        </a>
+      </div>
+    </section>
+  </div>
+</MainLayout>
