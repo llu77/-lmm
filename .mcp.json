@@ -7,7 +7,7 @@
       ],
       "env": {
         "CLOUDFLARE_ACCOUNT_ID": "85b01d19439ca53d3cfa740d2621a2bd",
-        "CLOUDFLARE_GATEWAY_NAME": "immm"
+        "CLOUDFLARE_GATEWAY_NAME": "symbol"
       }
     }
   }

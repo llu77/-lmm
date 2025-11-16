@@ -771,7 +771,7 @@ xai/grok-1
 ```typescript
 // AI Gateway URL
 const ACCOUNT_ID = "your-account-id";
-const GATEWAY_NAME = "immm";
+const GATEWAY_NAME = "symbol";
 const GATEWAY_URL = `https://gateway.ai.cloudflare.com/v1/${ACCOUNT_ID}/${GATEWAY_NAME}/compat`;
 
 // مع جميع المزايا
@@ -1197,7 +1197,7 @@ Respond in Arabic for Arabic queries, English for English queries.`;
 
   // استخدام AI Gateway مع Dynamic Routing
   const response = await fetch(
-    `https://gateway.ai.cloudflare.com/v1/${context.env.ACCOUNT_ID}/immm/compat/chat/completions`,
+    `https://gateway.ai.cloudflare.com/v1/${context.env.ACCOUNT_ID}/symbol/compat/chat/completions`,
     {
       method: "POST",
       headers: {
