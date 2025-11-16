@@ -378,3 +378,36 @@ export async function callClaudeOpusForThinking(
     }
   );
 }
+
+/**
+ * Call Claude 3.5 Sonnet (latest and most capable Sonnet model)
+ * استدعاء Claude 3.5 Sonnet عبر AI Binding
+ * Best balance of performance, speed, and cost
+ * توازن مثالي بين الأداء والسرعة والتكلفة
+ */
+export async function callClaudeSonnet35(
+  env: AIEnv,
+  prompt: string,
+  options: {
+    maxTokens?: number;
+    temperature?: number;
+    system?: string;
+  } = {}
+): Promise<AIResponse> {
+  const {
+    maxTokens = 4096,
+    temperature = 0.7,
+    system
+  } = options;
+
+  return await callClaudeViaGateway(
+    env,
+    [{ role: 'user', content: prompt }],
+    {
+      model: 'claude-3-5-sonnet-20241022', // Claude 3.5 Sonnet - Latest version
+      maxTokens,
+      temperature,
+      system: system || 'أنت مساعد مالي ذكي متخصص في مساعدة الشركات الصغيرة والمتوسطة. تجيب باللغة العربية بشكل احترافي ومفيد.'
+    }
+  );
+}

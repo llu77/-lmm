@@ -82,15 +82,37 @@ Cloudflare AI Gateway → AI Provider (Anthropic Claude or Workers AI) → Respo
 ### Gateway Configuration
 Both Anthropic Claude and Workers AI now route through the AI Gateway:
 
-**Anthropic Claude**:
+**Anthropic Claude (via AI Gateway - NOT direct AI binding)**:
+> **ملاحظة مهمة / Important Note**: Claude models (including Claude 3.5 Sonnet) are accessed through Cloudflare AI Gateway using HTTP fetch, not through the `env.AI` binding. The AI binding (`env.AI`) only supports Workers AI models.
+
 ```typescript
+// Claude 3.5 Sonnet - استدعاء عبر AI Gateway
+import { callClaudeSonnet35 } from '@/lib/ai';
+
+const response = await callClaudeSonnet35(env, 'Your prompt here', {
+  maxTokens: 4096,
+  temperature: 0.7
+});
+
+// أو استخدام الدالة العامة / Or use the general function
 const response = await fetch(
   `https://gateway.ai.cloudflare.com/v1/${ACCOUNT_ID}/symbol/anthropic/v1/messages`,
-  { /* ... */ }
+  { 
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'anthropic-version': '2023-06-01',
+      'x-api-key': env.ANTHROPIC_API_KEY
+    },
+    body: JSON.stringify({
+      model: 'claude-3-5-sonnet-20241022',
+      messages: [{ role: 'user', content: 'Your prompt' }]
+    })
+  }
 );
 ```
 
-**Workers AI** (with gateway):
+**Workers AI** (with gateway via `env.AI` binding):
 ```typescript
 const response = await env.AI.run(
   "@cf/meta/llama-3.1-8b-instruct",
@@ -129,6 +151,33 @@ const response = await env.AI.run(
 ### 5. Chat Interface
 - General-purpose AI assistant for financial queries
 - Available at: `src/pages/api/ai/chat.ts`
+
+### 6. Claude 3.5 Sonnet Direct Access (`callClaudeSonnet35`)
+- Dedicated function for Claude 3.5 Sonnet (latest version)
+- استدعاء مباشر لـ Claude 3.5 Sonnet
+- Best for general-purpose AI tasks with optimal performance
+- Usage example:
+```typescript
+import { callClaudeSonnet35 } from '@/lib/ai';
+
+const response = await callClaudeSonnet35(env, 'ما هي أفضل استراتيجية لتقليل المصروفات؟', {
+  maxTokens: 2048,
+  temperature: 0.7
+});
+console.log(response.content);
+```
+
+### 7. Claude Opus for Complex Thinking (`callClaudeOpusForThinking`)
+- For deep analysis and complex reasoning
+- للتحليل العميق والتفكير المعقد
+- Usage example:
+```typescript
+import { callClaudeOpusForThinking } from '@/lib/ai';
+
+const response = await callClaudeOpusForThinking(env, 'قم بتحليل شامل للوضع المالي', {
+  maxTokens: 8192
+});
+```
 
 ## Troubleshooting
 

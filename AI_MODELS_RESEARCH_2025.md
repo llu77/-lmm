@@ -139,9 +139,32 @@
 
 ## 6. الدمج مع AI Gateway / Integration with AI Gateway
 
-جميع النماذج تدعم التوجيه عبر AI Gateway:
+### ملاحظة مهمة جداً / Very Important Note
 
-### Claude (Anthropic)
+**نماذج Claude لا تعمل مع `env.AI` binding مباشرة!**  
+**Claude models do NOT work with `env.AI` binding directly!**
+
+- ✅ **Claude models** (3.5 Sonnet, Opus, etc.): تستخدم HTTP fetch عبر AI Gateway
+- ✅ **Workers AI models** (Llama, Mistral, etc.): تستخدم `env.AI.run()` مع gateway option
+
+### Claude 3.5 Sonnet (via AI Gateway - Recommended)
+
+**طريقة سهلة / Easy Way** - استخدام الدالة المخصصة:
+```typescript
+import { callClaudeSonnet35 } from '@/lib/ai';
+
+// Claude 3.5 Sonnet مع إعدادات افتراضية
+const response = await callClaudeSonnet35(env, 'ما هي أفضل استراتيجية للتوفير؟', {
+  maxTokens: 4096,
+  temperature: 0.7,
+  system: 'أنت مستشار مالي خبير'
+});
+
+console.log(response.content); // النص المُولّد
+console.log(response.usage);   // عدد الـ tokens المستخدمة
+```
+
+**طريقة مباشرة / Direct Way** - HTTP fetch:
 ```typescript
 const response = await fetch(
   `https://gateway.ai.cloudflare.com/v1/${ACCOUNT_ID}/symbol/anthropic/v1/messages`,
@@ -161,7 +184,7 @@ const response = await fetch(
 );
 ```
 
-### Workers AI
+### Workers AI (via `env.AI` binding)
 ```typescript
 const response = await env.AI.run(
   "@cf/meta/llama-3.1-8b-instruct",
