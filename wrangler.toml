@@ -2,7 +2,7 @@
 # Cloudflare Pages Configuration
 # Generated and synced with Dashboard: 2025-11-11
 # ============================================
-name = "lmmm"
+name = "symbolai-enhanced"
 main = "src/index.ts"
 pages_build_output_dir = "symbolai-worker/dist"
 compatibility_date = "2025-01-01"

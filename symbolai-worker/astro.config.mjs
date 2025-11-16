@@ -18,6 +18,12 @@ export default defineConfig({
   integrations: [
     react()
   ],
+  // Optimize build for memory-constrained environments
+  build: {
+    inlineStylesheets: 'auto',
+    split: true,
+    excludeMiddleware: false
+  },
   vite: {
     resolve: {
       alias: {
@@ -29,6 +35,16 @@ export default defineConfig({
     },
     optimizeDeps: {
       include: ['zod']
+    },
+    // Build optimizations for memory efficiency
+    build: {
+      minify: 'esbuild',
+      cssMinify: true,
+      rollupOptions: {
+        output: {
+          manualChunks: undefined, // Let Vite handle chunking automatically
+        }
+      }
     },
     ssr: {
       external: [

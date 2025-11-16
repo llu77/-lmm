@@ -4,6 +4,7 @@
   "description": "Simple Cloudflare Worker that responds with Hello World",
   "main": "index.ts",
   "scripts": {
+    "build": "echo 'No build needed for hello-world-worker'",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "tail": "wrangler tail"

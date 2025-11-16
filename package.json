@@ -10,7 +10,7 @@
   ],
   "scripts": {
     "build": "npm run build:workers && npm run build:mcp",
-    "build:workers": "cd symbolai-worker && npm run build || true && cd ../cloudflare-worker && npm run build || true",
+    "build:workers": "cd symbolai-worker && NODE_OPTIONS='--max-old-space-size=2048' npm run build || true && cd ../cloudflare-worker && npm run build || true",
     "build:mcp": "cd my-mcp-server-github-auth && npm run build || true",
     "dev": "npm run dev:workers",
     "dev:workers": "wrangler dev --config wrangler.toml",
@@ -28,9 +28,8 @@
     "audit:workers": "cd symbolai-worker && npm audit || true && cd ../cloudflare-worker && npm audit || true",
     "audit:mcp": "cd my-mcp-server-github-auth && npm audit || true",
     "install:all": "npm install && npm run install:workers && npm run install:mcp",
-    "install:workers": "cd symbolai-worker && npm install || true && cd ../cloudflare-worker && npm install || true",
-    "install:mcp": "cd my-mcp-server-github-auth && npm install || true",
-    "postinstall": "npm run install:workers && npm run install:mcp"
+    "install:workers": "cd symbolai-worker && npm install --no-save || true && cd ../cloudflare-worker && npm install --no-save || true",
+    "install:mcp": "cd my-mcp-server-github-auth && npm install --no-save || true"
   },
   "dependencies": {
     "@astrojs/react": "^4.4.1",
