@@ -1,0 +1,12 @@
+{
+  "$schema": "https://developers.cloudflare.com/workers/wrangler/configuration/",
+  "pages_build_output_dir": "symbolai-worker/dist",
+  "build": {
+    "command": "npm ci --legacy-peer-deps && npm run build",
+    "cwd": "",
+    "watch_dirs": [
+      "symbolai-worker/src",
+      "symbolai-worker/public"
+    ]
+  }
+}
