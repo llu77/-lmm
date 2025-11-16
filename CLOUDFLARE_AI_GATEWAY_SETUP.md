@@ -76,15 +76,36 @@ The account ID `85b01d19439ca53d3cfa740d2621a2bd` is already correctly configure
 ### AI Integration Flow
 ```
 User Request → Astro API Endpoint → ai.ts Helper Functions → 
-Cloudflare AI Gateway → Anthropic Claude API → Response
+Cloudflare AI Gateway → AI Provider (Anthropic Claude or Workers AI) → Response
+```
+
+### Gateway Configuration
+Both Anthropic Claude and Workers AI now route through the AI Gateway:
+
+**Anthropic Claude**:
+```typescript
+const response = await fetch(
+  `https://gateway.ai.cloudflare.com/v1/${ACCOUNT_ID}/symbol/anthropic/v1/messages`,
+  { /* ... */ }
+);
+```
+
+**Workers AI** (with gateway):
+```typescript
+const response = await env.AI.run(
+  "@cf/meta/llama-3.1-8b-instruct",
+  { messages: [...] },
+  { gateway: { id: "symbol" } }
+);
 ```
 
 ### Benefits of Using AI Gateway
 1. **Caching**: Reduces API calls and costs
 2. **Rate Limiting**: Protects against abuse
-3. **Analytics**: Track usage and costs
+3. **Analytics**: Track usage and costs for both Anthropic and Workers AI
 4. **Logging**: Monitor API calls and errors
 5. **Cost Management**: Better visibility into AI spending
+6. **Unified Monitoring**: Single dashboard for all AI providers
 
 ## AI Features in the Application
 
@@ -174,15 +195,22 @@ wrangler tail --format pretty | grep -i "ai\|anthropic\|claude"
 ## API Models Available
 
 ### Anthropic Claude (via AI Gateway)
-- `claude-3-5-sonnet-20241022` (default) - Best quality, recommended
-- `claude-3-opus-20240229` - Highest capability
+- `claude-3-5-sonnet-20241022` (default) - Best quality, recommended for general use
+- `claude-3-opus-20240229` - **Highest capability for complex thinking and deep analysis**
+  - Best for: Complex reasoning, financial analysis, strategic planning
+  - Token limit: Up to 8192 tokens
+  - Use via: `callClaudeOpusForThinking()` function
 - `claude-3-sonnet-20240229` - Balanced performance
 - `claude-3-haiku-20240307` - Fast responses
 
 ### Cloudflare Workers AI (fallback)
 - `@cf/meta/llama-3-8b-instruct` (default fallback)
+- `@cf/meta/llama-3.1-8b-instruct` (newer version)
 - `@cf/mistral/mistral-7b-instruct`
 - Free tier available
+- Now routes through AI Gateway for caching and analytics
+
+**Note**: Workers AI calls now automatically use the AI Gateway for improved performance and monitoring.
 
 ## Cost Optimization
 
