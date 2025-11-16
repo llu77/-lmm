@@ -88,7 +88,7 @@ database_name = "symbolai-financial-db"
 ```toml
 ENVIRONMENT = "production"
 AI_GATEWAY_ACCOUNT_ID = "85b01d19439ca53d3cfa740d2621a2bd"
-AI_GATEWAY_NAME = "symbolai-gateway"
+AI_GATEWAY_NAME = "symbol"
 EMAIL_FROM = "info@symbolai.net"
 ADMIN_EMAIL = "admin@symbolai.net"
 ```

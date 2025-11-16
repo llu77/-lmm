@@ -6,7 +6,7 @@
 |----------|-------|-------------|
 | `ENVIRONMENT` | `"production"` | Environment identifier |
 | `AI_GATEWAY_ACCOUNT_ID` | `"85b01d19439ca53d3cfa740d2621a2bd"` | Cloudflare AI Gateway account |
-| `AI_GATEWAY_NAME` | `"symbolai-gateway"` | AI Gateway name |
+| `AI_GATEWAY_NAME` | `"symbol"` | AI Gateway name |
 | `EMAIL_FROM` | `"info@symbolai.net"` | Default sender email |
 | `EMAIL_FROM_NAME` | `"SymbolAI"` | Sender display name |
 | `ADMIN_EMAIL` | `"admin@symbolai.net"` | Admin notification email |
