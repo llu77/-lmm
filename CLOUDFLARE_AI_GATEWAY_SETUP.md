@@ -7,9 +7,9 @@ This document provides configuration details for Cloudflare AI Gateway integrati
 
 ### AI Gateway Settings
 - **Account ID**: `85b01d19439ca53d3cfa740d2621a2bd`
-- **Gateway Name**: `default`
+- **Gateway Name**: `symbol`
 - **Provider**: Anthropic (Claude)
-- **Gateway URL**: `https://gateway.ai.cloudflare.com/v1/85b01d19439ca53d3cfa740d2621a2bd/default/anthropic`
+- **Gateway URL**: `https://gateway.ai.cloudflare.com/v1/85b01d19439ca53d3cfa740d2621a2bd/symbol/anthropic`
 
 ### Environment Variables
 The following environment variables need to be set in Cloudflare Workers:
@@ -33,7 +33,7 @@ echo "dXZnfE6kp6yeDIRY9qjMdzxLIbI0po8dLdUMCK6X" | wrangler secret put ANTHROPIC_
 
 ### Test with curl
 ```bash
-curl -X POST https://gateway.ai.cloudflare.com/v1/85b01d19439ca53d3cfa740d2621a2bd/default/anthropic/v1/messages \
+curl -X POST https://gateway.ai.cloudflare.com/v1/85b01d19439ca53d3cfa740d2621a2bd/symbol/anthropic/v1/messages \
   --header 'x-api-key: dXZnfE6kp6yeDIRY9qjMdzxLIbI0po8dLdUMCK6X' \
   --header 'anthropic-version: 2023-06-01' \
   --header 'Content-Type: application/json' \
@@ -62,9 +62,9 @@ After deployment, test the AI features through:
 ## Configuration Changes Made
 
 ### 1. Updated AI Gateway Name
-**File**: `symbolai-worker/wrangler.toml`
-- **Before**: `AI_GATEWAY_NAME = "symbolai-gateway"`
-- **After**: `AI_GATEWAY_NAME = "default"`
+**File**: `symbolai-worker/wrangler.toml` and `wrangler.toml`
+- **Before**: `AI_GATEWAY_NAME = "default"` / `AI_GATEWAY_NAME = "symbolai-gateway"`
+- **After**: `AI_GATEWAY_NAME = "symbol"`
 
 This matches the gateway name in your Cloudflare AI Gateway configuration.
 
@@ -118,7 +118,7 @@ wrangler secret put ANTHROPIC_API_KEY
 ```
 
 ### Issue: "AI Gateway error: Invalid gateway name"
-**Solution**: Ensure `AI_GATEWAY_NAME` matches your Cloudflare configuration (now set to `default`)
+**Solution**: Ensure `AI_GATEWAY_NAME` matches your Cloudflare configuration (now set to `symbol`)
 
 ### Issue: "Missing AI_GATEWAY_ACCOUNT_ID"
 **Solution**: Verify the account ID in `wrangler.toml` matches your Cloudflare account
@@ -159,7 +159,7 @@ wrangler secret list
 ### View AI Gateway Logs
 1. Go to Cloudflare Dashboard
 2. Navigate to AI Gateway
-3. Select your gateway: `default`
+3. Select your gateway: `symbol`
 4. View analytics and logs
 
 ### View Worker Logs
@@ -221,7 +221,7 @@ wrangler tail --format pretty | grep -i "ai\|anthropic\|claude"
 - [Best Practices](https://docs.anthropic.com/claude/docs/best-practices)
 
 ## Status
-✅ **Configuration Updated**: AI Gateway name changed to `default`
+✅ **Configuration Updated**: AI Gateway name changed to `symbol`
 ✅ **Account ID Verified**: `85b01d19439ca53d3cfa740d2621a2bd`
 ✅ **API Key Documented**: Token provided for setup
 ⏳ **Pending**: Set ANTHROPIC_API_KEY secret in Cloudflare Workers
@@ -229,5 +229,5 @@ wrangler tail --format pretty | grep -i "ai\|anthropic\|claude"
 
 ---
 
-**Last Updated**: 2025-11-13
-**Configuration Version**: 1.0
+**Last Updated**: 2025-11-16
+**Configuration Version**: 1.1
