@@ -1,0 +1,345 @@
+---
+import '@/styles/globals.css';
+import { ClientRouter } from 'astro:transitions';
+
+interface Props {
+  title?: string;
+  description?: string;
+}
+
+const {
+  title = 'نظام إدارة مالية - SymbolAI',
+  description = 'نظام متكامل لإدارة المالية والموارد البشرية'
+} = Astro.props;
+---
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content={description}>
+  <title>{title}</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <ClientRouter />
+</head>
+<body class="antialiased">
+  <div class="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <!-- Mobile Sidebar Overlay -->
+    <div id="sidebar-overlay" class="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-40 lg:hidden hidden" aria-hidden="true"></div>
+
+    <!-- Sidebar -->
+    <aside id="sidebar" class="fixed top-0 right-0 z-40 h-screen w-72 transform transition-transform duration-300 ease-in-out lg:translate-x-0 translate-x-full bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700">
+      <div class="h-full flex flex-col">
+        <!-- Logo & Brand -->
+        <div class="h-16 flex items-center justify-between px-6 border-b border-gray-200 dark:border-gray-700">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center">
+              <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+              </svg>
+            </div>
+            <div>
+              <h2 class="text-sm font-bold text-gray-900 dark:text-white">SymbolAI</h2>
+              <p class="text-xs text-gray-500 dark:text-gray-400">نظام مالي</p>
+            </div>
+          </div>
+          <button id="sidebar-close" class="lg:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+            <svg class="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <!-- Navigation -->
+        <nav class="flex-1 overflow-y-auto scrollbar-thin p-4 space-y-1">
+          <!-- Dashboard -->
+          <a href="/dashboard" class="nav-item group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white transition-all">
+            <svg class="w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+            </svg>
+            <span>لوحة التحكم</span>
+          </a>
+
+          <!-- Financial Section -->
+          <div class="pt-4">
+            <p class="px-3 mb-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">المالية</p>
+            
+            <a href="/revenues" class="nav-item group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white transition-all">
+              <svg class="w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>الإيرادات</span>
+            </a>
+
+            <a href="/expenses" class="nav-item group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white transition-all">
+              <svg class="w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+              </svg>
+              <span>المصروفات</span>
+            </a>
+          </div>
+
+          <!-- HR Section -->
+          <div class="pt-4">
+            <p class="px-3 mb-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">الموارد البشرية</p>
+            
+            <a href="/payroll" class="nav-item group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white transition-all">
+              <svg class="w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+              <span>الرواتب</span>
+            </a>
+
+            <a href="/bonus" class="nav-item group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white transition-all">
+              <svg class="w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
+              </svg>
+              <span>البونص</span>
+            </a>
+
+            <a href="/advances-deductions" class="nav-item group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white transition-all">
+              <svg class="w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <span>السلف والخصومات</span>
+            </a>
+
+            <a href="/employee-requests" class="nav-item group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white transition-all">
+              <svg class="w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+              </svg>
+              <span>طلبات الموظفين</span>
+            </a>
+          </div>
+
+          <!-- Operations Section -->
+          <div class="pt-4">
+            <p class="px-3 mb-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">العمليات</p>
+            
+            <a href="/product-orders" class="nav-item group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white transition-all">
+              <svg class="w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+              </svg>
+              <span>طلبات المنتجات</span>
+            </a>
+
+            <a href="/branches" class="nav-item group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white transition-all">
+              <svg class="w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+              </svg>
+              <span>الفروع</span>
+            </a>
+          </div>
+
+          <!-- System Section -->
+          <div class="pt-4">
+            <p class="px-3 mb-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">النظام</p>
+            
+            <a href="/ai-assistant" class="nav-item group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white transition-all">
+              <svg class="w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+              </svg>
+              <span>المساعد الذكي</span>
+            </a>
+
+            <a href="/users" class="nav-item group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white transition-all">
+              <svg class="w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+              <span>المستخدمين</span>
+            </a>
+
+            <a href="/email-settings" class="nav-item group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white transition-all">
+              <svg class="w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+              <span>إعدادات البريد</span>
+            </a>
+          </div>
+        </nav>
+
+        <!-- User Menu -->
+        <div class="p-4 border-t border-gray-200 dark:border-gray-700">
+          <div class="flex items-center gap-3 px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-700/50">
+            <div class="w-10 h-10 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white font-medium">
+              A
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-medium text-gray-900 dark:text-white truncate" id="user-name-sidebar">جاري التحميل...</p>
+              <p class="text-xs text-gray-500 dark:text-gray-400 truncate" id="user-role-sidebar">...</p>
+            </div>
+            <button id="logout-btn" class="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors" title="تسجيل الخروج">
+              <svg class="w-5 h-5 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <div class="lg:mr-72">
+      <!-- Top Header -->
+      <header class="sticky top-0 z-30 h-16 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+        <div class="h-full px-4 sm:px-6 lg:px-8 flex items-center justify-between">
+          <!-- Mobile Menu Button -->
+          <button id="sidebar-toggle" class="lg:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+            <svg class="w-6 h-6 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+
+          <!-- Breadcrumb -->
+          <nav class="hidden lg:flex items-center gap-2 text-sm" aria-label="Breadcrumb">
+            <a href="/dashboard" class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 transition-colors">
+              الرئيسية
+            </a>
+            <svg class="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+            </svg>
+            <span class="text-gray-900 dark:text-white font-medium" id="page-title">لوحة التحكم</span>
+          </nav>
+
+          <!-- Actions -->
+          <div class="flex items-center gap-2">
+            <!-- Search Button (future) -->
+            <button class="hidden sm:flex p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="بحث (Ctrl+K)">
+              <svg class="w-5 h-5 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </button>
+
+            <!-- Notifications -->
+            <button class="relative p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="الإشعارات">
+              <svg class="w-5 h-5 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+              </svg>
+              <span class="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+            </button>
+
+            <!-- Theme Toggle -->
+            <button id="theme-toggle" class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="تبديل الثيم">
+              <svg class="w-5 h-5 text-gray-500 dark:text-gray-400 hidden dark:block" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+              <svg class="w-5 h-5 text-gray-500 dark:text-gray-400 block dark:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <!-- Main Content -->
+      <main class="p-4 sm:p-6 lg:p-8">
+        <slot />
+      </main>
+
+      <!-- Footer -->
+      <footer class="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 py-6 px-4 sm:px-6 lg:px-8">
+        <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+          <p class="text-sm text-gray-500 dark:text-gray-400">
+            © 2025 SymbolAI. جميع الحقوق محفوظة.
+          </p>
+          <div class="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
+            <a href="/docs" class="hover:text-gray-700 dark:hover:text-gray-300 transition-colors">الدعم</a>
+            <span>•</span>
+            <a href="/docs" class="hover:text-gray-700 dark:hover:text-gray-300 transition-colors">التوثيق</a>
+            <span>•</span>
+            <span>الإصدار 2.0.0</span>
+          </div>
+        </div>
+      </footer>
+    </div>
+  </div>
+
+  <script>
+    // Sidebar Toggle
+    const sidebar = document.getElementById('sidebar');
+    const sidebarToggle = document.getElementById('sidebar-toggle');
+    const sidebarClose = document.getElementById('sidebar-close');
+    const sidebarOverlay = document.getElementById('sidebar-overlay');
+
+    function openSidebar() {
+      sidebar?.classList.remove('translate-x-full');
+      sidebarOverlay?.classList.remove('hidden');
+    }
+
+    function closeSidebar() {
+      sidebar?.classList.add('translate-x-full');
+      sidebarOverlay?.classList.add('hidden');
+    }
+
+    sidebarToggle?.addEventListener('click', openSidebar);
+    sidebarClose?.addEventListener('click', closeSidebar);
+    sidebarOverlay?.addEventListener('click', closeSidebar);
+
+    // Theme Toggle
+    const themeToggle = document.getElementById('theme-toggle');
+    
+    themeToggle?.addEventListener('click', () => {
+      document.documentElement.classList.toggle('dark');
+      const isDark = document.documentElement.classList.contains('dark');
+      localStorage.setItem('theme', isDark ? 'dark' : 'light');
+    });
+
+    // Load theme preference
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      document.documentElement.classList.add('dark');
+    }
+
+    // Active Nav Item
+    const currentPath = window.location.pathname;
+    document.querySelectorAll('.nav-item').forEach(link => {
+      if (link.getAttribute('href') === currentPath) {
+        link.classList.add('bg-gray-100', 'text-gray-900', 'dark:bg-gray-700', 'dark:text-white');
+        link.classList.remove('text-gray-700', 'dark:text-gray-300');
+      }
+    });
+
+    // Load User Info
+    async function loadUserInfo() {
+      try {
+        const response = await fetch('/api/auth/session');
+        const data = await response.json();
+        
+        if (data.authenticated && data.user) {
+          const userNameEl = document.getElementById('user-name-sidebar');
+          const userRoleEl = document.getElementById('user-role-sidebar');
+          
+          if (userNameEl) userNameEl.textContent = data.user.fullName || data.user.username;
+          if (userRoleEl) userRoleEl.textContent = getRoleLabel(data.user.role);
+        }
+      } catch (error) {
+        console.error('Failed to load user info:', error);
+      }
+    }
+
+    function getRoleLabel(role: string): string {
+      const labels: Record<string, string> = {
+        'admin': 'مدير النظام',
+        'supervisor': 'مشرف',
+        'partner': 'شريك',
+        'employee': 'موظف'
+      };
+      return labels[role] || role;
+    }
+
+    // Logout
+    document.getElementById('logout-btn')?.addEventListener('click', async () => {
+      try {
+        await fetch('/api/auth/logout', { method: 'POST' });
+        window.location.href = '/auth/login';
+      } catch (error) {
+        console.error('Logout error:', error);
+      }
+    });
+
+    // Load user info on page load
+    loadUserInfo();
+  </script>
+</body>
+</html>

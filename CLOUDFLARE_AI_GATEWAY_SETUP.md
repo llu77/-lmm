@@ -7,9 +7,9 @@ This document provides configuration details for Cloudflare AI Gateway integrati
 
 ### AI Gateway Settings
 - **Account ID**: `85b01d19439ca53d3cfa740d2621a2bd`
-- **Gateway Name**: `default`
+- **Gateway Name**: `symbol`
 - **Provider**: Anthropic (Claude)
-- **Gateway URL**: `https://gateway.ai.cloudflare.com/v1/85b01d19439ca53d3cfa740d2621a2bd/default/anthropic`
+- **Gateway URL**: `https://gateway.ai.cloudflare.com/v1/85b01d19439ca53d3cfa740d2621a2bd/symbol/anthropic`
 
 ### Environment Variables
 The following environment variables need to be set in Cloudflare Workers:
@@ -33,7 +33,7 @@ echo "dXZnfE6kp6yeDIRY9qjMdzxLIbI0po8dLdUMCK6X" | wrangler secret put ANTHROPIC_
 
 ### Test with curl
 ```bash
-curl -X POST https://gateway.ai.cloudflare.com/v1/85b01d19439ca53d3cfa740d2621a2bd/default/anthropic/v1/messages \
+curl -X POST https://gateway.ai.cloudflare.com/v1/85b01d19439ca53d3cfa740d2621a2bd/symbol/anthropic/v1/messages \
   --header 'x-api-key: dXZnfE6kp6yeDIRY9qjMdzxLIbI0po8dLdUMCK6X' \
   --header 'anthropic-version: 2023-06-01' \
   --header 'Content-Type: application/json' \
@@ -62,9 +62,9 @@ After deployment, test the AI features through:
 ## Configuration Changes Made
 
 ### 1. Updated AI Gateway Name
-**File**: `symbolai-worker/wrangler.toml`
-- **Before**: `AI_GATEWAY_NAME = "symbolai-gateway"`
-- **After**: `AI_GATEWAY_NAME = "default"`
+**File**: `symbolai-worker/wrangler.toml` and `wrangler.toml`
+- **Before**: `AI_GATEWAY_NAME = "default"` / `AI_GATEWAY_NAME = "symbolai-gateway"`
+- **After**: `AI_GATEWAY_NAME = "symbol"`
 
 This matches the gateway name in your Cloudflare AI Gateway configuration.
 
@@ -76,15 +76,58 @@ The account ID `85b01d19439ca53d3cfa740d2621a2bd` is already correctly configure
 ### AI Integration Flow
 ```
 User Request → Astro API Endpoint → ai.ts Helper Functions → 
-Cloudflare AI Gateway → Anthropic Claude API → Response
+Cloudflare AI Gateway → AI Provider (Anthropic Claude or Workers AI) → Response
+```
+
+### Gateway Configuration
+Both Anthropic Claude and Workers AI now route through the AI Gateway:
+
+**Anthropic Claude (via AI Gateway - NOT direct AI binding)**:
+> **ملاحظة مهمة / Important Note**: Claude models (including Claude 3.5 Sonnet) are accessed through Cloudflare AI Gateway using HTTP fetch, not through the `env.AI` binding. The AI binding (`env.AI`) only supports Workers AI models.
+
+```typescript
+// Claude 3.5 Sonnet - استدعاء عبر AI Gateway
+import { callClaudeSonnet35 } from '@/lib/ai';
+
+const response = await callClaudeSonnet35(env, 'Your prompt here', {
+  maxTokens: 4096,
+  temperature: 0.7
+});
+
+// أو استخدام الدالة العامة / Or use the general function
+const response = await fetch(
+  `https://gateway.ai.cloudflare.com/v1/${ACCOUNT_ID}/symbol/anthropic/v1/messages`,
+  { 
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'anthropic-version': '2023-06-01',
+      'x-api-key': env.ANTHROPIC_API_KEY
+    },
+    body: JSON.stringify({
+      model: 'claude-3-5-sonnet-20241022',
+      messages: [{ role: 'user', content: 'Your prompt' }]
+    })
+  }
+);
+```
+
+**Workers AI** (with gateway via `env.AI` binding):
+```typescript
+const response = await env.AI.run(
+  "@cf/meta/llama-3.1-8b-instruct",
+  { messages: [...] },
+  { gateway: { id: "symbol" } }
+);
 ```
 
 ### Benefits of Using AI Gateway
 1. **Caching**: Reduces API calls and costs
 2. **Rate Limiting**: Protects against abuse
-3. **Analytics**: Track usage and costs
+3. **Analytics**: Track usage and costs for both Anthropic and Workers AI
 4. **Logging**: Monitor API calls and errors
 5. **Cost Management**: Better visibility into AI spending
+6. **Unified Monitoring**: Single dashboard for all AI providers
 
 ## AI Features in the Application
 
@@ -109,6 +152,33 @@ Cloudflare AI Gateway → Anthropic Claude API → Response
 - General-purpose AI assistant for financial queries
 - Available at: `src/pages/api/ai/chat.ts`
 
+### 6. Claude 3.5 Sonnet Direct Access (`callClaudeSonnet35`)
+- Dedicated function for Claude 3.5 Sonnet (latest version)
+- استدعاء مباشر لـ Claude 3.5 Sonnet
+- Best for general-purpose AI tasks with optimal performance
+- Usage example:
+```typescript
+import { callClaudeSonnet35 } from '@/lib/ai';
+
+const response = await callClaudeSonnet35(env, 'ما هي أفضل استراتيجية لتقليل المصروفات؟', {
+  maxTokens: 2048,
+  temperature: 0.7
+});
+console.log(response.content);
+```
+
+### 7. Claude Opus for Complex Thinking (`callClaudeOpusForThinking`)
+- For deep analysis and complex reasoning
+- للتحليل العميق والتفكير المعقد
+- Usage example:
+```typescript
+import { callClaudeOpusForThinking } from '@/lib/ai';
+
+const response = await callClaudeOpusForThinking(env, 'قم بتحليل شامل للوضع المالي', {
+  maxTokens: 8192
+});
+```
+
 ## Troubleshooting
 
 ### Issue: "Anthropic API error: 401"
@@ -118,7 +188,7 @@ wrangler secret put ANTHROPIC_API_KEY
 ```
 
 ### Issue: "AI Gateway error: Invalid gateway name"
-**Solution**: Ensure `AI_GATEWAY_NAME` matches your Cloudflare configuration (now set to `default`)
+**Solution**: Ensure `AI_GATEWAY_NAME` matches your Cloudflare configuration (now set to `symbol`)
 
 ### Issue: "Missing AI_GATEWAY_ACCOUNT_ID"
 **Solution**: Verify the account ID in `wrangler.toml` matches your Cloudflare account
@@ -159,7 +229,7 @@ wrangler secret list
 ### View AI Gateway Logs
 1. Go to Cloudflare Dashboard
 2. Navigate to AI Gateway
-3. Select your gateway: `default`
+3. Select your gateway: `symbol`
 4. View analytics and logs
 
 ### View Worker Logs
@@ -174,15 +244,22 @@ wrangler tail --format pretty | grep -i "ai\|anthropic\|claude"
 ## API Models Available
 
 ### Anthropic Claude (via AI Gateway)
-- `claude-3-5-sonnet-20241022` (default) - Best quality, recommended
-- `claude-3-opus-20240229` - Highest capability
+- `claude-3-5-sonnet-20241022` (default) - Best quality, recommended for general use
+- `claude-3-opus-20240229` - **Highest capability for complex thinking and deep analysis**
+  - Best for: Complex reasoning, financial analysis, strategic planning
+  - Token limit: Up to 8192 tokens
+  - Use via: `callClaudeOpusForThinking()` function
 - `claude-3-sonnet-20240229` - Balanced performance
 - `claude-3-haiku-20240307` - Fast responses
 
 ### Cloudflare Workers AI (fallback)
 - `@cf/meta/llama-3-8b-instruct` (default fallback)
+- `@cf/meta/llama-3.1-8b-instruct` (newer version)
 - `@cf/mistral/mistral-7b-instruct`
 - Free tier available
+- Now routes through AI Gateway for caching and analytics
+
+**Note**: Workers AI calls now automatically use the AI Gateway for improved performance and monitoring.
 
 ## Cost Optimization
 
@@ -221,7 +298,7 @@ wrangler tail --format pretty | grep -i "ai\|anthropic\|claude"
 - [Best Practices](https://docs.anthropic.com/claude/docs/best-practices)
 
 ## Status
-✅ **Configuration Updated**: AI Gateway name changed to `default`
+✅ **Configuration Updated**: AI Gateway name changed to `symbol`
 ✅ **Account ID Verified**: `85b01d19439ca53d3cfa740d2621a2bd`
 ✅ **API Key Documented**: Token provided for setup
 ⏳ **Pending**: Set ANTHROPIC_API_KEY secret in Cloudflare Workers
@@ -229,5 +306,5 @@ wrangler tail --format pretty | grep -i "ai\|anthropic\|claude"
 
 ---
 
-**Last Updated**: 2025-11-13
-**Configuration Version**: 1.0
+**Last Updated**: 2025-11-16
+**Configuration Version**: 1.1

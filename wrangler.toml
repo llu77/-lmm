@@ -2,7 +2,7 @@
 # Cloudflare Pages Configuration
 # Generated and synced with Dashboard: 2025-11-11
 # ============================================
-name = "lmmm"
+name = "symbolai-enhanced"
 main = "src/index.ts"
 pages_build_output_dir = "symbolai-worker/dist"
 compatibility_date = "2025-01-01"
@@ -57,6 +57,14 @@ bucket_name = "erp-storage"
 binding = "STORAGE"  # General ERP file storage
 
 # ============================================
+# VPC Services (Cloudflare Tunnel)
+# ============================================
+[[vpc_services]]
+binding = "VPC_SERVICE"
+service_id = "019a6a59-cbb4-7031-9840-e79c64aeae7f"
+remote = true
+
+# ============================================
 # Production Environment Overrides
 # ============================================
 [[env.production.kv_namespaces]]
@@ -81,7 +89,7 @@ binding = "RATE_LIMIT"
 [vars]
 ENVIRONMENT = "production"
 AI_GATEWAY_ACCOUNT_ID = "85b01d19439ca53d3cfa740d2621a2bd"
-AI_GATEWAY_NAME = "symbolai-gateway"
+AI_GATEWAY_NAME = "symbol"
 CLOUDFLARE_GATEWAY_ID = "3c9bde8186fe4c868defcc441f28ca5e"
 CLOUDFLARE_GATEWAY_DOMAIN = "xnoojzri3g.cloudflare-gateway.com"
 CLOUDFLARE_GATEWAY_DOH = "https://xnoojzri3g.cloudflare-gateway.com/dns-query"

@@ -15,13 +15,13 @@
 [vars]
 ENVIRONMENT = "production"
 AI_GATEWAY_ACCOUNT_ID = "85b01d19439ca53d3cfa740d2621a2bd"
-AI_GATEWAY_NAME = "symbolai-gateway"
+AI_GATEWAY_NAME = "symbol"
 ```
 
 **Status**: ✅ Configured
 - `ENVIRONMENT`: Set to "production"
 - `AI_GATEWAY_ACCOUNT_ID`: Configured for AI gateway
-- `AI_GATEWAY_NAME`: Set to "symbolai-gateway"
+- `AI_GATEWAY_NAME`: Set to "symbol"
 
 #### Email Configuration
 ```toml
@@ -255,7 +255,7 @@ curl https://symbolai.net/api/email/health
 ### ✅ Configured (in wrangler.toml)
 - [x] `ENVIRONMENT` = "production"
 - [x] `AI_GATEWAY_ACCOUNT_ID` = "85b01d19439ca53d3cfa740d2621a2bd"
-- [x] `AI_GATEWAY_NAME` = "symbolai-gateway"
+- [x] `AI_GATEWAY_NAME` = "symbol"
 - [x] `EMAIL_FROM` = "info@symbolai.net"
 - [x] `EMAIL_FROM_NAME` = "SymbolAI"
 - [x] `ADMIN_EMAIL` = "admin@symbolai.net"

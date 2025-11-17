@@ -1,6 +1,6 @@
 name = "symbolai-worker"
 main = "./dist/_worker.js/index.js"
-compatibility_date = "2025-01-15"
+compatibility_date = "2024-10-22"
 compatibility_flags = ["nodejs_compat"]
 
 # Static Assets
@@ -11,6 +11,7 @@ directory = "./dist"
 # Observability (Logging & Analytics)
 [observability]
 enabled = true
+head_sampling_rate = 1
 
 # D1 Database Binding
 [[d1_databases]]
@@ -49,6 +50,12 @@ id = "57a4eb48d4f047e7aea6b4692e174894"
 binding = "PAYROLL_PDFS"
 bucket_name = "symbolai-payrolls"
 
+# VPC Services (Cloudflare Tunnel)
+[[vpc_services]]
+binding = "VPC_SERVICE"
+service_id = "019a6a59-cbb4-7031-9840-e79c64aeae7f"
+remote = true
+
 # Workflows Binding
 [[workflows]]
 binding = "WORKFLOWS"
@@ -77,16 +84,16 @@ name = "CloudflareMCPAgent"
 class_name = "CloudflareMCPAgent"
 script_name = "symbolai-worker"
 
-# Agent migrations (for Durable Objects)
+# Migrations (Updated to use new_sqlite_classes)
 [[migrations]]
 tag = "v1"
-new_classes = ["CloudflareMCPAgent"]
+new_sqlite_classes = ["CloudflareMCPAgent"]
 
 # Environment Variables / Secrets
 [vars]
 ENVIRONMENT = "production"
 AI_GATEWAY_ACCOUNT_ID = "85b01d19439ca53d3cfa740d2621a2bd"
-AI_GATEWAY_NAME = "default"
+AI_GATEWAY_NAME = "symbol"
 
 # Email Configuration
 EMAIL_FROM = "info@symbolai.net"

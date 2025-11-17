@@ -197,8 +197,149 @@ This project has extensive Arabic language support:
 - Follow Cloudflare Workers security best practices
 - Validate user input appropriately
 
+## Task Assignment Best Practices
+
+When Copilot is assigned to work on this repository:
+
+### Ideal Tasks for Copilot
+- **Bug fixes**: Specific, reproducible issues with clear error messages
+- **Feature additions**: Well-scoped features with defined requirements
+- **Refactoring**: Code quality improvements following existing patterns
+- **Documentation**: Updates to README, guides, or inline documentation
+- **Test coverage**: Adding tests for existing functionality
+- **Technical debt**: Addressing TODO items, improving code clarity
+- **Dependency updates**: Package updates with security patches
+
+### Task Scoping Guidelines
+- Issues should have clear acceptance criteria
+- Include specific files or directories to focus on
+- Reference related issues or PRs for context
+- Provide example inputs/outputs where applicable
+- Specify which tests should pass after changes
+
+### Not Recommended for Copilot
+- Architecture redesigns requiring deep domain knowledge
+- Security-critical production changes without review
+- Ambiguous or poorly-defined requirements
+- Tasks requiring stakeholder decision-making
+
+## Iteration and Feedback
+
+### PR Review Process
+- All Copilot-generated PRs require human review
+- Use PR comments with `@copilot` to request changes
+- Copilot can iterate on feedback iteratively
+- Request additional tests or error handling if needed
+
+### Testing Requirements
+- Run `npm run type-check` before finalizing
+- Run `npm run lint` to check code style
+- Verify builds complete: `npm run build`
+- Test changes in development: `npm run dev`
+- Run existing tests: `npm test` (when available)
+
+### Validation Steps
+1. Verify TypeScript compiles without errors
+2. Check ESLint passes with no new warnings
+3. Ensure builds complete successfully
+4. Test affected functionality manually
+5. Review diff for unintended changes
+6. Verify no secrets or credentials committed
+
+## Performance Considerations
+
+### Build Performance
+- Be mindful of bundle size when adding dependencies
+- Use dynamic imports for large components
+- Consider edge computing constraints (Cloudflare Workers limits)
+- Monitor build times (should stay under 5 minutes)
+
+### Runtime Performance
+- Optimize Arabic/RTL rendering (avoid layout thrashing)
+- Use React.memo for expensive components
+- Implement proper loading states
+- Consider caching strategies with TanStack Query
+
+### Edge Computing Constraints
+- Workers have 128MB memory limit
+- CPU time is limited per request
+- Consider cold start performance
+- Bundle size impacts deployment time
+
+## Error Handling and Debugging
+
+### Error Handling Patterns
+- Use ErrorBoundary components for React errors
+- Implement proper try-catch for async operations
+- Provide user-friendly Arabic error messages
+- Log errors for debugging (without exposing secrets)
+
+### Debugging Workflow
+1. Check browser console for client-side errors
+2. Review Wrangler logs for Worker errors
+3. Use TypeScript type checking to catch issues early
+4. Test with Arabic content to verify RTL support
+5. Verify responsive behavior across breakpoints
+
+### Common Issues
+- **Build failures**: Check dependency versions, run `npm install`
+- **Type errors**: Update `tsconfig.json` paths, check imports
+- **Lint errors**: Run `npm run lint` with `--fix` flag
+- **RTL issues**: Test with Arabic text, verify CSS logical properties
+- **Worker errors**: Check Wrangler configuration, environment variables
+
+## Build and Deployment Workflow
+
+### Pre-deployment Checklist
+- [ ] All tests pass
+- [ ] Type checking passes
+- [ ] Linting passes with no warnings
+- [ ] Build completes successfully
+- [ ] Manual testing completed
+- [ ] RTL/Arabic support verified
+- [ ] No secrets in code
+- [ ] Environment variables documented
+
+### Deployment Process
+1. Merge PR to main branch
+2. CI/CD runs tests and builds
+3. Deploy to Cloudflare Workers via Wrangler
+4. Verify deployment in production
+5. Monitor for errors in production logs
+
+### Rollback Procedure
+- If deployment fails, revert to previous version
+- Check Cloudflare Workers dashboard for errors
+- Review deployment logs for issues
+- Fix issues in new PR and redeploy
+
+## Working with Custom Agents
+
+The repository includes custom agents in `.github/agents/`:
+- Review agent configurations before modifying
+- Custom agents are specialized for specific tasks
+- Respect agent boundaries and permissions
+- Do not modify agent files without explicit request
+- Use agents as documented in their configuration files
+
+## Monorepo Coordination
+
+### Cross-workspace Changes
+- Consider impact on all workspaces before changes
+- Update root package.json if affecting multiple workspaces
+- Run `npm run build` to verify all workspaces build
+- Test workspace dependencies after changes
+
+### Dependency Management
+- Add shared dependencies to root package.json
+- Add workspace-specific dependencies to workspace package.json
+- Run `npm run install:all` after dependency changes
+- Keep dependency versions consistent across workspaces
+
 ## Additional Resources
 
 - See individual workspace README files for more specific guidance
 - Check `*.md` files in root for additional documentation
 - Review existing components before creating new ones
+- Consult [GitHub Copilot Best Practices](https://docs.github.com/en/copilot/tutorials/coding-agent/get-the-best-results)
+- Review [Cloudflare Workers documentation](https://developers.cloudflare.com/workers/) for edge computing patterns

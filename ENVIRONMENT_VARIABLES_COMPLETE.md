@@ -28,7 +28,7 @@ These variables should be added to your `wrangler.toml` in the `[vars]` section:
 [vars]
 ENVIRONMENT = "production"
 AI_GATEWAY_ACCOUNT_ID = "85b01d19439ca53d3cfa740d2621a2bd"
-AI_GATEWAY_NAME = "symbolai-gateway"
+AI_GATEWAY_NAME = "symbol"
 EMAIL_FROM = "info@symbolai.net"
 EMAIL_FROM_NAME = "SymbolAI"
 ADMIN_EMAIL = "admin@symbolai.net"
@@ -40,7 +40,7 @@ ADMIN_EMAIL = "admin@symbolai.net"
 |----------|-------|---------|---------|
 | `ENVIRONMENT` | `production` | Environment identifier | All workers |
 | `AI_GATEWAY_ACCOUNT_ID` | `85b01d19439ca53d3cfa740d2621a2bd` | Cloudflare account for AI Gateway | AI integrations |
-| `AI_GATEWAY_NAME` | `symbolai-gateway` | AI Gateway instance name | AI API calls |
+| `AI_GATEWAY_NAME` | `symbol` | AI Gateway instance name | AI API calls |
 | `EMAIL_FROM` | `info@symbolai.net` | Sender email address | Email system |
 | `EMAIL_FROM_NAME` | `SymbolAI` | Sender display name | Email templates |
 | `ADMIN_EMAIL` | `admin@symbolai.net` | Admin notification email | System alerts |
@@ -173,7 +173,7 @@ Add at the end of the file:
 [vars]
 ENVIRONMENT = "production"
 AI_GATEWAY_ACCOUNT_ID = "85b01d19439ca53d3cfa740d2621a2bd"
-AI_GATEWAY_NAME = "symbolai-gateway"
+AI_GATEWAY_NAME = "symbol"
 EMAIL_FROM = "info@symbolai.net"
 EMAIL_FROM_NAME = "SymbolAI"
 ADMIN_EMAIL = "admin@symbolai.net"
