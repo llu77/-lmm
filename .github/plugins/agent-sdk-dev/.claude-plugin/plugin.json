@@ -1,0 +1,36 @@
+{
+  "name": "agent-sdk-dev",
+  "version": "1.0.0",
+  "displayName": "Claude Agent SDK Development Plugin",
+  "description": "Streamlines the development of Claude Agent SDK applications with scaffolding commands and verification agents",
+  "author": "Anthropic",
+  "commands": [
+    {
+      "name": "new-sdk-app",
+      "description": "Interactive setup for new Agent SDK projects",
+      "path": "commands/new-sdk-app.js"
+    }
+  ],
+  "agents": [
+    {
+      "name": "agent-sdk-verifier-py",
+      "description": "Validate Python SDK applications against best practices",
+      "path": "agents/agent-sdk-verifier-py.md"
+    },
+    {
+      "name": "agent-sdk-verifier-ts",
+      "description": "Validate TypeScript SDK applications against best practices",
+      "path": "agents/agent-sdk-verifier-ts.md"
+    }
+  ],
+  "engines": {
+    "claude-code": ">=1.0.0"
+  },
+  "keywords": [
+    "agent-sdk",
+    "scaffolding",
+    "verification",
+    "python",
+    "typescript"
+  ]
+}
