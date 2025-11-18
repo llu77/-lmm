@@ -71,6 +71,14 @@ npm run test             # Run tests (currently placeholder)
 
 ## Coding Guidelines
 
+### File Naming Conventions
+- **Components**: PascalCase for React components (e.g., `UserProfile.tsx`, `NavBar.tsx`)
+- **Utilities**: camelCase for utility files (e.g., `formatDate.ts`, `apiClient.ts`)
+- **Types**: PascalCase for type definition files (e.g., `UserTypes.ts`)
+- **Constants**: camelCase or SCREAMING_SNAKE_CASE in files (e.g., `constants.ts` with `API_URL`)
+- **Tests**: Match source file with `.test.ts` or `.spec.ts` suffix
+- **Styles**: kebab-case for CSS files (e.g., `user-profile.css`)
+
 ### File Paths
 - Use absolute paths with `@/*` alias for imports (e.g., `@/components/ui/button`)
 - Path alias is configured in `tsconfig.json`
@@ -95,6 +103,19 @@ npm run test             # Run tests (currently placeholder)
 - Use **ES modules** (`type: "module"` in package.json)
 - Use `import/export` syntax (not `require`)
 - Module resolution is set to "bundler"
+
+### Git Commit Messages
+Follow conventional commit format for clear history:
+- **feat**: New feature (e.g., `feat: add revenue export to PDF`)
+- **fix**: Bug fix (e.g., `fix: correct payroll calculation for bonuses`)
+- **docs**: Documentation changes (e.g., `docs: update README with deployment steps`)
+- **style**: Code style changes (e.g., `style: format files with Prettier`)
+- **refactor**: Code refactoring (e.g., `refactor: simplify employee data fetching`)
+- **test**: Adding or updating tests (e.g., `test: add unit tests for PDF export`)
+- **chore**: Maintenance tasks (e.g., `chore: update dependencies`)
+- **perf**: Performance improvements (e.g., `perf: optimize bundle size`)
+
+Keep messages concise, in present tense, and under 72 characters for the subject line.
 
 ## Important Files and Directories
 
@@ -343,3 +364,83 @@ The repository includes custom agents in `.github/agents/`:
 - Review existing components before creating new ones
 - Consult [GitHub Copilot Best Practices](https://docs.github.com/en/copilot/tutorials/coding-agent/get-the-best-results)
 - Review [Cloudflare Workers documentation](https://developers.cloudflare.com/workers/) for edge computing patterns
+
+## Area-Specific Instructions
+
+For more granular, context-specific guidance, you can create `.instructions.md` files in `.github/instructions/` directory. These files can target specific areas of the codebase using the `applyTo` property in frontmatter:
+
+```markdown
+---
+applyTo: "symbolai-worker/src/**/*.tsx"
+---
+# Frontend Component Guidelines
+- Always use Arabic-first text
+- Test RTL layout thoroughly
+- Include accessibility attributes
+```
+
+This allows you to provide specialized instructions for different parts of the monorepo without cluttering the main instructions file.
+
+## Code Examples and Anti-Patterns
+
+### Good Practices ✅
+
+**React Component with TypeScript:**
+```tsx
+interface UserProfileProps {
+  userId: string;
+  onUpdate?: (user: User) => void;
+}
+
+export const UserProfile: React.FC<UserProfileProps> = ({ userId, onUpdate }) => {
+  const user = useQuery(api.users.get, { userId });
+  // Component logic
+};
+```
+
+**RTL-Aware Styling:**
+```tsx
+<div className="ps-4 pe-2 text-start">
+  {/* Use logical properties for RTL support */}
+</div>
+```
+
+**Error Handling:**
+```tsx
+try {
+  await createRevenue(data);
+  toast.success("تم إضافة الإيراد بنجاح");
+} catch (error) {
+  toast.error("حدث خطأ أثناء إضافة الإيراد");
+  console.error("Revenue creation failed:", error);
+}
+```
+
+### Anti-Patterns ❌
+
+**Avoid hardcoded directions:**
+```tsx
+// ❌ Don't use hardcoded left/right
+<div className="text-left margin-right-4">
+
+// ✅ Use logical properties instead
+<div className="text-start me-4">
+```
+
+**Avoid any types:**
+```tsx
+// ❌ Don't use any
+const processData = (data: any) => { }
+
+// ✅ Use proper types
+const processData = (data: RevenueData) => { }
+```
+
+**Avoid inline styles for spacing:**
+```tsx
+// ❌ Don't use inline styles
+<div style={{ paddingRight: '16px' }}>
+
+// ✅ Use Tailwind classes
+<div className="pe-4">
+```
