@@ -1,5 +1,7 @@
 # نظام LMM للإدارة المالية
 
+[![Dependency review](https://github.com/llu77/-lmm/actions/workflows/dependency-review.yml/badge.svg)](https://github.com/llu77/-lmm/actions/workflows/dependency-review.yml)
+
 <div dir="rtl">
 
 ## 📋 نظرة عامة
