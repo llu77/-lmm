@@ -1,6 +1,6 @@
 name = "symbolai-worker"
 main = "./dist/_worker.js/index.js"
-compatibility_date = "2025-01-15"
+compatibility_date = "2024-10-22"
 compatibility_flags = ["nodejs_compat"]
 
 # Static Assets
@@ -11,6 +11,7 @@ directory = "./dist"
 # Observability (Logging & Analytics)
 [observability]
 enabled = true
+head_sampling_rate = 1
 
 # D1 Database Binding
 [[d1_databases]]
@@ -18,15 +19,42 @@ binding = "DB"
 database_name = "symbolai-financial-db"
 database_id = "3897ede2-ffc0-4fe8-8217-f9607c89bef2"
 
-# KV Namespace for Sessions
+# KV Namespaces
+# Sessions - User authentication and session management
 [[kv_namespaces]]
 binding = "SESSIONS"
-id = "your_kv_namespace_id_here"
+id = "8f91016b728c4a289fdfdec425492aab"
+
+# Cache - Application caching
+[[kv_namespaces]]
+binding = "CACHE"
+id = "a497973607cf45bbbee76b64da9ac947"
+
+# Files - File storage metadata
+[[kv_namespaces]]
+binding = "FILES"
+id = "d9961a2085d44c669bbe6c175f3611c1"
+
+# Rate Limiting - API rate limiting
+[[kv_namespaces]]
+binding = "RATE_LIMIT"
+id = "797b75482e6c4408bb40f6d72f2512af"
+
+# OAuth - OAuth token storage
+[[kv_namespaces]]
+binding = "OAUTH_KV"
+id = "57a4eb48d4f047e7aea6b4692e174894"
 
 # R2 Bucket for Payroll PDFs
 [[r2_buckets]]
 binding = "PAYROLL_PDFS"
 bucket_name = "symbolai-payrolls"
+
+# VPC Services (Cloudflare Tunnel)
+[[vpc_services]]
+binding = "VPC_SERVICE"
+service_id = "019a6a59-cbb4-7031-9840-e79c64aeae7f"
+remote = true
 
 # Workflows Binding
 [[workflows]]
@@ -56,16 +84,16 @@ name = "CloudflareMCPAgent"
 class_name = "CloudflareMCPAgent"
 script_name = "symbolai-worker"
 
-# Agent migrations (for Durable Objects)
+# Migrations (Updated to use new_sqlite_classes)
 [[migrations]]
 tag = "v1"
-new_classes = ["CloudflareMCPAgent"]
+new_sqlite_classes = ["CloudflareMCPAgent"]
 
 # Environment Variables / Secrets
 [vars]
 ENVIRONMENT = "production"
 AI_GATEWAY_ACCOUNT_ID = "85b01d19439ca53d3cfa740d2621a2bd"
-AI_GATEWAY_NAME = "symbolai-gateway"
+AI_GATEWAY_NAME = "symbol"
 
 # Email Configuration
 EMAIL_FROM = "info@symbolai.net"

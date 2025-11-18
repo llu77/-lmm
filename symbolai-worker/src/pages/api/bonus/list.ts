@@ -1,104 +1,70 @@
 import type { APIRoute } from 'astro';
-import { requireAuthWithPermissions, requirePermission, validateBranchAccess } from '@/lib/permissions';
+import {
+  authenticateRequest,
+  resolveBranchFilter,
+  createSuccessResponse,
+  withErrorHandling
+} from '@/lib/api-helpers';
 import { bonusQueries } from '@/lib/db';
 
-export const GET: APIRoute = async ({ request, locals }) => {
-  // Check authentication with permissions
-  const authResult = await requireAuthWithPermissions(
-    locals.runtime.env.SESSIONS,
-    locals.runtime.env.DB,
-    request
-  );
+export const GET: APIRoute = withErrorHandling(async ({ request, locals }) => {
+  // Authenticate request with required permission
+  const authResult = await authenticateRequest({
+    kv: locals.runtime.env.SESSIONS,
+    db: locals.runtime.env.DB,
+    request,
+    requiredPermission: 'canViewReports'
+  });
 
   if (authResult instanceof Response) {
     return authResult;
   }
 
-  // Check permission to view reports (needed to view bonus)
-  const permError = requirePermission(authResult, 'canViewReports');
-  if (permError) {
-    return permError;
+  // Extract query parameters
+  const url = new URL(request.url);
+  const requestedBranchId = url.searchParams.get('branchId');
+  const month = url.searchParams.get('month');
+  const year = url.searchParams.get('year');
+
+  // Resolve branch filtering (use session branch if not provided)
+  const branchId = await resolveBranchFilter({
+    session: authResult,
+    requestedBranchId: requestedBranchId || authResult.branchId || 'BR001'
+  });
+
+  if (branchId instanceof Response) {
+    return branchId;
   }
 
-  try {
-    const url = new URL(request.url);
-    let branchId = url.searchParams.get('branchId');
-    const month = url.searchParams.get('month');
-    const year = url.searchParams.get('year');
+  // Default to current month if not provided
+  let finalMonth = month;
+  let finalYear = year ? parseInt(year) : undefined;
 
-    // If no branchId provided, use user's branch
-    if (!branchId) {
-      branchId = authResult.permissions.branchId || 'BR001';
-    }
-
-    // Validate branch access if branchId is specified
-    if (branchId) {
-      const branchError = validateBranchAccess(authResult, branchId);
-      if (branchError) {
-        return branchError;
-      }
-    }
-
-    if (!month || !year) {
-      // Default to current month
-      const now = new Date();
-      const monthNames = [
-        'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
-        'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'
-      ];
-
-      const result = await bonusQueries.getByBranchAndPeriod(
-        locals.runtime.env.DB,
-        branchId,
-        monthNames[now.getMonth()],
-        now.getFullYear()
-      );
-
-      return new Response(
-        JSON.stringify({
-          success: true,
-          bonusRecords: result.results || [],
-          count: result.results?.length || 0
-        }),
-        {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
-    }
-
-    const result = await bonusQueries.getByBranchAndPeriod(
-      locals.runtime.env.DB,
-      branchId,
-      month,
-      parseInt(year)
-    );
-
-    // Parse employee bonuses JSON
-    const bonusRecords = (result.results || []).map((record: any) => ({
-      ...record,
-      employee_bonuses: record.employee_bonuses ? JSON.parse(record.employee_bonuses) : []
-    }));
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        bonusRecords,
-        count: bonusRecords.length
-      }),
-      {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    );
-  } catch (error) {
-    console.error('List bonus error:', error);
-    return new Response(
-      JSON.stringify({ error: 'حدث خطأ أثناء جلب البيانات' }),
-      {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    );
+  if (!finalMonth || !finalYear) {
+    const now = new Date();
+    const monthNames = [
+      'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
+      'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'
+    ];
+    finalMonth = monthNames[now.getMonth()];
+    finalYear = now.getFullYear();
   }
-};
+
+  const result = await bonusQueries.getByBranchAndPeriod(
+    locals.runtime.env.DB,
+    branchId as string,
+    finalMonth,
+    finalYear!
+  );
+
+  // Parse employee bonuses JSON
+  const bonusRecords = (result.results || []).map((record: any) => ({
+    ...record,
+    employee_bonuses: record.employee_bonuses ? JSON.parse(record.employee_bonuses) : []
+  }));
+
+  return createSuccessResponse({
+    bonusRecords,
+    count: bonusRecords.length
+  });
+});

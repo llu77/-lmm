@@ -1,4 +1,5 @@
-/// <reference types="astro/client" />
+// eslint-disable-next-line @typescript-eslint/triple-slash-reference
+/// <reference path="../.astro/types.d.ts" />
 /// <reference types="@cloudflare/workers-types" />
 
 /**
@@ -6,6 +7,9 @@
  *
  * This file defines the types for the Cloudflare Workers runtime environment
  * including bindings for D1, KV, R2, AI, and other Cloudflare services.
+ *
+ * Note: Astro 5.x auto-generates types in .astro/types.d.ts
+ * Run `astro sync` to update type definitions.
  */
 
 type D1Database = import('@cloudflare/workers-types').D1Database;
@@ -19,15 +23,20 @@ type Workflow = import('@cloudflare/workers-types').Workflow;
 /**
  * Runtime Environment Interface
  */
-interface RuntimeEnv {
+export interface RuntimeEnv {
   // Database Bindings
   DB: D1Database;
 
   // KV Namespace Bindings
   SESSIONS: KVNamespace;
+  CACHE: KVNamespace;
+  FILES: KVNamespace;
+  RATE_LIMIT: KVNamespace;
+  OAUTH_KV: KVNamespace;
 
   // R2 Bucket Bindings
-  PAYROLL_PDFS: R2Bucket;
+  PAYROLL_BUCKET: R2Bucket;
+  STORAGE: R2Bucket;
 
   // AI Binding
   AI: Ai;
@@ -64,7 +73,7 @@ interface RuntimeEnv {
 /**
  * User Type (from database)
  */
-type User = {
+export type User = {
   id: number;
   username: string;
   email: string;
@@ -80,11 +89,12 @@ type User = {
  */
 declare namespace App {
   interface Locals {
-    // Cloudflare Runtime (set by adapter)
+    // Cloudflare Runtime (set by Cloudflare adapter)
     runtime: {
       env: RuntimeEnv;
-      cf: CfProperties;
-      ctx: ExecutionContext;
+      cf: import('@cloudflare/workers-types').IncomingRequestCfProperties;
+      caches: import('@cloudflare/workers-types').CacheStorage;
+      ctx: import('@cloudflare/workers-types').ExecutionContext;
     };
 
     // Authentication (set by middleware)
@@ -104,31 +114,6 @@ declare namespace App {
     requestId?: string;
     startTime?: number;
   }
-}
-
-/**
- * Cloudflare Request Properties
- */
-interface CfProperties {
-  asn: number;
-  colo: string;
-  city?: string;
-  continent?: string;
-  country?: string;
-  latitude?: string;
-  longitude?: string;
-  postalCode?: string;
-  region?: string;
-  regionCode?: string;
-  timezone?: string;
-}
-
-/**
- * Execution Context for Cloudflare Workers
- */
-interface ExecutionContext {
-  waitUntil(promise: Promise<any>): void;
-  passThroughOnException(): void;
 }
 
 /**

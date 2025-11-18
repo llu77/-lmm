@@ -1,5 +1,16 @@
 {
   "mcpServers": {
+    "cloudflare-ai": {
+      "command": "node",
+      "args": [
+        "/root/.claude/mcp-servers/cloudflare-ai/dist/index.js"
+      ],
+      "env": {
+        "CLOUDFLARE_ACCOUNT_ID": "85b01d19439ca53d3cfa740d2621a2bd",
+        "CLOUDFLARE_GATEWAY_NAME": "symbol"
+      },
+      "disabled": false
+    },
     "cloudflare-docs": {
       "command": "npx",
       "args": ["-y", "mcp-remote", "https://docs.mcp.cloudflare.com/sse"],

@@ -18,10 +18,32 @@ export default defineConfig({
   integrations: [
     react()
   ],
+  // Optimize build for memory-constrained environments
+  build: {
+    inlineStylesheets: 'auto',
+    split: true,
+    excludeMiddleware: false
+  },
   vite: {
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, './src')
+        '@': path.resolve(__dirname, './src'),
+        // Force using main zod export to avoid versioned import issues
+        'zod/v3': 'zod',
+        'zod/v4': 'zod'
+      }
+    },
+    optimizeDeps: {
+      include: ['zod']
+    },
+    // Build optimizations for memory efficiency
+    build: {
+      minify: 'esbuild',
+      cssMinify: true,
+      rollupOptions: {
+        output: {
+          manualChunks: undefined, // Let Vite handle chunking automatically
+        }
       }
     },
     ssr: {
@@ -32,7 +54,8 @@ export default defineConfig({
         'node:fs/promises',
         'node:stream',
         'node:url',
-        'node:crypto'
+        'node:crypto',
+        'node:async_hooks'
       ]
     }
   }

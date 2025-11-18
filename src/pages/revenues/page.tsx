@@ -120,6 +120,7 @@ function RevenuesContent({ branchId, branchName }: { branchId: string; branchNam
   
   // TODO: Replace with API calls to Cloudflare backend
   const [stats] = useState<any>(undefined);
+  const [revenues, setRevenues] = useState<any[]>([]);
 
   useEffect(() => {
     // TODO: Fetch revenue stats and list from Cloudflare API
@@ -274,7 +275,9 @@ function RevenuesContent({ branchId, branchName }: { branchId: string; branchNam
   return (
     <div className="space-y-6">
       {/* AI Smart Notifications */}
-      <NotificationBanner branchId={branchId} />
+      <NotificationBanner variant="info">
+        <p>فرع: {branchName}</p>
+      </NotificationBanner>
 
       {/* Statistics Cards */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-5">
@@ -589,8 +592,8 @@ function RevenuesContent({ branchId, branchName }: { branchId: string; branchNam
                         })),
                       });
 
-                      if (result.success && result.pdfUrl) {
-                        window.open(result.pdfUrl, '_blank');
+                      if (result.success && (result.data as { pdfUrl?: string })?.pdfUrl) {
+                        window.open((result.data as { pdfUrl: string }).pdfUrl, '_blank');
                         toast.success("✅ تم إنشاء التقرير بنجاح!");
 
                         // TODO: Trigger Zapier webhook with new backend
@@ -648,8 +651,8 @@ function RevenuesContent({ branchId, branchName }: { branchId: string; branchNam
                         })),
                       });
 
-                      if (result.success && result.pdfUrl) {
-                        const printWindow = window.open(result.pdfUrl, '_blank');
+                      if (result.success && (result.data as { pdfUrl?: string })?.pdfUrl) {
+                        const printWindow = window.open((result.data as { pdfUrl: string }).pdfUrl, '_blank');
                         if (printWindow) {
                           printWindow.focus();
                           setTimeout(() => {

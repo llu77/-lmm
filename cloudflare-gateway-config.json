@@ -1,0 +1,16 @@
+{
+  "gateway_id": "3c9bde8186fe4c868defcc441f28ca5e",
+  "gateway_domain": "xnoojzri3g.cloudflare-gateway.com",
+  "dns_over_https": "https://xnoojzri3g.cloudflare-gateway.com/dns-query",
+  "endpoints": {
+    "ipv4": {
+      "enabled": false,
+      "address": "172.64.36.1"
+    },
+    "ipv6": {
+      "enabled": true,
+      "address": "2a06:98c1:54::20:bbc0"
+    }
+  },
+  "description": "Cloudflare Zero Trust Gateway configuration for DNS filtering and security"
+}

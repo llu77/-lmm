@@ -40,7 +40,8 @@ type EmailLogDoc = any;
 
 function SettingsTabContent() {
   const [settings, setSettings] = useState<any>(undefined);
-  useEffect(() => { // TODO: fetch("/api/email-settings/all").then(r => r.json()).then(setSettings); }, []);
+  // TODO: fetch("/api/email-settings/all").then(r => r.json()).then(setSettings);
+  useEffect(() => { }, []);
   // TODO: API endpoint /api/email-settings/updatesendersettings
   // TODO: API endpoint /api/email-settings/updatedefaultrecipients
   // TODO: API endpoint /api/email-settings/updatedailyschedule
@@ -554,10 +555,14 @@ function SystemSupportInner() {
   // TODO: Connect to backend API
   const emailStats = undefined as EmailStats | undefined;
   const emailLogs = undefined as EmailLogDoc[] | undefined;
-  const sendEmail = async () => {}; // TODO: useAction(api.emailSystem.sendEmail);
-  const sendTemplateEmail = async () => {}; // TODO: useAction(api.emailSystem.sendTemplateEmail);
-  const testEmail = async () => {}; // TODO: useAction(api.emailSystem.testEmail);
-  const getTemplatePreview = async () => {}; // TODO: useAction(api.emailSystem.getTemplatePreview);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const sendEmail = async (_params?: unknown) => {}; // TODO: useAction(api.emailSystem.sendEmail);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const sendTemplateEmail = async (_params?: unknown) => {}; // TODO: useAction(api.emailSystem.sendTemplateEmail);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const testEmail = async (_params?: unknown) => {}; // TODO: useAction(api.emailSystem.testEmail);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const getTemplatePreview = async (_params?: unknown): Promise<{ html?: string }> => { return {}; }; // TODO: useAction(api.emailSystem.getTemplatePreview);
 
   const [selectedTab, setSelectedTab] = useState("overview");
   const [sending, setSending] = useState(false);
@@ -652,7 +657,7 @@ function SystemSupportInner() {
         templateId,
         variables,
       });
-      setPreviewHtml(preview.html);
+      setPreviewHtml(preview.html || "");
       toast.success("✅ تم إنشاء المعاينة");
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "فشل إنشاء المعاينة";

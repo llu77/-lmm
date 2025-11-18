@@ -19,6 +19,9 @@ import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Tooltip, Legend, Responsive
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 
+// Type helper for Convex documents
+type Doc<T extends string> = any;
+
 type DashboardStats = {
   totalRevenue: number;
   totalExpenses: number;

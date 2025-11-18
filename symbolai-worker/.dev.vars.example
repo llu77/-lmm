@@ -1,0 +1,19 @@
+# Environment Variables for Local Development
+# Copy this file to .dev.vars and fill in your actual values
+# DO NOT commit .dev.vars to version control
+
+# Anthropic API Key (for AI features)
+ANTHROPIC_API_KEY=your_anthropic_api_key_here
+
+# Resend API Key (for email)
+RESEND_API_KEY=your_resend_api_key_here
+RESEND_WEBHOOK_SECRET=your_resend_webhook_secret_here
+
+# Zapier Integration
+ZAPIER_WEBHOOK_URL=your_zapier_webhook_url_here
+
+# Session Secret
+SESSION_SECRET=your_session_secret_here
+
+# Note: KV namespaces, D1 databases, and R2 buckets are configured in wrangler.toml
+# For local development, use: wrangler dev --local

@@ -15,6 +15,7 @@ export default [
       '.claude/**',
       'cloudflare-analysis/**',
       'cloudflare-migration/**',
+      'symbolai-migration/**',
     ],
   },
   js.configs.recommended,

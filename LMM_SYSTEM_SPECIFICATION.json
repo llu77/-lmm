@@ -8,7 +8,9 @@
     "routing": "react-router-dom",
     "ui_framework": "nativebase-v3.4-inspired",
     "styling": "tailwindcss",
-    "backend": "convex",
+    "backend": "cloudflare-workers",
+    "database": "cloudflare-d1",
+    "storage": "cloudflare-kv",
     "min_node_version": "18.0.0",
     "rtl_support": true,
     "primary_language": "arabic"
@@ -16,9 +18,9 @@
 
   "architecture": {
     "pattern": "component-driven-architecture",
-    "state_management": "react-hooks + convex-queries",
-    "data_fetching": "convex-real-time-queries",
-    "authentication": "convex-auth-oauth",
+    "state_management": "react-hooks + custom-api",
+    "data_fetching": "fetch-api",
+    "authentication": "custom-session-based",
     "routing": "client-side-spa",
 
     "directory_structure": {
@@ -48,8 +50,8 @@
         },
 
         "convex/": {
-          "_generated/": "Auto-generated Convex API types",
-          "api.js": "Convex API endpoints"
+          "description": "REMOVED - Using Cloudflare D1 and KV instead",
+          "note": "Migrated to symbolai-worker with Astro + Cloudflare"
         }
       }
     },
@@ -57,7 +59,10 @@
     "core_technologies": {
       "react": "^18.3.0",
       "react-router-dom": "Latest",
-      "convex": "Real-time database and auth",
+      "convex": "REMOVED - Migrated to Cloudflare D1 and Workers",
+      "cloudflare-workers": "Edge computing platform",
+      "cloudflare-d1": "SQLite database at the edge",
+      "cloudflare-kv": "Key-value storage",
       "tailwindcss": "^3.4.0",
       "typescript": "^5.3.0",
       "react-hook-form": "^7.50.0",
@@ -1069,40 +1074,34 @@
   },
 
   "state_management": {
-    "pattern": "hooks + convex",
+    "pattern": "hooks + fetch-api",
 
     "data_fetching": {
-      "library": "convex",
+      "library": "native-fetch",
       "hooks": [
         {
-          "name": "useQuery",
-          "description": "Real-time data fetching with automatic updates",
-          "example": "const revenues = useQuery(api.revenues.list, params)",
+          "name": "useEffect + useState",
+          "description": "Data fetching with React hooks",
+          "example": "useEffect(() => { fetch('/api/revenues').then(...) }, [])",
           "return_type": "T | undefined",
-          "loading_state": "undefined when loading"
+          "loading_state": "managed with useState"
         },
         {
-          "name": "useMutation",
-          "description": "Data mutation operations",
-          "example": "const createRevenue = useMutation(api.revenues.create)",
-          "return_type": "async function"
-        },
-        {
-          "name": "useAction",
-          "description": "Server actions",
-          "example": "const processPayroll = useAction(api.payroll.generate)",
-          "return_type": "async function"
+          "name": "custom hooks",
+          "description": "Reusable data fetching hooks",
+          "example": "const { data, loading, error } = useData('/api/revenues')",
+          "return_type": "{ data, loading, error }"
         }
       ]
     },
 
     "authentication": {
-      "provider": "Convex Auth",
+      "provider": "Custom Session-Based Auth",
       "components": [
         "Authenticated - Render when logged in",
         "Unauthenticated - Render when logged out",
         "AuthLoading - Render during auth check",
-        "SignInButton - OAuth login button"
+        "SignInButton - Login form button"
       ],
       "oauth_providers": ["Google", "GitHub"],
       "hooks": [
@@ -1333,8 +1332,8 @@
     ],
 
     "caching": {
-      "react_query": "Client-side data caching",
-      "convex": "Real-time subscription optimization"
+      "cloudflare_kv": "Edge key-value caching",
+      "cloudflare_cache": "HTTP response caching"
     },
 
     "build": {

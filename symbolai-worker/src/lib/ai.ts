@@ -24,6 +24,7 @@ interface AIResponse {
 /**
  * Call Anthropic Claude via Cloudflare AI Gateway
  * Benefits: Caching, rate limiting, logging, cost tracking
+ * Default model: claude-3-5-sonnet-20241022 (Claude 3.5 Sonnet - latest)
  */
 export async function callClaudeViaGateway(
   env: AIEnv,
@@ -36,7 +37,7 @@ export async function callClaudeViaGateway(
   } = {}
 ): Promise<AIResponse> {
   const {
-    model = 'claude-3-5-sonnet-20241022',
+    model = 'claude-3-5-sonnet-20241022', // Default: Claude 3.5 Sonnet (latest)
     maxTokens = 4096,
     temperature = 0.7,
     system
@@ -104,13 +105,21 @@ export async function callWorkersAI(
   } = options;
 
   try {
-    const response = await env.AI.run(model, {
-      messages: [
-        { role: 'user', content: prompt }
-      ],
-      max_tokens: maxTokens,
-      temperature
-    });
+    const response = await env.AI.run(
+      model,
+      {
+        messages: [
+          { role: 'user', content: prompt }
+        ],
+        max_tokens: maxTokens,
+        temperature
+      },
+      {
+        gateway: {
+          id: env.AI_GATEWAY_NAME || 'symbol'
+        }
+      }
+    );
 
     return {
       content: response.response || response.text || '',
@@ -337,4 +346,68 @@ export async function generatePayrollSummary(
     console.error('Payroll summary error:', error);
     return `ملخص كشف رواتب ${payrollData.month} ${payrollData.year}: ${payrollData.totalEmployees} موظف، صافي المستحق ${payrollData.netSalary.toLocaleString('ar-EG')} جنيه.`;
   }
+}
+
+/**
+ * Call Claude Opus for complex reasoning and best thinking
+ * Use this for tasks requiring deep analysis, complex problem solving, or extended reasoning
+ */
+export async function callClaudeOpusForThinking(
+  env: AIEnv,
+  prompt: string,
+  options: {
+    maxTokens?: number;
+    temperature?: number;
+    system?: string;
+  } = {}
+): Promise<AIResponse> {
+  const {
+    maxTokens = 8192, // Higher token limit for complex thinking
+    temperature = 0.7,
+    system
+  } = options;
+
+  return await callClaudeViaGateway(
+    env,
+    [{ role: 'user', content: prompt }],
+    {
+      model: 'claude-3-opus-20240229', // Best model for complex thinking
+      maxTokens,
+      temperature,
+      system: system || 'أنت مساعد ذكي متخصص في التحليل العميق وحل المشكلات المعقدة. فكر بعناية وقدم تحليلاً شاملاً ومنطقياً.'
+    }
+  );
+}
+
+/**
+ * Call Claude 3.5 Sonnet (latest and most capable Sonnet model)
+ * استدعاء Claude 3.5 Sonnet عبر AI Binding
+ * Best balance of performance, speed, and cost
+ * توازن مثالي بين الأداء والسرعة والتكلفة
+ */
+export async function callClaudeSonnet35(
+  env: AIEnv,
+  prompt: string,
+  options: {
+    maxTokens?: number;
+    temperature?: number;
+    system?: string;
+  } = {}
+): Promise<AIResponse> {
+  const {
+    maxTokens = 4096,
+    temperature = 0.7,
+    system
+  } = options;
+
+  return await callClaudeViaGateway(
+    env,
+    [{ role: 'user', content: prompt }],
+    {
+      model: 'claude-3-5-sonnet-20241022', // Claude 3.5 Sonnet - Latest version
+      maxTokens,
+      temperature,
+      system: system || 'أنت مساعد مالي ذكي متخصص في مساعدة الشركات الصغيرة والمتوسطة. تجيب باللغة العربية بشكل احترافي ومفيد.'
+    }
+  );
 }
