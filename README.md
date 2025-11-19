@@ -430,6 +430,34 @@ await createRevenue({
 
 ---
 
+## 🤖 GitHub Copilot Pair Programming Agent
+
+This repository includes a comprehensive **Pair Programming Agent** for GitHub Copilot that provides professional AI-assisted collaborative development.
+
+### Features
+
+- **7 Collaboration Modes**: Driver, Navigator, Switch, TDD, Review, Mentor, Debug
+- **Quality Verification**: Automatic truth score evaluation (0.90-1.0 scale)
+- **Comprehensive Commands**: Code, testing, review, Git, and session management
+- **Real-World Workflows**: Feature implementation, debugging, and refactoring flows
+- **Best Practices**: Guidance for session management and code quality
+
+### Quick Start
+
+Use the agent in GitHub Copilot:
+
+```
+@pair-programming help me implement this feature in TDD mode
+```
+
+```
+@pair-programming review this code for security issues
+```
+
+For complete documentation, see [PAIR_PROGRAMMING_AGENT.md](./PAIR_PROGRAMMING_AGENT.md)
+
+---
+
 ## 📄 الرخصة
 
 هذا المشروع خاص بشركة LMM.
