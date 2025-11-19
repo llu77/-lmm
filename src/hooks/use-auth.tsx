@@ -1,34 +1,9 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { apiClient } from '@/lib/api-client';
+import type { User } from '@/types';
 
-export interface User {
-  id: string;
-  username: string;
-  fullName?: string;
-  email?: string;
-  role: string;
-  roleAr?: string;
-  branchId?: string;
-  branchName?: string;
-  permissions?: {
-    canViewAllBranches?: boolean;
-    canManageUsers?: boolean;
-    canManageSettings?: boolean;
-    canManageBranches?: boolean;
-    canAddRevenue?: boolean;
-    canAddExpense?: boolean;
-    canViewReports?: boolean;
-    canManageEmployees?: boolean;
-    canManageOrders?: boolean;
-    canManageRequests?: boolean;
-    canApproveRequests?: boolean;
-    canGeneratePayroll?: boolean;
-    canManageBonus?: boolean;
-    canSubmitRequests?: boolean;
-    canViewOwnRequests?: boolean;
-    canViewOwnBonus?: boolean;
-  };
-}
+// Re-export User type for backward compatibility
+export type { User } from '@/types';
 
 interface AuthContextType {
   user: User | null;
