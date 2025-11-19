@@ -393,7 +393,10 @@ interface UserProfileProps {
 }
 
 export const UserProfile: React.FC<UserProfileProps> = ({ userId, onUpdate }) => {
-  const user = useQuery(api.users.get, { userId });
+  const { data: user } = useQuery({
+    queryKey: ['users', userId],
+    queryFn: () => fetchUser(userId),
+  });
   // Component logic
 };
 ```
