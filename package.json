@@ -8,6 +8,9 @@
     "cloudflare-worker",
     "my-mcp-server-github-auth"
   ],
+  "overrides": {
+    "zod": "^3.25.76"
+  },
   "scripts": {
     "postinstall": "npm run install:workers && npm run install:mcp",
     "build": "npm run build:workers && npm run build:mcp",
@@ -55,7 +58,7 @@
     "next-themes": "^0.4.6",
     "react": "^18.3.1",
     "react-day-picker": "^9.11.1",
-    "react-dom": "^19.2.0",
+    "react-dom": "^18.3.1",
     "react-resizable-panels": "^3.0.6",
     "react-router-dom": "^7.9.5",
     "sonner": "^2.0.7",
@@ -64,8 +67,8 @@
   "devDependencies": {
     "@eslint/js": "^9.39.1",
     "@types/node": "^24.10.0",
-    "@types/react": "^19.2.2",
-    "@types/react-dom": "^19.2.3",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.5",
     "eslint": "^9.16.0",
     "globals": "^16.5.0",
     "typescript": "^5.9.3",

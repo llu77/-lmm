@@ -21,7 +21,7 @@ class ApiClient {
         credentials: 'include', // Important for cookies
       });
 
-      const data = await response.json();
+      const data: ApiResponse<T> = await response.json();
 
       if (!response.ok && data.error) {
         throw new Error(data.error);
