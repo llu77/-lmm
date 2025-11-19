@@ -424,7 +424,7 @@ try {
 **Avoid hardcoded directions:**
 ```tsx
 // ❌ Don't use hardcoded left/right
-<div className="text-left margin-right-4">
+<div className="text-left mr-4">
 
 // ✅ Use logical properties instead
 <div className="text-start me-4">
