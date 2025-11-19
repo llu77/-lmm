@@ -7,6 +7,7 @@ export default [
     ignores: [
       'node_modules/**',
       'dist/**',
+      '**/dist/**',
       'build/**',
       '.wrangler/**',
       'coverage/**',
@@ -16,6 +17,7 @@ export default [
       'cloudflare-analysis/**',
       'cloudflare-migration/**',
       'symbolai-migration/**',
+      '**/.astro/**',
     ],
   },
   js.configs.recommended,

@@ -13,7 +13,7 @@ export interface EmailError {
   message: string;
   severity: 'low' | 'medium' | 'high' | 'critical';
   retryable: boolean;
-  originalError?: any;
+  originalError?: unknown;
 }
 
 export interface EmailRetryConfig {
@@ -75,7 +75,7 @@ const DEFAULT_FALLBACK_CONFIG: EmailFallbackConfig = {
 // Error Classification
 // =====================================================
 
-export function classifyError(error: any): EmailError {
+export function classifyError(error: unknown): EmailError {
   const errorMessage = error?.message || String(error);
   const errorCode = error?.code || error?.statusCode;
 
