@@ -13,7 +13,8 @@
     "sync": "astro sync",
     "type-check": "astro check",
     "deploy": "wrangler deploy",
-    "test:mcp": "npx -p mcp-remote@latest mcp-remote-client"
+    "test:mcp": "npx -p mcp-remote@latest mcp-remote-client",
+    "reasoningbank": "tsx src/scripts/reasoningbank-cli.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.20.0",
@@ -60,6 +61,7 @@
     "postcss": "^8.4.35",
     "tailwindcss": "^3.4.1",
     "tsup": "^8.5.0",
+    "tsx": "^4.19.2",
     "typescript": "^5.9.3",
     "wrangler": "^4.45.3"
   }

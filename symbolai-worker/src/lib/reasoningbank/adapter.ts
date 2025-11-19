@@ -192,8 +192,11 @@ class InMemoryAgentDBAdapter implements AgentDBAdapter {
     const words1 = new Set(s1.toLowerCase().match(/\w+/g) || []);
     const words2 = new Set(s2.toLowerCase().match(/\w+/g) || []);
     
-    const intersection = new Set([...words1].filter(w => words2.has(w)));
-    const union = new Set([...words1, ...words2]);
+    const words1Array = Array.from(words1);
+    const words2Array = Array.from(words2);
+    
+    const intersection = new Set(words1Array.filter(w => words2.has(w)));
+    const union = new Set(words1Array.concat(words2Array));
     
     return intersection.size / union.size;
   }

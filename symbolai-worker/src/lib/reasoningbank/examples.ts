@@ -325,8 +325,3 @@ export async function runAllExamples() {
   
   console.log('\n=== All examples completed ===\n');
 }
-
-// Run examples if this file is executed directly
-if (import.meta.url === `file://${process.argv[1]}`) {
-  runAllExamples().catch(console.error);
-}
