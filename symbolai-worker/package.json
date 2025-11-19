@@ -14,7 +14,8 @@
     "type-check": "astro check",
     "deploy": "wrangler deploy",
     "test:mcp": "npx -p mcp-remote@latest mcp-remote-client",
-    "reasoningbank": "tsx src/scripts/reasoningbank-cli.ts"
+    "reasoningbank": "tsx src/scripts/reasoningbank-cli.ts",
+    "test:reasoningbank": "tsx src/scripts/test-reasoningbank.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.20.0",
