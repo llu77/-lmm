@@ -54,7 +54,7 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+        run: npm install --legacy-peer-deps --ignore-scripts
 
       - name: Build symbolai-worker
         run: |
@@ -102,7 +102,7 @@ jobs:
           name: worker-builds
 
       - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+        run: npm install --legacy-peer-deps --ignore-scripts
 
       - name: Deploy to Cloudflare Workers (Production)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -170,7 +170,7 @@ jobs:
           name: worker-builds
 
       - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+        run: npm install --legacy-peer-deps --ignore-scripts
 
       - name: Deploy to Cloudflare Workers (Production)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -227,7 +227,7 @@ jobs:
           name: worker-builds
 
       - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+        run: npm install --legacy-peer-deps --ignore-scripts
 
       - name: Deploy to Cloudflare Pages
         id: deploy
