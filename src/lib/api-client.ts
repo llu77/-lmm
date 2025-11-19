@@ -1,42 +1,10 @@
 // API Client for Cloudflare backend
+import type { ApiResponse } from '@/types';
+
 const API_BASE = '/api';
 
-export interface User {
-  id: string;
-  username: string;
-  fullName?: string;
-  email?: string;
-  role: string;
-  roleAr?: string;
-  branchId?: string;
-  branchName?: string;
-  permissions?: {
-    canViewAllBranches?: boolean;
-    canManageUsers?: boolean;
-    canManageSettings?: boolean;
-    canManageBranches?: boolean;
-    canAddRevenue?: boolean;
-    canAddExpense?: boolean;
-    canViewReports?: boolean;
-    canManageEmployees?: boolean;
-    canManageOrders?: boolean;
-    canManageRequests?: boolean;
-    canApproveRequests?: boolean;
-    canGeneratePayroll?: boolean;
-    canManageBonus?: boolean;
-    canSubmitRequests?: boolean;
-    canViewOwnRequests?: boolean;
-    canViewOwnBonus?: boolean;
-  };
-}
-
-export interface ApiResponse<T = unknown> {
-  success?: boolean;
-  data?: T;
-  error?: string;
-  user?: User;
-  authenticated?: boolean;
-}
+// Re-export types for backward compatibility
+export type { User, ApiResponse } from '@/types';
 
 class ApiClient {
   private async request<T = unknown>(
