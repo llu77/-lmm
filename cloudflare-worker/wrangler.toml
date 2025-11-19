@@ -1,21 +1,40 @@
-{
-	"name": "astro-blog-starter-template",
-	"compatibility_date": "2025-10-08",
-	"compatibility_flags": ["nodejs_compat"],
-	"main": "./dist/_worker.js/index.js",
-	"assets": {
-		"directory": "./dist",
-		"binding": "ASSETS"
-	},
-	"observability": {
-		"enabled": true
-	},
-	"vpc_services": [
-		{
-			"binding": "VPC_SERVICE",
-			"service_id": "019a6a59-cbb4-7031-9840-e79c64aeae7f",
-			"remote": true
-		}
-	],
-	"upload_source_maps": true
-}
+name = "astro-blog-starter-template"
+main = "./dist/_worker.js/index.js"
+compatibility_date = "2025-10-08"
+compatibility_flags = ["nodejs_compat"]
+
+# Static Assets
+[assets]
+binding = "ASSETS"
+directory = "./dist"
+
+# Observability (Logging & Analytics)
+[observability]
+enabled = true
+
+# VPC Services (Cloudflare Tunnel)
+[[vpc_services]]
+binding = "VPC_SERVICE"
+service_id = "019a6a59-cbb4-7031-9840-e79c64aeae7f"
+remote = true
+
+# Upload source maps for better error tracking
+upload_source_maps = true
+
+# ============================================================================
+# PREVIEW ENVIRONMENT CONFIGURATION
+# ============================================================================
+# This environment is used for PR preview deployments via GitHub Actions
+
+[env.preview]
+name = "astro-blog-starter-preview"
+
+# Preview observability
+[env.preview.observability]
+enabled = true
+
+# Preview can share VPC service with production
+[[env.preview.vpc_services]]
+binding = "VPC_SERVICE"
+service_id = "019a6a59-cbb4-7031-9840-e79c64aeae7f"
+remote = true
