@@ -854,11 +854,12 @@ export async function printProductOrderPDF(
 // ================== Payroll Functions ==================
 
 /**
- * تصدير مسير الرواتب إلى PDF
+ * دالة أساسية لإنشاء مسير الرواتب - تدعم التحميل والطباعة
  */
-export async function generatePayrollPDF(
+async function createPayrollPDF(
   payrollData: PayrollData,
-  config: Partial<PDFConfig> = {}
+  config: Partial<PDFConfig>,
+  mode: PDFOutputMode
 ): Promise<void> {
   const fullConfig = { ...DEFAULT_CONFIG, ...config };
 
@@ -1007,21 +1008,25 @@ export async function generatePayrollPDF(
 
     // إضافة الختم
     await addStampWithApproval(doc, fullConfig);
+    addPaginationFooters(doc);
 
-    // إضافة التذييل
-    const totalPages = (doc.internal as { pages: unknown[] }).pages.length - 1;
-    for (let i = 1; i <= totalPages; i++) {
-      doc.setPage(i);
-      addFooter(doc, i, totalPages);
-    }
-
-    // حفظ PDF
+    // إخراج PDF
     const fileName = `مسير_رواتب_${payrollData.branchName}_${monthName}_${payrollData.year}.pdf`;
-    doc.save(fileName);
+    await outputPDF(doc, { mode, fileName });
   } catch (error) {
     console.error('PDF generation error:', error);
     throw new Error('فشل في إنشاء مسير الرواتب. يرجى المحاولة مرة أخرى.');
   }
+}
+
+/**
+ * تصدير مسير الرواتب إلى PDF
+ */
+export async function generatePayrollPDF(
+  payrollData: PayrollData,
+  config: Partial<PDFConfig> = {}
+): Promise<void> {
+  return createPayrollPDF(payrollData, config, 'download');
 }
 
 /**
@@ -1031,161 +1036,5 @@ export async function printPayrollPDF(
   payrollData: PayrollData,
   config: Partial<PDFConfig> = {}
 ): Promise<void> {
-  const fullConfig = { ...DEFAULT_CONFIG, ...config };
-
-  // Override supervisor name if provided
-  if (payrollData.supervisorName) {
-    fullConfig.supervisorName = payrollData.supervisorName;
-  } else if (SUPERVISOR_MAP[payrollData.branchName]) {
-    fullConfig.supervisorName = SUPERVISOR_MAP[payrollData.branchName];
-  }
-
-  try {
-    // إنشاء PDF
-    const doc = await setupPDF('landscape');
-
-    // الشهر بالعربية
-    const arabicMonths = [
-      'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
-      'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'
-    ];
-    const monthName = arabicMonths[payrollData.month - 1];
-    const title = `مسير رواتب - ${monthName} ${payrollData.year}`;
-
-    // إضافة الهيدر
-    await addHeader(doc, title, fullConfig, payrollData.branchName);
-
-    // معلومات إضافية
-    const pageWidth = doc.internal.pageSize.getWidth();
-    doc.setFontSize(10);
-    doc.setTextColor(66, 66, 66);
-    doc.text(
-      `تاريخ الإنشاء: ${formatArabicDate(new Date(payrollData.generatedAt))}`,
-      pageWidth - 20,
-      85,
-      { align: 'right' }
-    );
-
-    // إعداد البيانات للجدول
-    const tableData = payrollData.employees.map((emp, index) => {
-      const grossSalary = emp.baseSalary + emp.supervisorAllowance + emp.incentives;
-      return [
-        (index + 1).toString(),
-        emp.employeeName,
-        emp.nationalId || '-',
-        formatNumber(emp.baseSalary),
-        formatNumber(emp.supervisorAllowance),
-        formatNumber(emp.incentives),
-        formatNumber(grossSalary),
-        formatNumber(emp.totalAdvances),
-        formatNumber(emp.totalDeductions),
-        formatNumber(emp.netSalary),
-      ];
-    });
-
-    // إنشاء الجدول
-    autoTable(doc, {
-      head: [[
-        '#',
-        'اسم الموظف',
-        'رقم الهوية',
-        'الراتب الأساسي',
-        'بدل إشراف',
-        'حوافز',
-        'الإجمالي',
-        'السلف',
-        'الخصومات',
-        'الصافي',
-      ]],
-      body: tableData,
-      startY: 95,
-      theme: 'grid',
-      styles: {
-        font: 'Cairo',
-        fontSize: 9,
-        cellPadding: 4,
-        halign: 'center',
-        valign: 'middle',
-        lineColor: [144, 202, 249],
-        lineWidth: 0.5,
-      },
-      headStyles: {
-        fillColor: [100, 181, 246],
-        textColor: [255, 255, 255],
-        fontSize: 10,
-        fontStyle: 'bold',
-        halign: 'center',
-        lineColor: [33, 150, 243],
-        lineWidth: 1,
-      },
-      alternateRowStyles: {
-        fillColor: [248, 250, 252],
-      },
-      columnStyles: {
-        0: { cellWidth: 15, halign: 'center' },
-        1: { cellWidth: 45, halign: 'right' },
-        2: { cellWidth: 35, halign: 'center' },
-        3: { cellWidth: 30, halign: 'right' },
-        4: { cellWidth: 25, halign: 'right' },
-        5: { cellWidth: 25, halign: 'right' },
-        6: { cellWidth: 30, halign: 'right', fontStyle: 'bold' },
-        7: { cellWidth: 25, halign: 'right' },
-        8: { cellWidth: 25, halign: 'right' },
-        9: { cellWidth: 35, halign: 'right', fontStyle: 'bold', fillColor: [227, 242, 253] },
-      },
-      didParseCell: (hookData) => {
-        if (hookData.column.index === 9 && hookData.section === 'body') {
-          hookData.cell.styles.textColor = [21, 101, 192];
-          hookData.cell.styles.fontStyle = 'bold';
-        }
-      },
-    });
-
-    // صندوق الإجمالي
-    const finalY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
-    const boxX = 15;
-    const boxWidth = pageWidth - 30;
-    const boxHeight = 20;
-
-    drawBlueGradient(doc, boxX, finalY, boxWidth, boxHeight);
-
-    doc.setDrawColor(33, 150, 243);
-    doc.setLineWidth(1.5);
-    doc.roundedRect(boxX, finalY, boxWidth, boxHeight, 4, 4, 'D');
-
-    doc.setFontSize(14);
-    doc.setTextColor(255, 255, 255);
-    doc.text(
-      `إجمالي صافي الرواتب: ${formatNumber(payrollData.totalNetSalary)} ريال`,
-      pageWidth / 2,
-      finalY + 13,
-      { align: 'center' }
-    );
-
-    doc.setFontSize(9);
-    doc.setTextColor(100, 100, 100);
-    doc.text(
-      `عدد الموظفين: ${payrollData.employees.length} | الفرع: ${payrollData.branchName}`,
-      pageWidth / 2,
-      finalY + boxHeight + 8,
-      { align: 'center' }
-    );
-
-    // إضافة الختم
-    await addStampWithApproval(doc, fullConfig);
-
-    // إضافة التذييل
-    const totalPages = (doc.internal as { pages: unknown[] }).pages.length - 1;
-    for (let i = 1; i <= totalPages; i++) {
-      doc.setPage(i);
-      addFooter(doc, i, totalPages);
-    }
-
-    // طباعة
-    doc.autoPrint();
-    window.open(doc.output('bloburl'), '_blank');
-  } catch (error) {
-    console.error('Print error:', error);
-    throw new Error('فشل في طباعة مسير الرواتب. يرجى المحاولة مرة أخرى.');
-  }
+  return createPayrollPDF(payrollData, config, 'print');
 }
