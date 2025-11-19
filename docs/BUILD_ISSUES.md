@@ -4,7 +4,7 @@
 
 ### 1. React Version Mismatch (HIGH PRIORITY)
 
-**Status**: ❌ Blocking production builds
+**Status**: ⚠️ Partially resolved - dependencies fixed, build still failing
 
 **Error**:
 ```
@@ -12,48 +12,66 @@ Minified React error #527
 React versions: 18.3.1 vs 19.2.0
 ```
 
-**Impact**: The symbolai-worker build fails at the final step due to conflicting React versions being bundled together.
+**Impact**: The symbolai-worker build fails at the final step during static build phase.
 
-**Root Cause**: Multiple versions of React are installed in the dependency tree:
-- Some packages depend on React 18.3.1
-- Other packages require React 19.2.0
+**Root Cause**: The error originates from `_@astro-renderers` chunk during Astro's static build process, even though all npm dependencies are correctly aligned.
 
-**Solution Options**:
+**What We've Tried** ✅:
+1. ✅ Fixed react-dom version mismatch (changed from 19.2.0 to 18.3.1)
+2. ✅ Updated both root and symbolai-worker package.json files
+3. ✅ Verified all React packages in node_modules are 18.3.1
+4. ✅ Cleared package-lock.json and reinstalled
+5. ✅ Cleared workspace node_modules
+6. ✅ Cleared build artifacts (dist folder)
+7. ✅ Cleared Astro and Vite caches
+8. ✅ Confirmed no React 19 packages exist in node_modules tree
 
-#### Option 1: Force Single React Version (Recommended)
-Add resolutions to `package.json`:
+**Current Status**:
+- All package.json files specify react@18.3.1 and react-dom@18.3.1
+- `npm list react react-dom` shows only 18.3.1 versions
+- Build succeeds through server and client bundling
+- Build fails when Astro tries to execute the bundled worker code
 
-```json
-{
-  "resolutions": {
-    "react": "18.3.1",
-    "react-dom": "18.3.1"
-  },
-  "overrides": {
-    "react": "18.3.1",
-    "react-dom": "18.3.1"
-  }
-}
-```
+**Likely Causes**:
+1. **Astro Configuration Issue**: The `@astrojs/react` renderer may have bundling issues
+2. **Build Cache**: Some cached build artifact we haven't cleared
+3. **Module Resolution**: Astro's module resolution may be pulling React from unexpected location
+4. **Peer Dependency Conflict**: A transitive dependency declaring incorrect peer deps
 
-Then run:
+**Next Investigation Steps**:
+
+#### Option 1: Update Astro Packages (Recommended)
 ```bash
+npm update @astrojs/react @astrojs/cloudflare astro
 npm install --legacy-peer-deps --ignore-scripts
+rm -rf symbolai-worker/dist symbolai-worker/.astro
+npm run build:workers
 ```
 
-#### Option 2: Update All Packages to React 19
-Update all React-dependent packages to versions compatible with React 19.2.0.
+#### Option 2: Fresh Install
+```bash
+rm -rf node_modules package-lock.json
+rm -rf symbolai-worker/node_modules
+npm install --legacy-peer-deps --ignore-scripts
+npm run build:workers
+```
+
+#### Option 3: Investigate Astro React Renderer
+Check `@astrojs/react` package for React version requirements and compatibility.
+
+#### Option 4: Enable Verbose Logging
+```bash
+cd symbolai-worker
+DEBUG=astro:* npm run build
+```
 
 **Affected Files**:
-- `symbolai-worker/package.json`
-- Root `package.json`
+- ✅ `package.json` - Fixed (react-dom: ^18.3.1)
+- ✅ `symbolai-worker/package.json` - Fixed (react-dom: ^18.3.1)
+- ✅ `package-lock.json` - Updated with correct versions
 
-**Next Steps**:
-1. Audit React dependencies: `npm list react react-dom`
-2. Choose React version (18.3.1 recommended for stability)
-3. Add resolutions/overrides to package.json
-4. Test build: `npm run build:workers`
-5. Update documentation once resolved
+**Temporary Workaround**:
+The build script uses `|| true` to continue despite build failures. The cloudflare-worker builds successfully, so partial deployments are possible.
 
 ---
 
