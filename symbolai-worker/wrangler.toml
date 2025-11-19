@@ -133,3 +133,61 @@ crons = [
   "0 10 * * 6",     # Bonus reminder every Saturday at 10 AM
   "0 3 1 * *"       # Cleanup on 1st of month at 3 AM
 ]
+
+# ============================================================================
+# PREVIEW ENVIRONMENT CONFIGURATION
+# ============================================================================
+# This environment is used for PR preview deployments via GitHub Actions
+# Create preview resources in Cloudflare dashboard before deploying
+
+[env.preview]
+name = "symbolai-worker-preview"
+
+# Preview Environment Variables
+[env.preview.vars]
+ENVIRONMENT = "preview"
+AI_GATEWAY_ACCOUNT_ID = "85b01d19439ca53d3cfa740d2621a2bd"
+AI_GATEWAY_NAME = "symbol-preview"
+EMAIL_FROM = "preview@symbolai.net"
+EMAIL_FROM_NAME = "SymbolAI Preview"
+ADMIN_EMAIL = "admin@symbolai.net"
+
+# Preview D1 Database
+# Note: Create a preview database in Cloudflare dashboard
+# Then update the database_id below
+[[env.preview.d1_databases]]
+binding = "DB"
+database_name = "symbolai-financial-db-preview"
+# database_id = "YOUR_PREVIEW_DB_ID"  # Uncomment and set after creating preview DB
+
+# Preview KV Namespaces
+# Note: Create preview KV namespaces or reuse production with caution
+[[env.preview.kv_namespaces]]
+binding = "SESSIONS"
+# id = "YOUR_PREVIEW_SESSIONS_KV_ID"  # Uncomment and set after creating
+
+[[env.preview.kv_namespaces]]
+binding = "CACHE"
+id = "a497973607cf45bbbee76b64da9ac947"  # Safe to share with production
+
+[[env.preview.kv_namespaces]]
+binding = "FILES"
+# id = "YOUR_PREVIEW_FILES_KV_ID"  # Uncomment and set after creating
+
+[[env.preview.kv_namespaces]]
+binding = "RATE_LIMIT"
+id = "797b75482e6c4408bb40f6d72f2512af"  # Safe to share with production
+
+[[env.preview.kv_namespaces]]
+binding = "OAUTH_KV"
+# id = "YOUR_PREVIEW_OAUTH_KV_ID"  # Uncomment and set after creating
+
+# Preview R2 Bucket
+[[env.preview.r2_buckets]]
+binding = "PAYROLL_PDFS"
+# bucket_name = "symbolai-payrolls-preview"  # Uncomment and set after creating
+
+# Preview routes (optional - remove if you don't want preview on custom domain)
+# routes = [
+#   { pattern = "preview.symbolai.net/*", zone_name = "symbolai.net" }
+# ]
