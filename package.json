@@ -9,7 +9,6 @@
     "my-mcp-server-github-auth"
   ],
   "scripts": {
-    "postinstall": "npm run install:workers && npm run install:mcp",
     "build": "npm run build:workers && npm run build:mcp",
     "build:workers": "cd symbolai-worker && NODE_OPTIONS='--max-old-space-size=2048' npm run build || true && cd ../cloudflare-worker && npm run build || true",
     "build:mcp": "cd my-mcp-server-github-auth && npm run build || true",
