@@ -259,6 +259,7 @@ export function createMockEnv() {
   return {
     DB: new MockD1Database(),
     SESSIONS: new MockKVNamespace(),
+    CACHE: new MockKVNamespace(),
     FILES: new MockR2Bucket(),
     AI: new MockAI(),
     // Add any environment variables

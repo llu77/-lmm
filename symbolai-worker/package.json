@@ -21,6 +21,17 @@
     "cf:d1:list": "wrangler d1 list",
     "security:audit": "npm audit",
     "security:test": "tsx scripts/test-password-hashing.ts",
+    "test": "vitest",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "test:security": "vitest run tests/security",
+    "test:api": "vitest run tests/api",
+    "test:e2e": "vitest run tests/e2e",
+    "test:watch": "vitest --watch",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage",
+    "test:bench": "vitest bench",
+    "test:ci": "vitest run --coverage --reporter=verbose",
     "test:mcp": "npx -p mcp-remote@latest mcp-remote-client",
     "reasoningbank": "tsx src/scripts/reasoningbank-cli.ts",
     "test:reasoningbank": "tsx src/scripts/test-reasoningbank.ts"
@@ -66,12 +77,15 @@
     "@cloudflare/workers-types": "^4.20250110.0",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.3",
+    "@vitest/ui": "^1.6.1",
     "autoprefixer": "^10.4.17",
+    "miniflare": "^3.20250718.2",
     "postcss": "^8.4.35",
     "tailwindcss": "^3.4.1",
     "tsup": "^8.5.0",
     "tsx": "^4.19.2",
     "typescript": "^5.9.3",
+    "vitest": "^1.6.1",
     "wrangler": "^4.45.3"
   }
 }
