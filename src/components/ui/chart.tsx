@@ -16,6 +16,18 @@ export type ChartConfig = {
   );
 };
 
+// Shared type for Recharts payload items
+export type ChartPayloadItem = {
+  name?: string;
+  value?: unknown;
+  dataKey?: string;
+  color?: string;
+  type?: string;
+  payload?: Record<string, unknown>;
+  fill?: string;
+  [key: string]: unknown;
+};
+
 type ChartContextProps = {
   config: ChartConfig;
 };
@@ -118,11 +130,11 @@ function ChartTooltipContent({
   labelKey,
 }: React.ComponentProps<"div"> & {
   active?: boolean;
-  payload?: any[];
+  payload?: ChartPayloadItem[];
   label?: string | number;
-  labelFormatter?: (value: any, payload: any[]) => React.ReactNode;
+  labelFormatter?: (value: unknown, payload: ChartPayloadItem[]) => React.ReactNode;
   labelClassName?: string;
-  formatter?: (value: any, name: string, item: any, index: number, payload: any) => React.ReactNode;
+  formatter?: (value: unknown, name: string, item: ChartPayloadItem, index: number, payload: unknown) => React.ReactNode;
   color?: string;
   hideLabel?: boolean;
   hideIndicator?: boolean;
@@ -263,7 +275,7 @@ function ChartLegendContent({
   verticalAlign = "bottom",
   nameKey,
 }: React.ComponentProps<"div"> & {
-  payload?: any[];
+  payload?: ChartPayloadItem[];
   verticalAlign?: "top" | "bottom";
   hideIcon?: boolean;
   nameKey?: string;
