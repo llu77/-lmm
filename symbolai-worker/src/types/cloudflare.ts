@@ -1,9 +1,18 @@
 /**
  * Cloudflare Workers Type Definitions
- * 
+ *
  * This file provides TypeScript type definitions following Cloudflare Workers standards
  * Compatible with the official @cloudflare/workers-types
  */
+
+import type {
+  KVNamespace,
+  D1Database,
+  R2Bucket,
+  Ai,
+  ScheduledEvent,
+  MessageBatch
+} from '@cloudflare/workers-types';
 
 /**
  * Environment bindings for the worker
@@ -12,19 +21,19 @@
 export interface Env {
   // KV Namespace bindings
   KV?: KVNamespace;
-  
+
   // D1 Database bindings
   DB?: D1Database;
-  
+
   // R2 Bucket bindings
   BUCKET?: R2Bucket;
-  
+
   // Service bindings
   AI?: Ai;
-  
+
   // Environment variables
   ENVIRONMENT?: string;
-  
+
   // Add your custom bindings here
   [key: string]: unknown;
 }

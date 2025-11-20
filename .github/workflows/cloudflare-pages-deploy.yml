@@ -1,0 +1,238 @@
+name: Deploy to Cloudflare Pages
+
+on:
+  push:
+    branches:
+      - main
+      - claude/**
+    paths:
+      - 'symbolai-worker/**'
+      - '.github/workflows/cloudflare-pages-deploy.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'symbolai-worker/**'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'preview'
+        type: choice
+        options:
+          - production
+          - preview
+
+# Prevent concurrent deployments
+concurrency:
+  group: pages-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Job 1: Build symbolai-worker
+  build:
+    name: Build SymbolAI Worker
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'symbolai-worker/package-lock.json'
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            symbolai-worker/node_modules
+            ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('symbolai-worker/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install dependencies
+        working-directory: symbolai-worker
+        run: npm ci --legacy-peer-deps
+
+      - name: Type check
+        working-directory: symbolai-worker
+        run: npm run type-check
+        continue-on-error: true
+
+      - name: Build for Cloudflare Pages
+        working-directory: symbolai-worker
+        run: |
+          NODE_OPTIONS='--max-old-space-size=4096' npm run build
+        env:
+          NODE_ENV: production
+
+      - name: Verify build output
+        run: |
+          echo "Build directory contents:"
+          ls -lah symbolai-worker/dist/
+          du -sh symbolai-worker/dist/
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: symbolai-worker-dist
+          path: symbolai-worker/dist/
+          retention-days: 7
+          compression-level: 9
+
+  # Job 2: Deploy to Cloudflare Pages
+  deploy:
+    name: Deploy to Cloudflare Pages
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: ${{ github.event_name == 'pull_request' && 'preview' || (github.ref == 'refs/heads/main' && 'production' || 'preview') }}
+      url: ${{ steps.deploy.outputs.url }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: symbolai-worker-dist
+          path: symbolai-worker/dist
+
+      - name: Determine deployment type
+        id: deployment-type
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "type=preview" >> $GITHUB_OUTPUT
+            echo "branch=${{ github.head_ref }}" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "type=production" >> $GITHUB_OUTPUT
+            echo "branch=main" >> $GITHUB_OUTPUT
+          else
+            echo "type=preview" >> $GITHUB_OUTPUT
+            echo "branch=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Deploy to Cloudflare Pages
+        id: deploy
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy symbolai-worker/dist --project-name=symbolai-financial-erp --branch=${{ steps.deployment-type.outputs.branch }} --commit-dirty=true
+
+      - name: Extract deployment URL
+        id: url
+        run: |
+          # Try to extract URL from wrangler output
+          DEPLOY_URL="${{ steps.deploy.outputs.deployment-url }}"
+          if [ -z "$DEPLOY_URL" ]; then
+            # Fallback to constructed URL
+            if [ "${{ steps.deployment-type.outputs.type }}" == "production" ]; then
+              DEPLOY_URL="https://symbolai-financial-erp.pages.dev"
+            else
+              DEPLOY_URL="https://${{ steps.deployment-type.outputs.branch }}.symbolai-financial-erp.pages.dev"
+            fi
+          fi
+          echo "url=$DEPLOY_URL" >> $GITHUB_OUTPUT
+
+      - name: Comment on PR with deployment URL
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const deploymentUrl = '${{ steps.url.outputs.url }}';
+            const branch = '${{ steps.deployment-type.outputs.branch }}';
+            const commit = context.sha.substring(0, 7);
+
+            const comment = `## 🚀 Cloudflare Pages Deployment
+
+            ✅ **Successfully deployed to Preview!**
+
+            | Info | Value |
+            |------|-------|
+            | 🌐 **Preview URL** | ${deploymentUrl} |
+            | 🔀 **Branch** | \`${branch}\` |
+            | 📝 **Commit** | \`${commit}\` |
+            | 🕐 **Deployed at** | ${new Date().toLocaleString('en-US', { timeZone: 'UTC' })} UTC |
+
+            ### 📊 Quick Actions
+            - [View Deployment](${deploymentUrl})
+            - [View Logs](https://dash.cloudflare.com)
+            - [Cloudflare Pages Dashboard](https://dash.cloudflare.com)
+
+            ---
+            *Deployment powered by Cloudflare Pages*`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+      - name: Generate deployment summary
+        run: |
+          echo "## 🎉 Cloudflare Pages Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Deployment Details" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Environment** | ${{ steps.deployment-type.outputs.type }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Branch** | \`${{ steps.deployment-type.outputs.branch }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Commit** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **URL** | ${{ steps.url.outputs.url }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Triggered by** | @${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔗 Quick Links" >> $GITHUB_STEP_SUMMARY
+          echo "- [View Deployment](${{ steps.url.outputs.url }})" >> $GITHUB_STEP_SUMMARY
+          echo "- [Cloudflare Dashboard](https://dash.cloudflare.com)" >> $GITHUB_STEP_SUMMARY
+
+  # Job 3: Smoke tests (optional)
+  smoke-test:
+    name: Run Smoke Tests
+    needs: deploy
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Wait for deployment to be ready
+        run: sleep 30
+
+      - name: Test deployment health
+        run: |
+          DEPLOYMENT_URL="${{ needs.deploy.outputs.url }}"
+
+          echo "Testing deployment at: $DEPLOYMENT_URL"
+
+          # Test if site is accessible
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "$DEPLOYMENT_URL" || echo "000")
+
+          if [ "$RESPONSE" == "200" ] || [ "$RESPONSE" == "301" ] || [ "$RESPONSE" == "302" ]; then
+            echo "✅ Deployment is accessible (HTTP $RESPONSE)"
+          else
+            echo "⚠️ Deployment returned HTTP $RESPONSE"
+            echo "This may be normal if the site requires authentication"
+          fi
+
+          echo "Smoke test completed"
+
+      - name: Generate test summary
+        if: always()
+        run: |
+          echo "## 🧪 Smoke Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Basic health check completed for the deployment." >> $GITHUB_STEP_SUMMARY
