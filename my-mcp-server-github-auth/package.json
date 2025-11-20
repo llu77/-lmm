@@ -12,9 +12,9 @@
 	},
 	"dependencies": {
 		"@cloudflare/workers-oauth-provider": "^0.1.0",
-		"@modelcontextprotocol/sdk": "1.20.2",
+		"@modelcontextprotocol/sdk": "1.22.0",
 		"agents": "^0.2.19",
-		"hono": "^4.10.4",
+		"hono": "^4.10.6",
 		"just-pick": "^4.2.0",
 		"octokit": "^5.0.4",
 		"workers-mcp": "^0.0.13",
