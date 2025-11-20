@@ -108,14 +108,65 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // Continue to the next middleware or route
   const response = await next();
 
-  // Add security headers
+  // =====================================================
+  // Security Headers (OWASP 2025 Best Practices)
+  // =====================================================
+
+  // Prevent clickjacking attacks
   response.headers.set('X-Frame-Options', 'DENY');
+
+  // Prevent MIME-type sniffing
   response.headers.set('X-Content-Type-Options', 'nosniff');
+
+  // Control referrer information
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+
+  // Restrict browser features
   response.headers.set(
     'Permissions-Policy',
-    'camera=(), microphone=(), geolocation=()'
+    'camera=(), microphone=(), geolocation=(), payment=()'
   );
+
+  // HTTP Strict Transport Security (HSTS)
+  // Force HTTPS for 1 year, include subdomains, allow preload
+  response.headers.set(
+    'Strict-Transport-Security',
+    'max-age=31536000; includeSubDomains; preload'
+  );
+
+  // Content Security Policy (CSP)
+  // Restrict resource loading to prevent XSS attacks
+  const cspDirectives = [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval'", // Note: unsafe-* needed for Astro/React
+    "style-src 'self' 'unsafe-inline'", // unsafe-inline needed for styled components
+    "img-src 'self' data: https:",
+    "font-src 'self' data:",
+    "connect-src 'self' https://*.anthropic.com https://*.cloudflare.com",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "upgrade-insecure-requests",
+  ].join('; ');
+  response.headers.set('Content-Security-Policy', cspDirectives);
+
+  // X-XSS-Protection (legacy, but still useful for older browsers)
+  response.headers.set('X-XSS-Protection', '1; mode=block');
+
+  // Cross-Origin Resource Sharing (CORS)
+  // Only allow same origin by default
+  if (apiRoutes) {
+    response.headers.set('Access-Control-Allow-Origin', url.origin);
+    response.headers.set('Access-Control-Allow-Credentials', 'true');
+    response.headers.set(
+      'Access-Control-Allow-Methods',
+      'GET, POST, PUT, DELETE, OPTIONS'
+    );
+    response.headers.set(
+      'Access-Control-Allow-Headers',
+      'Content-Type, Authorization'
+    );
+  }
 
   return response;
 });
