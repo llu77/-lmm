@@ -353,9 +353,14 @@ export async function checkPasswordBreach(
     // Parse response: each line is "SUFFIX:COUNT"
     const lines = responseText.split('\n');
     for (const line of lines) {
-      const [suffix, countStr] = line.split(':');
+      const trimmedLine = line.trim();
+      if (!trimmedLine) continue; // Skip empty lines
+      const parts = trimmedLine.split(':');
+      if (parts.length !== 2) continue; // Skip malformed lines
+      const [suffix, countStr] = parts;
       if (suffix === hashSuffix) {
-        return { isBreached: true, count: parseInt(countStr, 10) };
+        const count = parseInt(countStr, 10);
+        return { isBreached: true, count: isNaN(count) ? 0 : count };
       }
     }
 
