@@ -13,7 +13,7 @@
     },
     "cloudflare-docs": {
       "command": "npx",
-      "args": ["-y", "mcp-remote", "https://docs.mcp.cloudflare.com/sse"],
+      "args": ["-y", "mcp-remote", "https://docs.mcp.cloudflare.com/sse", "--debug"],
       "disabled": false
     },
     "cloudflare-workers": {
