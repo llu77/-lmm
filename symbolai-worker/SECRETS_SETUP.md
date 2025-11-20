@@ -15,10 +15,23 @@ This guide explains how to set up secrets for SymbolAI Worker deployment on Clou
 
 We've created an automated script for quick secret setup:
 
-### Step 1: Run the Setup Script
+### Step 1: Create Your Secrets Script
 
 ```bash
 cd symbolai-worker
+
+# Copy the example template
+cp setup-secrets-now.sh.example setup-secrets-now.sh
+
+# Edit the script and replace placeholder values with your actual API keys
+# ANTHROPIC_KEY="sk-ant-api03-YOUR_ACTUAL_KEY"
+# RESEND_KEY="re_YOUR_ACTUAL_KEY"
+nano setup-secrets-now.sh  # or use your preferred editor
+```
+
+### Step 2: Run the Setup Script
+
+```bash
 ./setup-secrets-now.sh
 ```
 
@@ -29,13 +42,13 @@ This script will automatically configure:
 - ⚠️  RESEND_WEBHOOK_SECRET (placeholder)
 - ⚠️  ZAPIER_WEBHOOK_URL (placeholder)
 
-### Step 2: Verify Secrets
+### Step 3: Verify Secrets
 
 ```bash
 wrangler secret list --config wrangler.toml
 ```
 
-### Step 3: Delete the Script (IMPORTANT!)
+### Step 4: Delete the Script (IMPORTANT!)
 
 ```bash
 rm setup-secrets-now.sh
