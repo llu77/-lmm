@@ -135,7 +135,7 @@ jobs:
 
       - name: Comment PR with deployment URL
         if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const deploymentUrl = '${{ steps.deploy-preview.outputs.deployment-url }}';
@@ -192,7 +192,7 @@ jobs:
 
       - name: Comment PR with deployment status
         if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             github.rest.issues.createComment({
@@ -239,7 +239,7 @@ jobs:
 
       - name: Comment PR with Pages URL
         if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const deploymentUrl = '${{ steps.deploy.outputs.deployment-url }}';
