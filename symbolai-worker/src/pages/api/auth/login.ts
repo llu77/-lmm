@@ -128,6 +128,18 @@ export const POST: APIRoute = async ({ request, locals }) => {
       } catch (rehashError) {
         // Log error but don't fail login
         console.error('Password re-hashing error:', rehashError);
+        // Track failed rehash attempts for monitoring
+        try {
+          await locals.runtime.env.DB.prepare(`
+            UPDATE users_new
+            SET rehash_failures = COALESCE(rehash_failures, 0) + 1
+            WHERE id = ?
+          `)
+            .bind(user.id)
+            .run();
+        } catch (rehashTrackError) {
+          console.error('Failed to increment rehash_failures:', rehashTrackError);
+        }
         // User can still login, will retry next time
       }
     }
