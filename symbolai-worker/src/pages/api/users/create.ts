@@ -53,7 +53,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     }
 
     // Validate password strength
-    const passwordValidation = validatePasswordStrength(password);
+    const passwordValidation = await validatePasswordStrength(password);
     if (!passwordValidation.valid) {
       return new Response(
         JSON.stringify({

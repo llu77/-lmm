@@ -293,6 +293,78 @@ export interface PasswordValidationResult {
   error?: string;
   strength?: 'weak' | 'medium' | 'strong' | 'very_strong';
   suggestions?: string[];
+  isBreached?: boolean;
+  breachCount?: number;
+}
+
+/**
+ * Check if password has been breached using Have I Been Pwned API
+ * 
+ * Uses k-anonymity model: only sends first 5 characters of SHA-1 hash
+ * to protect privacy. The API returns all hash suffixes that match,
+ * and we check locally if our full hash is in the list.
+ * 
+ * @param {string} password - Password to check
+ * @returns {Promise<{isBreached: boolean, count: number}>} Breach status and occurrence count
+ * 
+ * @example
+ * const result = await checkPasswordBreach('password123');
+ * if (result.isBreached) {
+ *   console.log(`Found in ${result.count} data breaches`);
+ * }
+ */
+export async function checkPasswordBreach(
+  password: string
+): Promise<{ isBreached: boolean; count: number }> {
+  try {
+    // Hash the password with SHA-1 (HIBP requirement)
+    const encoder = new TextEncoder();
+    const data = encoder.encode(password);
+    const hashBuffer = await crypto.subtle.digest('SHA-1', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const fullHash = hashArray
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('')
+      .toUpperCase();
+
+    // Take first 5 characters (k-anonymity)
+    const hashPrefix = fullHash.substring(0, 5);
+    const hashSuffix = fullHash.substring(5);
+
+    // Query HIBP API
+    const response = await fetch(
+      `https://api.pwnedpasswords.com/range/${hashPrefix}`,
+      {
+        method: 'GET',
+        headers: {
+          'User-Agent': 'LMM-Financial-System',
+        },
+      }
+    );
+
+    if (!response.ok) {
+      // If API is unavailable, don't block password creation
+      console.error('HIBP API unavailable:', response.status);
+      return { isBreached: false, count: 0 };
+    }
+
+    const responseText = await response.text();
+    
+    // Parse response: each line is "SUFFIX:COUNT"
+    const lines = responseText.split('\n');
+    for (const line of lines) {
+      const [suffix, countStr] = line.split(':');
+      if (suffix === hashSuffix) {
+        return { isBreached: true, count: parseInt(countStr, 10) };
+      }
+    }
+
+    return { isBreached: false, count: 0 };
+  } catch (error) {
+    // On error, don't block password creation
+    console.error('Password breach check failed:', error);
+    return { isBreached: false, count: 0 };
+  }
 }
 
 /**
@@ -302,18 +374,23 @@ export interface PasswordValidationResult {
  * - Minimum length: 8 characters
  * - Maximum length: 128 characters
  * - Contains uppercase, lowercase, numbers, special characters
+ * - Not found in data breaches (via Have I Been Pwned API)
  *
  * @param {string} password - Password to validate
- * @returns {PasswordValidationResult} Validation result with suggestions
+ * @param {boolean} checkBreach - Whether to check against HIBP database (default: true)
+ * @returns {Promise<PasswordValidationResult>} Validation result with suggestions
  *
  * @example
- * const result = validatePasswordStrength('MyPass123!');
+ * const result = await validatePasswordStrength('MyPass123!');
  * if (!result.valid) {
  *   console.log(result.error);
  *   console.log(result.suggestions);
  * }
  */
-export function validatePasswordStrength(password: string): PasswordValidationResult {
+export async function validatePasswordStrength(
+  password: string,
+  checkBreach: boolean = true
+): Promise<PasswordValidationResult> {
   const suggestions: string[] = [];
 
   // Length check
@@ -336,7 +413,7 @@ export function validatePasswordStrength(password: string): PasswordValidationRe
   const hasUpperCase = /[A-Z]/.test(password);
   const hasLowerCase = /[a-z]/.test(password);
   const hasNumbers = /\d/.test(password);
-  const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>_\-=+\[\]\\\/]/.test(password);
+  const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>_\-=+[\]\\/]/.test(password);
 
   // Count character types
   const typesCount = [hasUpperCase, hasLowerCase, hasNumbers, hasSpecialChar]
@@ -370,10 +447,33 @@ export function validatePasswordStrength(password: string): PasswordValidationRe
     };
   }
 
+  // Check against Have I Been Pwned database
+  let isBreached = false;
+  let breachCount = 0;
+  
+  if (checkBreach) {
+    const breachResult = await checkPasswordBreach(password);
+    isBreached = breachResult.isBreached;
+    breachCount = breachResult.count;
+    
+    if (isBreached) {
+      return {
+        valid: false,
+        error: `كلمة المرور هذه تم اختراقها في ${breachCount.toLocaleString('ar')} حالة تسريب بيانات. الرجاء اختيار كلمة مرور أخرى.`,
+        strength,
+        suggestions: ['استخدم كلمة مرور فريدة لم يتم اختراقها من قبل'],
+        isBreached: true,
+        breachCount
+      };
+    }
+  }
+
   return {
     valid: true,
     strength,
-    suggestions: suggestions.length > 0 ? suggestions : undefined
+    suggestions: suggestions.length > 0 ? suggestions : undefined,
+    isBreached: false,
+    breachCount: 0
   };
 }
 
@@ -387,4 +487,5 @@ export default {
   verifyLegacySHA256,
   needsRehash,
   validatePasswordStrength,
+  checkPasswordBreach,
 };
