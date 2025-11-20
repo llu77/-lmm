@@ -59,7 +59,9 @@ jobs:
 
       - name: Install dependencies
         working-directory: symbolai-worker
-        run: npm ci --legacy-peer-deps
+        run: |
+          npm ci --legacy-peer-deps --ignore-scripts
+          echo "Dependencies installed successfully"
 
       - name: Type check
         working-directory: symbolai-worker
