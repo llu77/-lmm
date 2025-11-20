@@ -27,7 +27,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.70.0",
-    "@astrojs/cloudflare": "^12.6.10",
+    "@astrojs/cloudflare": "^12.6.11",
     "@astrojs/react": "^4.4.1",
     "@modelcontextprotocol/sdk": "^1.22.0",
     "@radix-ui/react-accordion": "^1.2.0",
