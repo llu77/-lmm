@@ -63,13 +63,13 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.5",
-    "@cloudflare/workers-types": "^4.20250110.0",
+    "@cloudflare/workers-types": "^4.20251120.0",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.3",
     "autoprefixer": "^10.4.17",
     "postcss": "^8.4.35",
     "tailwindcss": "^3.4.1",
-    "tsup": "^8.5.0",
+    "tsup": "^8.5.1",
     "tsx": "^4.19.2",
     "typescript": "^5.9.3",
     "wrangler": "^4.45.3"
