@@ -12,6 +12,10 @@ build/
 .env.production
 .dev.vars
 
+# Secrets setup scripts (NEVER COMMIT)
+setup-secrets*.sh
+**/setup-secrets*.sh
+
 # Logs
 *.log
 logs/
