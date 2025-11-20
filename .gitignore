@@ -56,3 +56,12 @@ ALL_SECRETS_SUMMARY.md
 SECRETS_FOUND_UPDATE.md
 *secrets*.txt
 *credentials*.txt
+
+# =====================================================
+# Security: Password Files (DO NOT COMMIT)
+# =====================================================
+.secure-passwords.json
+*.passwords.*
+*password-list*
+*user-passwords*
+generate-seed-data-original.js
