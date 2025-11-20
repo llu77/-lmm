@@ -93,7 +93,7 @@ new_sqlite_classes = ["CloudflareMCPAgent"]
 [vars]
 ENVIRONMENT = "production"
 AI_GATEWAY_ACCOUNT_ID = "85b01d19439ca53d3cfa740d2621a2bd"
-AI_GATEWAY_NAME = "symbol"
+AI_GATEWAY_NAME = "symbolai-enhanced"
 
 # Email Configuration
 EMAIL_FROM = "info@symbolai.net"
@@ -147,7 +147,7 @@ name = "symbolai-worker-preview"
 [env.preview.vars]
 ENVIRONMENT = "preview"
 AI_GATEWAY_ACCOUNT_ID = "85b01d19439ca53d3cfa740d2621a2bd"
-AI_GATEWAY_NAME = "symbol-preview"
+AI_GATEWAY_NAME = "symbolai-enhanced-preview"
 EMAIL_FROM = "preview@symbolai.net"
 EMAIL_FROM_NAME = "SymbolAI Preview"
 ADMIN_EMAIL = "admin@symbolai.net"

@@ -1,6 +1,19 @@
+/**
+ * User Creation API Endpoint - Enhanced with Argon2id Support
+ *
+ * Security Features:
+ * - Argon2id password hashing (secure)
+ * - Password strength validation
+ * - Input sanitization
+ *
+ * @version 2.0 - Enhanced Security
+ * @date 2025-11-20
+ */
+
 import type { APIRoute } from 'astro';
 import { requireAdminRole, logAudit, getClientIP } from '@/lib/permissions';
 import { generateId } from '@/lib/db';
+import { hashPassword, validatePasswordStrength } from '@/lib/password';
 
 export const POST: APIRoute = async ({ request, locals }) => {
   // Only admin can create users
@@ -25,10 +38,28 @@ export const POST: APIRoute = async ({ request, locals }) => {
       branch_id
     } = await request.json();
 
-    // Validation
+    // =====================================================
+    // Input Validation
+    // =====================================================
+
     if (!username || !password || !role_id) {
       return new Response(
         JSON.stringify({ error: 'اسم المستخدم وكلمة المرور والدور مطلوبة' }),
+        {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
+    }
+
+    // Validate password strength
+    const passwordValidation = validatePasswordStrength(password);
+    if (!passwordValidation.valid) {
+      return new Response(
+        JSON.stringify({
+          error: passwordValidation.error,
+          suggestions: passwordValidation.suggestions
+        }),
         {
           status: 400,
           headers: { 'Content-Type': 'application/json' }
@@ -83,15 +114,18 @@ export const POST: APIRoute = async ({ request, locals }) => {
       }
     }
 
-    // Hash password (simple for now - in production use bcrypt)
-    // For now, we'll use a simple SHA-256 hash
-    const encoder = new TextEncoder();
-    const data = encoder.encode(password);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const hashedPassword = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    // =====================================================
+    // Hash Password with Argon2id
+    // =====================================================
 
-    // Create user
+    console.log(`🔐 Hashing password for new user: ${username}`);
+    const hashedPassword = await hashPassword(password);
+    console.log(`✅ Password hashed successfully for user: ${username}`);
+
+    // =====================================================
+    // Create User
+    // =====================================================
+
     const userId = generateId();
     await locals.runtime.env.DB.prepare(`
       INSERT INTO users_new (id, username, password, email, full_name, phone, role_id, branch_id, is_active)
@@ -99,7 +133,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     `).bind(
       userId,
       username,
-      hashedPassword,
+      hashedPassword,  // Now using Argon2id hash
       email || null,
       full_name || null,
       phone || null,

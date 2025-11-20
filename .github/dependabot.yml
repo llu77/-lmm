@@ -1,12 +1,136 @@
-# To get started with Dependabot version updates, you'll need to specify which
-# package ecosystems to update and where the package manifests are located.
-# Please see the documentation for all configuration options:
-# https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
-
+# =====================================================
+# Dependabot Configuration for SymbolAI Worker
+# =====================================================
+#
+# Automatically checks for dependency updates and creates PRs
+# Docs: https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+# =====================================================
 
 version: 2
 updates:
-  - package-ecosystem: "npm" # See documentation for possible values
-    directory: "/" # Location of package manifests
+  # ===================================================
+  # Root Package Dependencies
+  # ===================================================
+  - package-ecosystem: "npm"
+    directory: "/"
     schedule:
       interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Riyadh"
+    open-pull-requests-limit: 10
+    versioning-strategy: increase
+    # Group related updates together
+    groups:
+      # Security updates (high priority)
+      security:
+        patterns:
+          - "*"
+        update-types:
+          - "patch"
+          - "minor"
+      # Cloudflare packages
+      cloudflare:
+        patterns:
+          - "@cloudflare/*"
+          - "wrangler"
+          - "@astrojs/cloudflare"
+      # Astro framework
+      astro:
+        patterns:
+          - "astro"
+          - "@astrojs/*"
+      # React ecosystem
+      react:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "@types/react"
+          - "@types/react-dom"
+      # Development tools
+      development-dependencies:
+        dependency-type: "development"
+        update-types:
+          - "minor"
+          - "patch"
+    labels:
+      - "dependencies"
+      - "automated"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    # Automatically approve and merge patch updates
+    # (requires GitHub Actions workflow)
+    reviewers:
+      - "llu77"
+    assignees:
+      - "llu77"
+
+  # ===================================================
+  # SymbolAI Worker Package Dependencies
+  # ===================================================
+  - package-ecosystem: "npm"
+    directory: "/symbolai-worker"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "10:00"
+      timezone: "Asia/Riyadh"
+    open-pull-requests-limit: 10
+    versioning-strategy: increase
+    groups:
+      security:
+        patterns:
+          - "*"
+        update-types:
+          - "patch"
+          - "minor"
+      cloudflare:
+        patterns:
+          - "@cloudflare/*"
+          - "wrangler"
+      ai-sdk:
+        patterns:
+          - "@anthropic-ai/*"
+          - "@modelcontextprotocol/*"
+      ui-components:
+        patterns:
+          - "@radix-ui/*"
+          - "lucide-react"
+    labels:
+      - "dependencies"
+      - "symbolai-worker"
+      - "automated"
+    commit-message:
+      prefix: "chore(symbolai-worker)"
+      include: "scope"
+
+  # ===================================================
+  # GitHub Actions Workflows
+  # ===================================================
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+      time: "09:00"
+      timezone: "Asia/Riyadh"
+    open-pull-requests-limit: 5
+    labels:
+      - "github-actions"
+      - "ci/cd"
+      - "automated"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+
+  # ===================================================
+  # Docker (if applicable in future)
+  # ===================================================
+  # - package-ecosystem: "docker"
+  #   directory: "/"
+  #   schedule:
+  #     interval: "weekly"
+  #   labels:
+  #     - "docker"
+  #     - "automated"
