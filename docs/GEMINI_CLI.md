@@ -6,24 +6,17 @@ A command-line interface for interacting with Google's Gemini AI directly from y
 
 ### Local Installation (within this project)
 
+The Gemini CLI is part of the LMM monorepo. To install and use it:
+
 ```bash
+# Install dependencies
 npm install
+
+# Link the CLI to make it available globally
 npm link
 ```
 
-### Global Installation
-
-To install the package globally and make the `gemini` command available system-wide:
-
-```bash
-npm install -g @google/gemini-cli
-```
-
-Or if working from this repository:
-
-```bash
-npm link
-```
+After linking, the `gemini` command will be available system-wide.
 
 ## Configuration
 
