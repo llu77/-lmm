@@ -458,6 +458,36 @@ For complete documentation, see [PAIR_PROGRAMMING_AGENT.md](./PAIR_PROGRAMMING_A
 
 ---
 
+## 🤖 Gemini CLI
+
+This repository includes a command-line interface for Google's Gemini AI, allowing you to chat with Gemini directly from your terminal.
+
+### Quick Start
+
+```bash
+# Install dependencies
+npm install
+
+# Link the CLI globally
+npm link
+
+# Set your API key
+export GEMINI_API_KEY="your-api-key-here"
+
+# Start chatting
+gemini
+
+# Ask a single question
+gemini "What is the weather today?"
+
+# Get help
+gemini --help
+```
+
+For complete documentation, see [docs/GEMINI_CLI.md](./docs/GEMINI_CLI.md)
+
+---
+
 ## 📄 الرخصة
 
 هذا المشروع خاص بشركة LMM.
