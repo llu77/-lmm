@@ -5,10 +5,16 @@
 	"scripts": {
 		"build": "echo 'No build step required for MCP server'",
 		"deploy": "wrangler deploy",
+		"deploy:full": "./deploy.sh",
+		"deploy:db": "wrangler d1 execute symbolai-financial-db --file=./schema.sql",
+		"deploy:secrets": "echo 'Set secrets: GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, COOKIE_ENCRYPTION_KEY'",
 		"dev": "wrangler dev",
 		"start": "wrangler dev",
 		"cf-typegen": "wrangler types",
-		"type-check": "tsc --noEmit"
+		"type-check": "tsc --noEmit",
+		"db:list": "wrangler d1 list",
+		"db:query": "wrangler d1 execute symbolai-financial-db",
+		"secrets:list": "wrangler secret list"
 	},
 	"dependencies": {
 		"@cloudflare/workers-oauth-provider": "^0.1.0",

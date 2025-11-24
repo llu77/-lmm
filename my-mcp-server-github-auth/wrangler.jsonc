@@ -45,6 +45,13 @@
 			"id": "57a4eb48d4f047e7aea6b4692e174894"
 		}
 	],
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "symbolai-financial-db",
+			"database_id": "3897ede2-ffc0-4fe8-8217-f9607c89bef2"
+		}
+	],
 	"ai": {
 		"binding": "AI"
 	},
