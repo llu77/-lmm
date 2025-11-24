@@ -2,6 +2,10 @@
 
 # MCP Server GitHub Auth - Deployment Script
 # This script automates the deployment process for the MCP Server with GitHub OAuth
+#
+# Usage: ./deploy.sh
+# Make executable with: chmod +x deploy.sh
+# Or run with: bash deploy.sh
 
 set -e  # Exit on error
 
@@ -73,7 +77,11 @@ print_info "Step 2: Setting up secrets..."
 print_warning "You will be prompted to enter the following secrets:"
 echo "  1. GITHUB_CLIENT_ID (from your GitHub OAuth App)"
 echo "  2. GITHUB_CLIENT_SECRET (from your GitHub OAuth App)"
-echo "  3. COOKIE_ENCRYPTION_KEY (generate with: openssl rand -hex 32)"
+echo "  3. COOKIE_ENCRYPTION_KEY (generate a random 32-byte hex string)"
+echo ""
+print_info "Generate encryption key with one of these methods:"
+echo "  - OpenSSL: openssl rand -hex 32"
+echo "  - Node.js: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\""
 echo ""
 
 read -p "Press Enter to continue with setting secrets..."

@@ -25,12 +25,23 @@ For detailed deployment instructions, see **[DEPLOYMENT.md](./DEPLOYMENT.md)** w
 
 ### Quick Deploy
 
+Using the automated script:
+
 ```bash
 cd my-mcp-server-github-auth
-npm run deploy:full
+chmod +x deploy.sh  # Make script executable (first time only)
+./deploy.sh
+# Or: npm run deploy:full
 ```
 
-Or manually:
+Or run manually with bash:
+
+```bash
+cd my-mcp-server-github-auth
+bash deploy.sh
+```
+
+Or deploy manually step-by-step:
 
 ```bash
 cd my-mcp-server-github-auth && \

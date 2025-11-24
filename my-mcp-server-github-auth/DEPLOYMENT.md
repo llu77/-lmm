@@ -60,11 +60,17 @@ npx wrangler secret put GITHUB_CLIENT_ID
 # Set GitHub OAuth Client Secret
 npx wrangler secret put GITHUB_CLIENT_SECRET
 
-# Set Cookie Encryption Key (generate with: openssl rand -hex 32)
+# Set Cookie Encryption Key
+# Generate with: openssl rand -hex 32
+# Or with Node.js: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 npx wrangler secret put COOKIE_ENCRYPTION_KEY
 ```
 
 **Note**: When setting secrets, enter the actual values when prompted by Wrangler. Do not include quotes.
+
+**Generating Encryption Key**: Use one of these methods to generate a secure random key:
+- OpenSSL: `openssl rand -hex 32`
+- Node.js: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
 
 ### 5. Create and Initialize D1 Database
 
@@ -276,5 +282,5 @@ For issues and questions:
 
 ---
 
-**Last Updated**: November 2025
+**Last Updated**: November 2024
 **Version**: 1.0.0

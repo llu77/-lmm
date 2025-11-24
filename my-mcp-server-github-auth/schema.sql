@@ -3,6 +3,10 @@
 -- D1 Database for MCP Server Operations
 -- =========================================
 
+-- Note: Foreign key constraints are defined in this schema.
+-- To enforce them at runtime, enable foreign keys in your application code:
+-- await env.DB.prepare("PRAGMA foreign_keys = ON").run();
+
 -- 1. oauth_sessions
 -- Store OAuth session data for MCP client connections
 CREATE TABLE IF NOT EXISTS oauth_sessions (
