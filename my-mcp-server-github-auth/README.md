@@ -14,6 +14,45 @@ The MCP server (powered by [Cloudflare Workers](https://developers.cloudflare.co
 > [!WARNING]
 > This is a demo template designed to help you get started quickly. While we have implemented several security controls, **you must implement all preventive and defense-in-depth security measures before deploying to production**. Please review our comprehensive security guide: [Securing MCP Servers](https://github.com/cloudflare/agents/blob/main/docs/securing-mcp-servers.md)
 
+## 🚀 Quick Start
+
+For detailed deployment instructions, see **[DEPLOYMENT.md](./DEPLOYMENT.md)** which includes:
+- Complete step-by-step deployment guide
+- GitHub OAuth App setup
+- Database initialization
+- Secret configuration
+- Troubleshooting tips
+
+### Quick Deploy
+
+Using the automated script:
+
+```bash
+cd my-mcp-server-github-auth
+chmod +x deploy.sh  # Make script executable (first time only)
+./deploy.sh
+# Or: npm run deploy:full
+```
+
+Or run manually with bash:
+
+```bash
+cd my-mcp-server-github-auth
+bash deploy.sh
+```
+
+Or deploy manually step-by-step:
+
+```bash
+cd my-mcp-server-github-auth && \
+npx wrangler login && \
+npx wrangler secret put GITHUB_CLIENT_ID && \
+npx wrangler secret put GITHUB_CLIENT_SECRET && \
+npx wrangler secret put COOKIE_ENCRYPTION_KEY && \
+npx wrangler d1 execute symbolai-financial-db --file=./schema.sql && \
+npx wrangler deploy
+```
+
 ## Getting Started
 
 Clone the repo directly & install dependencies: `npm install`.
