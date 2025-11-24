@@ -1,15 +1,18 @@
-# Model Context Protocol (MCP) Server + Github OAuth
+# Model Context Protocol (MCP) Server + Github OAuth + SSH Key Auth
 
-This is a [Model Context Protocol (MCP)](https://modelcontextprotocol.io/introduction) server that supports remote MCP connections, with Github OAuth built-in.
+This is a [Model Context Protocol (MCP)](https://modelcontextprotocol.io/introduction) server that supports remote MCP connections with two authentication methods:
+- **GitHub OAuth**: Standard OAuth 2.0 flow with GitHub
+- **SSH Key Authentication**: Cloudflare Access SSH certificate authentication
 
-You can deploy it to your own Cloudflare account, and after you create your own Github OAuth client app, you'll have a fully functional remote MCP server that you can build off. Users will be able to connect to your MCP server by signing in with their GitHub account.
+You can deploy it to your own Cloudflare account, and after you configure authentication, you'll have a fully functional remote MCP server. Users can connect by signing in with their GitHub account OR using SSH key authentication through Cloudflare Access.
 
-You can use this as a reference example for how to integrate other OAuth providers with an MCP server deployed to Cloudflare, using the [`workers-oauth-provider` library](https://github.com/cloudflare/workers-oauth-provider).
+You can use this as a reference example for how to integrate multiple authentication providers with an MCP server deployed to Cloudflare, using the [`workers-oauth-provider` library](https://github.com/cloudflare/workers-oauth-provider).
 
 The MCP server (powered by [Cloudflare Workers](https://developers.cloudflare.com/workers/)):
 
 * Acts as OAuth _Server_ to your MCP clients
-* Acts as OAuth _Client_ to your _real_ OAuth server (in this case, GitHub)
+* Acts as OAuth _Client_ to your _real_ OAuth server (GitHub)
+* Supports SSH key authentication via Cloudflare Access
 
 > [!WARNING]
 > This is a demo template designed to help you get started quickly. While we have implemented several security controls, **you must implement all preventive and defense-in-depth security measures before deploying to production**. Please review our comprehensive security guide: [Securing MCP Servers](https://github.com/cloudflare/agents/blob/main/docs/securing-mcp-servers.md)
@@ -58,9 +61,13 @@ Enter `https://mcp-github-oauth.<your-subdomain>.workers.dev/sse` and hit connec
 
 You now have a remote MCP server deployed! 
 
-### Access Control
+### Authentication Methods
 
-This MCP server uses GitHub OAuth for authentication. All authenticated GitHub users can access basic tools like "add" and "userInfoOctokit".
+This MCP server supports two authentication methods:
+
+#### 1. GitHub OAuth (Default)
+
+All authenticated GitHub users can access basic tools like "add" and "userInfoOctokit".
 
 The "generateImage" tool is restricted to specific GitHub users listed in the `ALLOWED_USERNAMES` configuration:
 
@@ -71,6 +78,20 @@ const ALLOWED_USERNAMES = new Set([
   'teammate1'
 ]);
 ```
+
+#### 2. SSH Key Authentication (Cloudflare Access)
+
+Users can also authenticate using SSH keys via Cloudflare Access. This method:
+- Uses Cloudflare's zero-trust security model
+- Validates SSH certificates and JWT tokens
+- Extracts user identity from Cloudflare Access headers
+
+To use SSH key authentication, connect to:
+```
+https://mcp-github-oauth.<your-subdomain>.workers.dev/ssh-authorize
+```
+
+For detailed setup instructions, see [SSH_KEY_AUTH.md](../SSH_KEY_AUTH.md)
 
 ### Access the remote MCP server from Claude Desktop
 

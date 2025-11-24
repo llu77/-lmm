@@ -14,6 +14,7 @@ import {
 	validateCSRFToken,
 	validateOAuthState,
 } from "./workers-oauth-utils";
+import { validateSSHKeyAuth } from "./ssh-key-auth";
 
 const app = new Hono<{ Bindings: Env & { OAUTH_PROVIDER: OAuthHelpers } }>();
 
@@ -199,6 +200,154 @@ app.get("/callback", async (c) => {
 		status: 302,
 		headers,
 	});
+});
+
+/**
+ * SSH Key Authentication Endpoints
+ * These endpoints provide an alternative authentication method using SSH keys
+ * with Cloudflare Access
+ */
+
+// SSH Key Authentication - Authorize Endpoint
+app.get("/ssh-authorize", async (c) => {
+	const oauthReqInfo = await c.env.OAUTH_PROVIDER.parseAuthRequest(c.req.raw);
+	const { clientId } = oauthReqInfo;
+
+	if (!clientId) {
+		return c.text("Invalid request", 400);
+	}
+
+	// Validate SSH key authentication
+	const { valid, user } = await validateSSHKeyAuth(c.req.raw, c.env);
+
+	if (!valid || !user) {
+		return c.text("SSH key authentication failed. Please ensure your CF-Access headers are present.", 401);
+	}
+
+	// Check if client is already approved
+	if (await isClientApproved(c.req.raw, clientId, c.env.COOKIE_ENCRYPTION_KEY)) {
+		// Skip approval dialog and proceed with authentication
+		const { stateToken } = await createOAuthState(oauthReqInfo, c.env.OAUTH_KV);
+		const { setCookie: sessionBindingCookie } = await bindStateToSession(stateToken);
+
+		// Complete SSH key authentication
+		const { redirectTo } = await c.env.OAUTH_PROVIDER.completeAuthorization({
+			metadata: {
+				label: user.name,
+			},
+			props: {
+				accessToken: "ssh-key-auth",
+				email: user.email,
+				login: user.login,
+				name: user.name,
+			} as Props,
+			request: oauthReqInfo,
+			scope: oauthReqInfo.scope,
+			userId: user.login,
+		});
+
+		return new Response(null, {
+			headers: {
+				"Set-Cookie": sessionBindingCookie,
+				Location: redirectTo,
+			},
+			status: 302,
+		});
+	}
+
+	// Generate CSRF protection for the approval form
+	const { token: csrfToken, setCookie } = generateCSRFProtection();
+
+	return renderApprovalDialog(c.req.raw, {
+		client: await c.env.OAUTH_PROVIDER.lookupClient(clientId),
+		csrfToken,
+		server: {
+			description: "This is an MCP Remote Server using SSH Key authentication with Cloudflare Access.",
+			logo: "https://avatars.githubusercontent.com/u/314135?s=200&v=4",
+			name: "Cloudflare SSH Key Auth MCP Server",
+		},
+		setCookie,
+		state: { oauthReqInfo },
+	});
+});
+
+// SSH Key Authentication - Approve Endpoint
+app.post("/ssh-authorize", async (c) => {
+	try {
+		// Read form data
+		const formData = await c.req.raw.formData();
+
+		// Validate CSRF token
+		validateCSRFToken(formData, c.req.raw);
+
+		// Extract state from form data
+		const encodedState = formData.get("state");
+		if (!encodedState || typeof encodedState !== "string") {
+			return c.text("Missing state in form data", 400);
+		}
+
+		let state: { oauthReqInfo?: AuthRequest };
+		try {
+			state = JSON.parse(atob(encodedState));
+		} catch (_e) {
+			return c.text("Invalid state data", 400);
+		}
+
+		if (!state.oauthReqInfo || !state.oauthReqInfo.clientId) {
+			return c.text("Invalid request", 400);
+		}
+
+		// Validate SSH key authentication
+		const { valid, user } = await validateSSHKeyAuth(c.req.raw, c.env);
+
+		if (!valid || !user) {
+			return c.text("SSH key authentication failed", 401);
+		}
+
+		// Add client to approved list
+		const approvedClientCookie = await addApprovedClient(
+			c.req.raw,
+			state.oauthReqInfo.clientId,
+			c.env.COOKIE_ENCRYPTION_KEY,
+		);
+
+		// Create OAuth state and bind it to this user's session
+		const { stateToken } = await createOAuthState(state.oauthReqInfo, c.env.OAUTH_KV);
+		const { setCookie: sessionBindingCookie } = await bindStateToSession(stateToken);
+
+		// Complete SSH key authentication
+		const { redirectTo } = await c.env.OAUTH_PROVIDER.completeAuthorization({
+			metadata: {
+				label: user.name,
+			},
+			props: {
+				accessToken: "ssh-key-auth",
+				email: user.email,
+				login: user.login,
+				name: user.name,
+			} as Props,
+			request: state.oauthReqInfo,
+			scope: state.oauthReqInfo.scope,
+			userId: user.login,
+		});
+
+		// Set both cookies: approved client list + session binding
+		const headers = new Headers();
+		headers.append("Set-Cookie", approvedClientCookie);
+		headers.append("Set-Cookie", sessionBindingCookie);
+		headers.append("Location", redirectTo);
+
+		return new Response(null, {
+			status: 302,
+			headers,
+		});
+	} catch (error: any) {
+		console.error("POST /ssh-authorize error:", error);
+		if (error instanceof OAuthError) {
+			return error.toResponse();
+		}
+		return c.text(`Internal server error: ${error.message}`, 500);
+	}
 });
 
 export { app as GitHubHandler };

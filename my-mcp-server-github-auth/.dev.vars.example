@@ -1,3 +1,8 @@
 GITHUB_CLIENT_ID=<your github client id>
 GITHUB_CLIENT_SECRET=<your github client secret>
 COOKIE_ENCRYPTION_KEY=<your cookie cookie encryption key>
+
+# SSH Key Authentication (Optional)
+# Cloudflare Access SSH authentication credentials
+SSH_KEY_CLIENT_ID=20b80e2b331f2ee4c6d32008bf496614.access
+SSH_KEY_FINGERPRINT=671f73b3d352e97f08a80272a651dba35568eccace91213f7f04d00f4de37bc2
