@@ -5,6 +5,9 @@
 
 set -e  # Exit on error
 
+# Configuration
+DATABASE_NAME="symbolai-financial-db"
+
 # Color codes for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -42,9 +45,11 @@ if ! command_exists npx; then
     exit 1
 fi
 
-if ! command_exists wrangler && ! npx wrangler --version >/dev/null 2>&1; then
-    print_error "Wrangler CLI is not available. Installing..."
-    npm install -g wrangler
+# Check if Wrangler is available via npx
+if ! npx wrangler --version >/dev/null 2>&1; then
+    print_error "Wrangler CLI is not available via npx."
+    print_info "Please install it with: npm install -g wrangler"
+    exit 1
 fi
 
 print_success "Prerequisites check passed"
@@ -91,24 +96,31 @@ print_success "Secrets configured"
 print_info "Step 3: Initializing D1 database..."
 
 # Check if database exists
-if npx wrangler d1 list | grep -q "symbolai-financial-db"; then
-    print_warning "Database 'symbolai-financial-db' already exists"
+if npx wrangler d1 list | grep -q "$DATABASE_NAME"; then
+    print_success "Database '$DATABASE_NAME' found"
     read -p "Do you want to re-apply the schema? (y/N) " -n 1 -r
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         print_info "Applying database schema..."
-        npx wrangler d1 execute symbolai-financial-db --file=./schema.sql
+        npx wrangler d1 execute "$DATABASE_NAME" --file=./schema.sql
         print_success "Database schema applied"
     else
         print_info "Skipping schema application"
     fi
 else
-    print_warning "Database 'symbolai-financial-db' not found"
-    print_info "Creating database and applying schema..."
-    # Note: The database should be created manually or through Cloudflare dashboard
-    # This assumes it already exists as per the configuration
-    npx wrangler d1 execute symbolai-financial-db --file=./schema.sql
-    print_success "Database schema applied"
+    print_error "Database '$DATABASE_NAME' not found!"
+    print_info "Please create the database first using one of these methods:"
+    echo "  1. Via Cloudflare Dashboard: Workers & Pages > D1 > Create database"
+    echo "  2. Via Wrangler CLI: npx wrangler d1 create $DATABASE_NAME"
+    echo ""
+    print_info "After creating the database, update wrangler.jsonc with the database ID"
+    read -p "Would you like to continue without database initialization? (y/N) " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        print_error "Deployment cancelled. Please create the database first."
+        exit 1
+    fi
+    print_warning "Continuing without database initialization..."
 fi
 
 # Step 4: Deploy
