@@ -15,6 +15,13 @@ import {
 	validateOAuthState,
 } from "./workers-oauth-utils";
 import { validateSSHKeyAuth } from "./ssh-key-auth";
+import {
+	streamAuthSuccess,
+	streamAuthFailure,
+	streamOAuthStart,
+	streamOAuthComplete,
+	streamTokenIssued,
+} from "./event-streaming";
 
 const app = new Hono<{ Bindings: Env & { OAUTH_PROVIDER: OAuthHelpers } }>();
 
@@ -23,6 +30,11 @@ app.get("/authorize", async (c) => {
 	const { clientId } = oauthReqInfo;
 	if (!clientId) {
 		return c.text("Invalid request", 400);
+	}
+
+	// Stream OAuth start event
+	if (c.env.UU_STREAM) {
+		await streamOAuthStart(c.env.UU_STREAM, clientId, oauthReqInfo.scope);
 	}
 
 	// Check if client is already approved
@@ -173,6 +185,16 @@ app.get("/callback", async (c) => {
 	const user = await new Octokit({ auth: accessToken }).rest.users.getAuthenticated();
 	const { login, name, email } = user.data;
 
+	// Stream authentication success event
+	if (c.env.UU_STREAM) {
+		await streamAuthSuccess(
+			c.env.UU_STREAM,
+			{ login, name: name || login, email: email || `${login}@github.com` },
+			"github",
+			c.req.raw
+		);
+	}
+
 	// Return back to the MCP client a new token
 	const { redirectTo } = await c.env.OAUTH_PROVIDER.completeAuthorization({
 		metadata: {
@@ -189,6 +211,21 @@ app.get("/callback", async (c) => {
 		scope: oauthReqInfo.scope,
 		userId: login,
 	});
+
+	// Stream OAuth complete and token issued events
+	if (c.env.UU_STREAM) {
+		await streamOAuthComplete(
+			c.env.UU_STREAM,
+			{ login, name: name || login, email: email || `${login}@github.com` },
+			oauthReqInfo.clientId!
+		);
+		await streamTokenIssued(
+			c.env.UU_STREAM,
+			{ login, name: name || login, email: email || `${login}@github.com` },
+			oauthReqInfo.clientId!,
+			oauthReqInfo.scope
+		);
+	}
 
 	// Clear the session binding cookie (one-time use) by creating response with headers
 	const headers = new Headers({ Location: redirectTo });
@@ -221,7 +258,16 @@ app.get("/ssh-authorize", async (c) => {
 	const { valid, user } = await validateSSHKeyAuth(c.req.raw, c.env);
 
 	if (!valid || !user) {
+		// Stream SSH auth failure
+		if (c.env.UU_STREAM) {
+			await streamAuthFailure(c.env.UU_STREAM, "ssh", "Invalid SSH key or missing CF-Access headers", c.req.raw);
+		}
 		return c.text("SSH key authentication failed. Please ensure your CF-Access headers are present.", 401);
+	}
+
+	// Stream SSH auth success
+	if (c.env.UU_STREAM) {
+		await streamAuthSuccess(c.env.UU_STREAM, user, "ssh", c.req.raw);
 	}
 
 	// Check if client is already approved

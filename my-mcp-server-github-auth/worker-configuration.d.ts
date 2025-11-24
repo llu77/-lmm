@@ -10,6 +10,8 @@ declare namespace Cloudflare {
 		OAUTH_KV: KVNamespace;
 		MCP_OBJECT: DurableObjectNamespace<import("./src/index").MyMCP>;
 		AI: Ai;
+		DB: D1Database;
+		UU_STREAM: any; // Cloudflare Pipeline binding
 	}
 }
 interface Env extends Cloudflare.Env {}
