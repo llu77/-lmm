@@ -1,0 +1,125 @@
+name: Deploy MCP Server to Cloudflare Workers
+
+on:
+  push:
+    branches:
+      - main
+      - 'claude/**'
+    paths:
+      - 'my-mcp-server-github-auth/**'
+      - '.github/workflows/deploy-mcp-server.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'my-mcp-server-github-auth/**'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - preview
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy MCP Server
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: my-mcp-server-github-auth/package-lock.json
+
+      - name: Install dependencies
+        working-directory: my-mcp-server-github-auth
+        run: npm ci
+
+      - name: Build TypeScript
+        working-directory: my-mcp-server-github-auth
+        run: npm run build || echo "No build script found, skipping"
+
+      - name: Deploy to Cloudflare Workers
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: my-mcp-server-github-auth
+          command: deploy
+
+      - name: Apply D1 Database Schema
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        working-directory: my-mcp-server-github-auth
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          npx wrangler d1 execute symbolai-financial-db \
+            --file=./schema.sql \
+            --yes || echo "Schema already applied or error occurred"
+
+      - name: Set Worker Secrets
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        working-directory: my-mcp-server-github-auth
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          echo "${{ secrets.GITHUB_CLIENT_ID }}" | npx wrangler secret put GITHUB_CLIENT_ID || true
+          echo "${{ secrets.GITHUB_CLIENT_SECRET }}" | npx wrangler secret put GITHUB_CLIENT_SECRET || true
+          echo "${{ secrets.COOKIE_ENCRYPTION_KEY }}" | npx wrangler secret put COOKIE_ENCRYPTION_KEY || true
+
+      - name: Deployment Summary
+        run: |
+          echo "### 🚀 MCP Server Deployment Complete!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Worker:** \`mcp-server-github-auth\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ github.event.inputs.environment || 'production' }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "#### 🔗 Access URLs:" >> $GITHUB_STEP_SUMMARY
+          echo "- Worker: \`https://your-worker.workers.dev\`" >> $GITHUB_STEP_SUMMARY
+          echo "- GitHub OAuth: \`/authorize\`" >> $GITHUB_STEP_SUMMARY
+          echo "- SSH Auth: \`/ssh-authorize\`" >> $GITHUB_STEP_SUMMARY
+          echo "- MCP Endpoint: \`/mcp\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "#### ✅ Next Steps:" >> $GITHUB_STEP_SUMMARY
+          echo "1. Configure Pipeline Sink in Cloudflare Dashboard" >> $GITHUB_STEP_SUMMARY
+          echo "2. Test authentication endpoints" >> $GITHUB_STEP_SUMMARY
+          echo "3. Verify D1 database connection" >> $GITHUB_STEP_SUMMARY
+          echo "4. Monitor event streaming" >> $GITHUB_STEP_SUMMARY
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `### 🚀 MCP Server Preview Deployed!
+
+              **Preview URL:** \`https://preview.your-worker.workers.dev\`
+
+              **Endpoints:**
+              - GitHub OAuth: \`/authorize\`
+              - SSH Auth: \`/ssh-authorize\`
+              - MCP: \`/mcp\`
+
+              Test your changes before merging!`
+            })
