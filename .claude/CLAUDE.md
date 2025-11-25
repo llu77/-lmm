@@ -1,189 +1,434 @@
-# Claude Code Configuration Guide
+# LMM Financial Management System - Claude Code Guide
 
-This directory contains configuration files for customizing Claude Code behavior.
+This document provides comprehensive guidance for AI assistants working on this codebase.
 
-## 📁 Directory Structure
+## Project Overview
+
+**LMM** (نظام إدارة مالية) is a production-ready Arabic-first financial management system built as a monorepo. It's an enterprise ERP system with full RTL support for:
+
+- Payroll and employee compensation management
+- Revenue and expense tracking
+- Employee requests and approval workflows
+- Product orders and inventory
+- AI-assisted financial analysis (Claude integration)
+- Multi-branch operations with security controls
+
+**Version**: 2.0.0 | **Status**: Production Ready
+
+## Repository Structure
+
+```
+lmm/
+├── src/                          # React frontend (legacy/reference)
+│   ├── main.tsx                  # React entry point
+│   ├── App.tsx                   # Main router
+│   ├── pages/                    # Page components (15+ routes)
+│   ├── components/
+│   │   └── ui/                   # 65+ reusable UI components
+│   ├── hooks/                    # Custom React hooks
+│   ├── lib/                      # Utilities (api-client, pdf-export)
+│   └── types/                    # TypeScript definitions
+│
+├── symbolai-worker/              # Main Astro + Cloudflare Workers backend
+│   ├── src/
+│   │   ├── pages/                # Astro pages (20+ routes)
+│   │   ├── components/           # React components for Astro
+│   │   ├── layouts/              # Page layouts
+│   │   ├── lib/                  # Core libraries
+│   │   │   ├── db.ts             # D1 database utilities
+│   │   │   ├── ai.ts             # Claude AI integration
+│   │   │   ├── session.ts        # Session management
+│   │   │   ├── permissions.ts    # RBAC system
+│   │   │   ├── mcp-client.ts     # MCP client library
+│   │   │   └── reasoningbank/    # AI reasoning persistence
+│   │   ├── middleware.ts         # Astro middleware
+│   │   ├── theme/                # Design tokens (colors, typography)
+│   │   └── styles/               # Global CSS
+│   ├── migrations/               # D1 database migrations
+│   ├── astro.config.mjs          # Astro configuration
+│   └── wrangler.toml             # Cloudflare Workers config
+│
+├── cloudflare-worker/            # Simple Cloudflare Worker
+├── my-mcp-server-github-auth/    # MCP server for GitHub OAuth
+│
+├── .claude/                      # Claude Code configuration
+│   ├── CLAUDE.md                 # This file
+│   ├── settings.json             # MCP servers and settings
+│   ├── commands/                 # Custom slash commands
+│   └── output-styles/            # Response style presets
+│
+├── .github/
+│   ├── workflows/                # CI/CD pipelines
+│   ├── agents/                   # GitHub Copilot agents
+│   └── dependabot.yml            # Automated dependency updates
+│
+└── docs/                         # Additional documentation
+```
+
+## Technology Stack
+
+### Frontend
+| Technology | Version | Purpose |
+|------------|---------|---------|
+| React | 19.2.0 | UI framework |
+| TypeScript | 5.9.3 | Type safety |
+| Tailwind CSS | 4.1.x | Styling with RTL utilities |
+| Radix UI | Latest | Headless UI components |
+| React Hook Form | 7.66.1 | Form state management |
+| Zod | 4.1.13 | Schema validation |
+| Recharts | 3.5.0 | Data visualization |
+
+### Backend/Edge
+| Technology | Version | Purpose |
+|------------|---------|---------|
+| Astro | 5.16.0 | Meta-framework |
+| Cloudflare Workers | Latest | Edge computing |
+| Cloudflare D1 | Latest | SQLite database at edge |
+| Cloudflare KV | Latest | Key-value storage |
+| Cloudflare R2 | Latest | Object storage (PDFs) |
+
+### AI & Integration
+| Technology | Version | Purpose |
+|------------|---------|---------|
+| @anthropic-ai/sdk | 0.70.1 | Claude AI integration |
+| @modelcontextprotocol/sdk | 1.22.0 | MCP protocol |
+| Resend | 6.5.2 | Email delivery |
+| jsPDF | 3.0.4 | PDF generation |
+
+### Development Tools
+| Tool | Version | Purpose |
+|------|---------|---------|
+| Node.js | ≥18.20.8 | Runtime |
+| npm | ≥9.0.0 | Package manager |
+| Wrangler | 4.50.0 | Cloudflare CLI |
+| ESLint | 9.16.0 | Code linting |
+
+## Development Workflows
+
+### Quick Start
+
+```bash
+# Install dependencies (all workspaces)
+npm run install:all
+
+# Development server (main worker)
+npm run dev
+
+# Or for symbolai-worker specifically:
+cd symbolai-worker && npm run dev
+```
+
+### Build Commands
+
+```bash
+# Build all workspaces
+npm run build
+
+# Build only workers
+npm run build:workers
+
+# Build only MCP server
+npm run build:mcp
+
+# Type checking
+npm run type-check
+
+# Linting
+npm run lint
+```
+
+### Deployment
+
+```bash
+# Deploy to Cloudflare
+npm run deploy
+
+# Preview deployment (symbolai-worker)
+cd symbolai-worker && npm run deploy:preview
+```
+
+### Maintenance
+
+```bash
+# Clean all node_modules
+npm run clean
+
+# Update all dependencies
+npm run update
+
+# Security audit
+npm run audit
+```
+
+## Key Entry Points
+
+| File | Purpose |
+|------|---------|
+| `src/main.tsx` | React frontend entry |
+| `src/App.tsx` | Main router configuration |
+| `symbolai-worker/src/middleware.ts` | Astro/Cloudflare middleware |
+| `symbolai-worker/src/lib/db.ts` | Database utilities |
+| `symbolai-worker/src/lib/ai.ts` | AI/Claude integration |
+
+## Coding Conventions
+
+### TypeScript
+
+- Use strict TypeScript with `noEmit` for type checking
+- Define types in `src/types/` or co-located with components
+- Prefer interfaces over type aliases for objects
+- Use Zod schemas for runtime validation
+
+### React Components
+
+```tsx
+// Use functional components with TypeScript
+interface Props {
+  title: string;
+  onAction: () => void;
+}
+
+export function MyComponent({ title, onAction }: Props) {
+  // Component logic
+}
+```
+
+### RTL/Arabic Support
+
+```tsx
+// Use logical properties for RTL support
+<div className="ps-4 pe-2 ms-auto text-start">
+  {/* ps = padding-inline-start, pe = padding-inline-end */}
+  {/* ms = margin-inline-start, text-start = right in RTL */}
+</div>
+```
+
+### File Naming
+
+- Components: `PascalCase.tsx` (e.g., `BranchSelector.tsx`)
+- Utilities: `kebab-case.ts` (e.g., `api-client.ts`)
+- Pages: `kebab-case.tsx` or `index.tsx` in folders
+- Types: `types.ts` or `*.types.ts`
+
+### Imports
+
+```tsx
+// Preferred import order:
+// 1. React/framework imports
+import { useState } from 'react';
+
+// 2. External libraries
+import { useForm } from 'react-hook-form';
+
+// 3. Internal components (use @ alias)
+import { Button } from '@/components/ui/button';
+
+// 4. Utilities and types
+import { cn } from '@/lib/utils';
+import type { User } from '@/types';
+```
+
+## Database (Cloudflare D1)
+
+### Migrations Location
+`symbolai-worker/migrations/`
+
+### Key Tables
+- `employees` - Employee records
+- `revenues` - Income tracking
+- `expenses` - Expense tracking
+- `payroll` - Payroll records
+- `requests` - Employee requests
+- `sessions` - User sessions
+
+### Database Operations
+```typescript
+// Use lib/db.ts utilities
+import { getDB } from '@/lib/db';
+
+const db = getDB(env);
+const result = await db.prepare('SELECT * FROM employees').all();
+```
+
+## Environment Variables
+
+### Required Secrets (set via Wrangler)
+- `ANTHROPIC_API_KEY` - Claude AI API key
+- `RESEND_API_KEY` - Email service key
+- `SESSION_SECRET` - Session encryption
+
+### Cloudflare Bindings (in wrangler.toml)
+- `DB` - D1 database
+- `KV_SESSIONS` - Session storage
+- `KV_CACHE` - General cache
+- `R2_STORAGE` - File storage
+
+## CI/CD Pipelines
+
+Located in `.github/workflows/`:
+
+| Workflow | Trigger | Purpose |
+|----------|---------|---------|
+| `cloudflare-workers-deploy.yml` | Push to main | Full deployment |
+| `cloudflare-pages-deploy.yml` | Push/PR | Pages deployment |
+| `claude.yml` | @claude mention | AI code assistance |
+| `claude-code-review.yml` | PR opened | Automated review |
+
+### Deployment Flow
+1. Build verification (type-check, lint)
+2. Deploy symbolai-worker to Cloudflare Workers
+3. Deploy cloudflare-worker
+4. Deploy to Cloudflare Pages
+5. Post deployment summary
+
+## Testing
+
+### Current State
+- Test placeholder: `npm run test`
+- Security tests: `npm run security:test` (password hashing)
+- MCP tests: `npm run test:mcp`
+
+### Recommended Stack
+- **Unit**: Vitest or Jest
+- **Integration**: React Testing Library
+- **E2E**: Playwright or Cypress
+
+## Important Documentation
+
+| Document | Location | Purpose |
+|----------|----------|---------|
+| System Spec | `LMM_SYSTEM_SPECIFICATION.json` | Complete system specification |
+| Deployment | `DEPLOYMENT_GUIDE.md` | Deployment instructions |
+| Astro Guide | `ASTRO_V5_ARCHITECTURE.md` | Astro 5 architecture |
+| MCP Guide | `MCP_ARCHITECTURE.md` | MCP integration |
+| Security | `COMPREHENSIVE_SECURITY_AUDIT_REPORT.md` | Security audit |
+
+---
+
+## Claude Code Configuration
+
+### Directory Structure
 
 ```
 .claude/
-├── CLAUDE.md              # This file - main documentation
-├── settings.json          # Project-level settings
-├── settings.local.json    # User-specific settings (gitignored)
+├── CLAUDE.md              # This file
+├── settings.json          # Project MCP servers
+├── settings.local.json    # User-specific (gitignored)
 ├── commands/              # Custom slash commands
-│   └── *.md              # Command definition files
-├── output-styles/         # Output style presets
-│   └── *.md              # Style definition files
-└── MCP_SETUP.md          # MCP server configuration guide
+│   └── dedupe.md          # Dependency deduplication
+├── output-styles/         # Response style presets
+│   ├── code-reviewer.md
+│   ├── documentation-writer.md
+│   ├── api-designer.md
+│   ├── python-expert.md
+│   └── test-specialist.md
+└── MCP_SETUP.md           # MCP configuration guide
 ```
 
-## 🎨 Output Styles System
+### MCP Servers
 
-Output styles allow you to customize how Claude Code responds by providing specialized system prompts for different tasks. This is useful for creating consistent, domain-specific assistants.
+Configured in `settings.json`:
+- **Cloudflare AI** - AI operations
+- **Cloudflare Docs** - Documentation search
+- **Cloudflare Workers** - Infrastructure management
+- **Figma** - Design integration
 
-### What are Output Styles?
+### Output Styles
 
-Output styles are reusable system prompt configurations that modify Claude's behavior for specific tasks:
-- **Code Review**: Thorough code analysis with security focus
-- **Documentation**: Clear, comprehensive documentation writing
-- **Testing**: Test-driven development assistance
-- **Python Specialist**: Python-specific best practices
-- **API Design**: RESTful API design patterns
-
-### Directory Locations
-
-Output styles can be stored in two locations:
-
-1. **User-level** (global): `~/.claude/output-styles/`
-   - Available across all projects
-   - Good for personal preferences
-
-2. **Project-level** (local): `.claude/output-styles/`
-   - Specific to this project
-   - Shared with team via git
-   - Overrides user-level styles with same name
-
-### File Format
-
-Output style files use Markdown with YAML frontmatter:
+Output styles customize Claude's responses for specific tasks:
 
 ```markdown
 ---
 name: Style Name
-description: Brief description of what this style does
+description: Brief description
 ---
 
-System prompt content goes here.
-
-You can use:
-- Bullet points
-- Multiple paragraphs
-- Code examples
-- Any markdown formatting
+System prompt content here.
 ```
 
-### Creating Output Styles
+**Available Styles:**
+- `code-reviewer.md` - Thorough code review with security focus
+- `documentation-writer.md` - Clear, comprehensive documentation
+- `test-specialist.md` - Test-driven development assistance
+- `api-designer.md` - RESTful API design patterns
+- `python-expert.md` - Python best practices
 
-#### Method 1: Manual Creation
+### Custom Commands
 
-Create a new `.md` file in `.claude/output-styles/`:
-
-**Example:** `.claude/output-styles/code-reviewer.md`
+Create commands in `.claude/commands/*.md`:
 
 ```markdown
 ---
-name: Code Reviewer
-description: Thorough code review assistant
+name: command-name
+description: What it does
 ---
 
-You are an expert code reviewer.
-
-For every code submission:
-1. Check for bugs and security issues
-2. Evaluate performance
-3. Suggest improvements
-4. Rate code quality (1-10)
+Command prompt content.
 ```
 
-#### Method 2: Using Python Script
+---
 
-Use the provided utility script:
+## AI Assistant Guidelines
 
-```python
-from scripts.create_output_style import create_output_style
+When working on this codebase:
 
-await create_output_style(
-    'Code Reviewer',
-    'Thorough code review assistant',
-    """You are an expert code reviewer.
+1. **Language**: Code in English, UI text in Arabic. Comments in English.
 
-For every code submission:
-1. Check for bugs and security issues
-2. Evaluate performance
-3. Suggest improvements
-4. Rate code quality (1-10)"""
-)
+2. **RTL Awareness**: Always use logical CSS properties (`ps-`, `pe-`, `ms-`, `me-`, `text-start`, `text-end`) instead of directional ones.
+
+3. **Type Safety**: Maintain strict TypeScript. Don't use `any` without justification.
+
+4. **Component Library**: Prefer existing Radix UI components in `src/components/ui/`.
+
+5. **Security**:
+   - Never commit secrets or API keys
+   - Use environment variables for sensitive data
+   - Validate all user input with Zod
+
+6. **Database**:
+   - Use parameterized queries (never string concatenation)
+   - Migrations go in `symbolai-worker/migrations/`
+
+7. **Testing**: Add tests for new functionality when possible.
+
+8. **Documentation**: Update relevant docs when making significant changes.
+
+## Quick References
+
+### Common Commands
+```bash
+npm run dev              # Start dev server
+npm run build            # Build all
+npm run type-check       # TypeScript check
+npm run lint             # ESLint check
+npm run deploy           # Deploy to production
 ```
 
-### Using Output Styles
+### Key Paths
+- UI Components: `src/components/ui/`
+- API Routes: `symbolai-worker/src/pages/api/`
+- Database: `symbolai-worker/src/lib/db.ts`
+- AI Integration: `symbolai-worker/src/lib/ai.ts`
+- Styles: `symbolai-worker/src/styles/globals.css`
+- Migrations: `symbolai-worker/migrations/`
 
-#### In Claude Agent SDK
-
-```python
-from claude_agent_sdk import query, ClaudeAgentOptions
-
-# Load output style by name
-messages = []
-async for message in query(
-    prompt="Review this code",
-    options=ClaudeAgentOptions(
-        output_style="Code Reviewer"
-    )
-):
-    messages.append(message)
+### Design System Colors
+```
+Primary (Cyan):   #06b6d4
+Secondary (Pink): #ec4899
+Success (Green):  #22c55e
+Warning (Orange): #f97316
+Danger (Rose):    #f43f5e
+Error (Red):      #ef4444
+Info (Blue):      #0ea5e9
 ```
 
-#### Or use custom system prompts directly:
+---
 
-```python
-from claude_agent_sdk import query, ClaudeAgentOptions
+## Additional Resources
 
-custom_prompt = """You are a Python coding specialist.
-Follow these guidelines:
-- Write clean, well-documented code
-- Use type hints for all functions
-- Include comprehensive docstrings"""
-
-messages = []
-async for message in query(
-    prompt="Create a data processing pipeline",
-    options=ClaudeAgentOptions(
-        system_prompt=custom_prompt
-    )
-):
-    messages.append(message)
-```
-
-### Available Output Styles
-
-This project includes the following output styles:
-
-- **code-reviewer.md**: Thorough code review with security focus
-- **documentation-writer.md**: Clear, comprehensive documentation
-- **test-specialist.md**: Test-driven development assistant
-- **python-expert.md**: Python best practices specialist
-- **api-designer.md**: RESTful API design patterns
-
-### Best Practices
-
-1. **Naming**: Use lowercase with hyphens (e.g., `my-style.md`)
-2. **Description**: Keep it concise (one sentence)
-3. **Content**: Be specific about the behavior you want
-4. **Examples**: Include examples in the prompt when helpful
-5. **Version Control**: Commit project-level styles to share with team
-
-### Example Output Styles
-
-See `.claude/output-styles/` for pre-configured examples:
-- Code review specialists
-- Documentation writers
-- Testing assistants
-- Domain-specific experts
-
-## ⚙️ MCP Servers
-
-See [MCP_SETUP.md](./MCP_SETUP.md) for MCP server configuration.
-
-## 🔧 Custom Commands
-
-See `commands/` directory for custom slash command definitions.
-
-## 📚 Settings Files
-
-- **settings.json**: Project-wide settings (committed to git)
-- **settings.local.json**: User-specific overrides (gitignored)
-
-## 📖 References
-
-- [Claude Code Documentation](https://docs.claude.com/en/docs/claude-code)
-- [Claude Agent SDK](https://docs.claude.com/en/docs/claude-agent-sdk)
-- [Output Styles Guide](https://docs.claude.com/en/docs/claude-code/output-styles)
+- [Claude Code Docs](https://docs.claude.com/en/docs/claude-code)
+- [Astro Documentation](https://docs.astro.build)
+- [Cloudflare Workers Docs](https://developers.cloudflare.com/workers/)
+- [Tailwind CSS](https://tailwindcss.com/docs)
+- [Radix UI](https://www.radix-ui.com/docs/primitives)
