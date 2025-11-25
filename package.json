@@ -8,6 +8,9 @@
     "cloudflare-worker",
     "my-mcp-server-github-auth"
   ],
+  "bin": {
+    "gemini": "./bin/gemini.js"
+  },
   "scripts": {
     "build": "npm run build:workers && npm run build:mcp",
     "build:workers": "cd symbolai-worker && NODE_OPTIONS='--max-old-space-size=2048' npm run build || true && cd ../cloudflare-worker && npm run build || true",
@@ -33,6 +36,7 @@
   },
   "dependencies": {
     "@astrojs/react": "^4.4.1",
+    "@google/generative-ai": "^0.24.1",
     "@noble/hashes": "^2.0.1",
     "@radix-ui/react-aspect-ratio": "^1.1.8",
     "@radix-ui/react-context-menu": "^2.2.16",
