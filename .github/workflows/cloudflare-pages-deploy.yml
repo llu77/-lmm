@@ -104,7 +104,7 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Download build artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: symbolai-worker-dist
           path: symbolai-worker/dist
