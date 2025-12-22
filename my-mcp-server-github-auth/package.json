@@ -12,13 +12,13 @@
 	},
 	"dependencies": {
 		"@cloudflare/workers-oauth-provider": "^0.1.0",
-		"@modelcontextprotocol/sdk": "1.22.0",
-		"agents": "^0.2.19",
-		"hono": "^4.10.6",
+		"@modelcontextprotocol/sdk": "1.25.1",
+		"agents": "^0.2.35",
+		"hono": "^4.11.1",
 		"just-pick": "^4.2.0",
 		"octokit": "^5.0.4",
 		"workers-mcp": "^0.0.13",
-		"zod": "^4.1.12"
+		"zod": "^4.2.1"
 	},
 	"devDependencies": {
 		"@types/node": "^24.10.0",
