@@ -184,6 +184,27 @@ export const FINANCE_DDL: readonly string[] = [
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`,
 
+  // Extra data for employee_requests, whose columns differ between deployments
+  // and lack an employee link, a free-text reason and leave details.
+  `CREATE TABLE IF NOT EXISTS employee_request_meta (
+    request_id TEXT PRIMARY KEY,
+    employee_id TEXT,
+    reason TEXT,
+    leave_type TEXT,
+    leave_start TEXT,
+    leave_end TEXT,
+    leave_days REAL,
+    permission_hours REAL,
+    requested_installments INTEGER,
+    financial_json TEXT,
+    responded_by TEXT,
+    responded_by_name TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_employee_request_meta_employee
+    ON employee_request_meta (employee_id)`,
+
   `CREATE TABLE IF NOT EXISTS user_notifications (
     id TEXT PRIMARY KEY,
     branch_id TEXT,

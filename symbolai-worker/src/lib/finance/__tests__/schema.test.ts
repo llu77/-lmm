@@ -25,7 +25,7 @@ for (const variant of ['008', 'legacy'] as const) {
     await ensureFinanceSchema(DB as any);
     for (const statement of FINANCE_DDL) DB.raw.exec(statement); // second run is a no-op
     const tables = DB.query<{ name: string }>(`SELECT name FROM sqlite_master WHERE type = 'table'`).map(r => r.name);
-    for (const t of ['payroll_adjustments', 'payroll_runs', 'payroll_run_items', 'financial_vouchers', 'voucher_sequences', 'organization_settings', 'user_signatures', 'user_notifications']) {
+    for (const t of ['payroll_adjustments', 'payroll_runs', 'payroll_run_items', 'financial_vouchers', 'voucher_sequences', 'organization_settings', 'user_signatures', 'user_notifications', 'employee_request_meta']) {
       assert.ok(tables.includes(t), `missing ${t}`);
     }
   });
