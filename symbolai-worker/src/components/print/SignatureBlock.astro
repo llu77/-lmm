@@ -1,0 +1,89 @@
+---
+// Row of signature boxes (prepared by / received by / approved by).
+// A slot with `approved` shows the approver's signature and the company stamp;
+// without an uploaded stamp image a drawn seal with the company name is used.
+export interface SignatureSlot {
+  titleAr: string;
+  titleEn: string;
+  name?: string | null;
+  signatureImage?: string | null;
+  /** Show the company stamp over this slot (only after manager approval). */
+  stamp?: boolean;
+  date?: string | null;
+  /** Leave an empty line for a handwritten signature. */
+  handwritten?: boolean;
+}
+
+interface Props {
+  slots: SignatureSlot[];
+  stampImage?: string | null;
+  companyName: string;
+}
+
+const { slots, stampImage, companyName } = Astro.props;
+---
+
+<section class="signatures" style={`grid-template-columns: repeat(${slots.length}, 1fr);`}>
+  {slots.map(slot => (
+    <div class="sig">
+      <div class="sig-title">
+        <span>{slot.titleAr}</span>
+        <span class="en">{slot.titleEn}</span>
+      </div>
+      <div class="sig-area">
+        {slot.signatureImage && <img class="sig-img" src={slot.signatureImage} alt="" />}
+        {slot.stamp && (stampImage
+          ? <img class="stamp-img" src={stampImage} alt="" />
+          : (
+            <div class="seal" aria-hidden="true">
+              <div class="seal-inner">
+                <div class="seal-company">{companyName}</div>
+                <div class="seal-word">معتمد</div>
+                <div class="seal-word en">APPROVED</div>
+              </div>
+            </div>
+          ))}
+        {!slot.signatureImage && !slot.stamp && <div class="sig-line" />}
+      </div>
+      <div class="sig-name">{slot.name || (slot.handwritten ? 'الاسم: ............................' : ' ')}</div>
+      {slot.date && <div class="sig-date num">{slot.date}</div>}
+    </div>
+  ))}
+</section>
+
+<style>
+  .signatures { display: grid; gap: 14px; margin-top: 18px; break-inside: avoid; }
+  .sig { text-align: center; }
+  .sig-title {
+    display: flex; justify-content: space-between; gap: 6px;
+    font-weight: 700; color: var(--navy); border-bottom: 1px solid var(--line); padding-bottom: 3px; font-size: 12px;
+  }
+  .sig-title .en { font-weight: 600; color: var(--muted); font-size: 11px; }
+  .sig-area {
+    position: relative; height: 96px; margin: 6px 0 4px;
+    background: var(--panel); border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .sig-img { max-height: 80px; max-width: 85%; object-fit: contain; position: relative; z-index: 2; mix-blend-mode: multiply; }
+  .stamp-img {
+    position: absolute; inset-inline-start: 8px; top: 4px; width: 92px; height: 92px; object-fit: contain;
+    transform: rotate(-12deg); opacity: .88; mix-blend-mode: multiply; z-index: 1;
+  }
+  .sig-line { width: 70%; border-bottom: 1px dashed #9ca3af; height: 50px; }
+  .sig-name { font-weight: 700; font-size: 12.5px; }
+  .sig-date { font-size: 11px; color: var(--muted); }
+  .seal {
+    position: absolute; inset-inline-start: 10px; top: 6px;
+    width: 86px; height: 86px; border-radius: 50%;
+    border: 3px double rgba(30, 64, 175, .8); color: rgba(30, 64, 175, .85);
+    display: flex; align-items: center; justify-content: center;
+    transform: rotate(-14deg); z-index: 1; background: rgba(255,255,255,.2);
+  }
+  .seal-inner {
+    width: 70px; height: 70px; border-radius: 50%; border: 1px solid rgba(30, 64, 175, .7);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; line-height: 1.1;
+  }
+  .seal-company { font-size: 8px; font-weight: 700; max-width: 62px; overflow: hidden; }
+  .seal-word { font-size: 13px; font-weight: 800; }
+  .seal-word.en { font-size: 8px; letter-spacing: 1px; }
+</style>

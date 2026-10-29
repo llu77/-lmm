@@ -1,0 +1,121 @@
+---
+// Standalone printable document (A4). Used by the payroll sheet, payslips and
+// vouchers. Screen: grey desk with white sheets and a toolbar. Print: sheets only.
+interface Props {
+  title: string;
+  orientation?: 'portrait' | 'landscape';
+  backHref?: string;
+  /** Diagonal text on every sheet, e.g. "مسودة — غير معتمد". */
+  watermark?: string | null;
+}
+
+const { title, orientation = 'portrait', backHref = '/dashboard', watermark = null } = Astro.props;
+---
+
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>{title}</title>
+    <style is:global set:html={`@page { size: A4 ${orientation}; margin: 9mm; }`}></style>
+    <style is:global>
+      :root {
+        --ink: #1f2937;
+        --muted: #6b7280;
+        --line: #1f2937;
+        --soft-line: #d1d5db;
+        --panel: #f3f4f6;
+        --accent: #b91c1c;
+        --accent-soft: #dbe7f6;
+        --navy: #1e2a4a;
+        --ok: #166534;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; }
+      body {
+        background: #d4d7dd;
+        color: var(--ink);
+        font-family: 'Segoe UI', Tahoma, 'Noto Naskh Arabic', 'Geeza Pro', 'Arial', sans-serif;
+        font-size: 12.5px;
+        line-height: 1.5;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      .toolbar {
+        position: sticky; top: 0; z-index: 10;
+        display: flex; gap: 8px; align-items: center; justify-content: center;
+        padding: 10px 16px; background: #111827; color: #fff;
+      }
+      .toolbar button, .toolbar a {
+        font: inherit; font-size: 14px; border: 0; border-radius: 6px; padding: 8px 18px;
+        cursor: pointer; text-decoration: none;
+      }
+      .toolbar .primary { background: #0891b2; color: #fff; }
+      .toolbar .secondary { background: #374151; color: #fff; }
+      .toolbar .hint { font-size: 12px; color: #9ca3af; margin-inline-start: 12px; }
+      .desk { padding: 18px 0 40px; }
+      .sheet {
+        position: relative; overflow: hidden;
+        background: #fff; margin: 0 auto 18px;
+        padding: 12mm 12mm 10mm;
+        box-shadow: 0 2px 14px rgba(0,0,0,.18);
+      }
+      .sheet.portrait { width: 210mm; min-height: 297mm; }
+      .sheet.landscape { width: 297mm; min-height: 210mm; }
+      .sheet.half { min-height: auto; }
+      .watermark {
+        position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+        pointer-events: none; z-index: 0;
+      }
+      .watermark span {
+        transform: rotate(-28deg); font-size: 64px; font-weight: 800; letter-spacing: 2px;
+        color: rgba(185, 28, 28, .09); white-space: nowrap; border: 6px solid rgba(185, 28, 28, .09);
+        padding: 6px 28px; border-radius: 12px;
+      }
+      .sheet > *:not(.watermark) { position: relative; z-index: 1; }
+      .en { direction: ltr; unicode-bidi: isolate; font-family: 'Segoe UI', Arial, sans-serif; }
+      .num { direction: ltr; unicode-bidi: isolate; font-variant-numeric: tabular-nums; }
+      .muted { color: var(--muted); }
+      @media print {
+        body { background: #fff; }
+        .toolbar { display: none !important; }
+        .desk { padding: 0; }
+        .sheet { box-shadow: none; margin: 0; padding: 0; width: auto !important; min-height: auto !important; }
+        .sheet + .sheet { break-before: page; }
+        .no-print { display: none !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="toolbar no-print">
+      <button type="button" class="primary" id="print-btn">🖨️ طباعة</button>
+      <a class="secondary" href={backHref}>رجوع</a>
+      <slot name="toolbar" />
+      <span class="hint">للحصول على أفضل نتيجة: فعّل «رسومات الخلفية» وألغِ «الرؤوس والتذييلات» في نافذة الطباعة</span>
+    </div>
+    <div class="desk" data-watermark={watermark ?? ''}>
+      <slot />
+    </div>
+    <script>
+      document.getElementById('print-btn')?.addEventListener('click', () => window.print());
+      // Repeat the watermark on every sheet of the document.
+      const desk = document.querySelector<HTMLElement>('.desk');
+      const text = desk?.dataset.watermark;
+      if (desk && text) {
+        desk.querySelectorAll<HTMLElement>('.sheet').forEach(sheet => {
+          const mark = document.createElement('div');
+          mark.className = 'watermark';
+          const span = document.createElement('span');
+          span.textContent = text;
+          mark.appendChild(span);
+          sheet.prepend(mark);
+        });
+      }
+      if (new URLSearchParams(window.location.search).get('autoprint') === '1') {
+        window.addEventListener('load', () => setTimeout(() => window.print(), 300));
+      }
+    </script>
+  </body>
+</html>

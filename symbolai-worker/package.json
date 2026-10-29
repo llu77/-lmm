@@ -12,6 +12,7 @@
     "astro": "astro",
     "sync": "astro sync",
     "type-check": "astro check",
+    "test": "tsx --test src/lib/finance/__tests__/*.test.ts",
     "deploy": "wrangler deploy",
     "deploy:preview": "wrangler deploy --env preview",
     "cf:types": "wrangler types",

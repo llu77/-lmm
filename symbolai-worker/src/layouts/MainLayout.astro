@@ -1,6 +1,10 @@
 ---
 import '@/styles/globals.css';
-import { ClientRouter } from 'astro:transitions';
+import NotificationBell from '@/components/NotificationBell.astro';
+
+// No <ClientRouter />: with client-side navigation, page <script> modules run
+// only on the first visit, so returning to a page left it without data or
+// event handlers. Full page loads keep every page's script working.
 
 interface Props {
   title?: string;
@@ -21,34 +25,45 @@ const {
   <meta name="description" content={description}>
   <title>{title}</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-  <ClientRouter />
 </head>
 <body>
   <div class="min-h-screen bg-background">
     <!-- Header/Navigation -->
-    <header class="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div class="container flex h-14 items-center">
-        <div class="mr-4 flex">
-          <a href="/dashboard" class="mr-6 flex items-center space-x-2">
-            <span class="font-bold">SymbolAI المالية</span>
-          </a>
-          <nav class="flex items-center space-x-6 text-sm font-medium">
-            <a href="/dashboard" class="transition-colors hover:text-foreground/80 text-foreground">لوحة التحكم</a>
-            <a href="/revenues" class="transition-colors hover:text-foreground/80 text-foreground/60">الإيرادات</a>
-            <a href="/expenses" class="transition-colors hover:text-foreground/80 text-foreground/60">المصروفات</a>
-            <a href="/employees" class="transition-colors hover:text-foreground/80 text-foreground/60">الموظفين</a>
-            <a href="/bonus" class="transition-colors hover:text-foreground/80 text-foreground/60">البونص</a>
-            <a href="/payroll" class="transition-colors hover:text-foreground/80 text-foreground/60">الرواتب</a>
-            <a href="/employee-requests" class="transition-colors hover:text-foreground/80 text-foreground/60">الطلبات</a>
-            <a href="/product-orders" class="transition-colors hover:text-foreground/80 text-foreground/60">الطلبيات</a>
-            <a href="/backups" class="transition-colors hover:text-foreground/80 text-foreground/60">النسخ الاحتياطي</a>
-            <a href="/ai-assistant" class="transition-colors hover:text-foreground/80 text-foreground/60">المساعد الذكي</a>
-          </nav>
-        </div>
-        <div class="flex flex-1 items-center justify-between space-x-2 md:justify-end">
-          <div class="w-full flex-1 md:w-auto md:flex-none">
-            <!-- User menu will go here -->
-          </div>
+    <header class="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 print:hidden">
+      <div class="container flex h-14 items-center gap-4">
+        <a href="/dashboard" class="flex shrink-0 items-center">
+          <span class="font-bold">SymbolAI المالية</span>
+        </a>
+        <nav id="main-nav" class="flex min-w-0 flex-1 items-center gap-5 overflow-x-auto whitespace-nowrap text-sm font-medium">
+          {[
+            { href: '/dashboard', label: 'لوحة التحكم' },
+            { href: '/revenues', label: 'الإيرادات' },
+            { href: '/expenses', label: 'المصروفات' },
+            { href: '/employees', label: 'الموظفين' },
+            { href: '/bonus', label: 'البونص' },
+            { href: '/payroll', label: 'الرواتب' },
+            { href: '/advances-deductions', label: 'المستحقات والاستقطاعات' },
+            { href: '/vouchers', label: 'السندات' },
+            { href: '/manage-requests', label: 'الطلبات' },
+            { href: '/my-requests', label: 'طلباتي' },
+            { href: '/product-orders', label: 'الطلبيات' },
+            { href: '/settings', label: 'الإعدادات' },
+            { href: '/ai-assistant', label: 'المساعد الذكي' },
+          ].map(item => {
+            const active = Astro.url.pathname === item.href || Astro.url.pathname.startsWith(`${item.href}/`);
+            return (
+              <a
+                href={item.href}
+                class:list={['transition-colors hover:text-foreground/80', active ? 'text-foreground font-semibold' : 'text-foreground/60']}
+                aria-current={active ? 'page' : undefined}
+              >
+                {item.label}
+              </a>
+            );
+          })}
+        </nav>
+        <div class="flex shrink-0 items-center gap-2">
+          <NotificationBell />
         </div>
       </div>
     </header>
