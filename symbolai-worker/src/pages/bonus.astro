@@ -8,375 +8,701 @@ if (!cookieHeader?.includes('session=')) {
 }
 ---
 
-<MainLayout title="البونص - SymbolAI">
+<MainLayout title="البونص الأسبوعي - SymbolAI">
   <div class="space-y-6">
-    <div>
-      <h1 class="text-3xl font-bold">حساب البونص الأسبوعي</h1>
-      <p class="text-muted-foreground mt-2">حساب بونص الموظفين بناءً على إيراداتهم</p>
-    </div>
-
-    <!-- Calculation Section -->
-    <div class="rounded-lg border bg-card p-6">
-      <h3 class="text-xl font-semibold mb-4">حساب بونص جديد</h3>
-
-      <div class="grid gap-4 md:grid-cols-3 mb-4">
-        <div>
-          <label class="block text-sm font-medium mb-2">الشهر</label>
-          <select id="bonus-month" class="w-full rounded-md border px-3 py-2">
-            <option value="يناير">يناير</option>
-            <option value="فبراير">فبراير</option>
-            <option value="مارس">مارس</option>
-            <option value="أبريل">أبريل</option>
-            <option value="مايو">مايو</option>
-            <option value="يونيو">يونيو</option>
-            <option value="يوليو">يوليو</option>
-            <option value="أغسطس">أغسطس</option>
-            <option value="سبتمبر">سبتمبر</option>
-            <option value="أكتوبر">أكتوبر</option>
-            <option value="نوفمبر">نوفمبر</option>
-            <option value="ديسمبر">ديسمبر</option>
-          </select>
-        </div>
-        <div>
-          <label class="block text-sm font-medium mb-2">السنة</label>
-          <input type="number" id="bonus-year" value="2025" class="w-full rounded-md border px-3 py-2" />
-        </div>
-        <div>
-          <label class="block text-sm font-medium mb-2">رقم الأسبوع</label>
-          <select id="bonus-week" class="w-full rounded-md border px-3 py-2">
-            <option value="1">الأسبوع 1 (أيام 1-7)</option>
-            <option value="2">الأسبوع 2 (أيام 8-14)</option>
-            <option value="3">الأسبوع 3 (أيام 15-21)</option>
-            <option value="4">الأسبوع 4 (أيام 22-28)</option>
-            <option value="5">الأسبوع 5 (أيام 29-31)</option>
-          </select>
-        </div>
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div>
+        <h1 class="text-3xl font-bold">البونص الأسبوعي</h1>
+        <p class="text-muted-foreground mt-2 max-w-3xl leading-relaxed">
+          يُحسب بونص كل موظف <strong>تلقائياً</strong> من إيرادات الكاشير المسجّلة في صفحة الإيرادات، لكل أسبوع من الشهر
+          (1–7، 8–14، 15–21، 22–28، 29–نهاية الشهر) وفق شرائح يحددها المدير. بعد انتهاء الأسبوع يرسله مشرف الفرع للاعتماد،
+          وبعد اعتماد المدير يُضاف تلقائياً إلى مسير رواتب الشهر.
+        </p>
       </div>
-
-      <button
-        id="calculate-btn"
-        class="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors font-medium"
+      <a
+        id="settings-link"
+        href="/bonus-settings"
+        class="hidden shrink-0 rounded-md border px-4 py-2 text-sm font-medium hover:bg-gray-50"
       >
-        احسب البونص
-      </button>
-
-      <!-- Calculation Results -->
-      <div id="calculation-results" class="mt-6 hidden">
-        <div class="rounded-lg bg-blue-50 border border-blue-200 p-4 mb-4">
-          <div class="grid gap-4 md:grid-cols-3">
-            <div>
-              <p class="text-sm text-blue-700">الفترة</p>
-              <p class="font-bold text-blue-900" id="week-range">-</p>
-            </div>
-            <div>
-              <p class="text-sm text-blue-700">عدد سجلات الإيرادات</p>
-              <p class="font-bold text-blue-900" id="revenue-count">0</p>
-            </div>
-            <div>
-              <p class="text-sm text-blue-700">إجمالي البونص</p>
-              <p class="font-bold text-blue-900" id="total-bonus">0 ج.م</p>
-            </div>
-          </div>
-        </div>
-
-        <div class="overflow-x-auto">
-          <table class="w-full">
-            <thead>
-              <tr class="border-b">
-                <th class="text-right p-3 font-medium">اسم الموظف</th>
-                <th class="text-right p-3 font-medium">إجمالي الإيرادات</th>
-                <th class="text-right p-3 font-medium">النسبة</th>
-                <th class="text-right p-3 font-medium">مبلغ البونص</th>
-              </tr>
-            </thead>
-            <tbody id="bonus-table-body">
-            </tbody>
-          </table>
-        </div>
-
-        <div class="flex gap-3 justify-end mt-4">
-          <button
-            id="save-draft-btn"
-            class="px-4 py-2 border rounded-md hover:bg-gray-50"
-          >
-            حفظ كمسودة
-          </button>
-          <button
-            id="approve-save-btn"
-            class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
-          >
-            موافقة وحفظ
-          </button>
-        </div>
-
-        <div id="already-exists-warning" class="hidden mt-4 rounded-lg bg-yellow-50 border border-yellow-200 p-4">
-          <p class="text-sm text-yellow-800">⚠️ تنبيه: يوجد بالفعل سجل بونص لهذا الأسبوع. الحفظ سيضيف سجل جديد.</p>
-        </div>
-      </div>
+        إعدادات شرائح البونص
+      </a>
     </div>
 
-    <!-- Previous Bonus Records -->
-    <div class="rounded-lg border bg-card p-6">
-      <div class="flex items-center justify-between mb-4">
-        <h3 class="text-xl font-semibold">سجلات البونص السابقة</h3>
-        <div class="flex gap-2">
-          <select id="filter-month" class="rounded-md border px-3 py-2 text-sm">
-            <option value="يناير">يناير</option>
-            <option value="فبراير">فبراير</option>
-            <option value="مارس">مارس</option>
-            <option value="أبريل">أبريل</option>
-            <option value="مايو">مايو</option>
-            <option value="يونيو">يونيو</option>
-            <option value="يوليو">يوليو</option>
-            <option value="أغسطس">أغسطس</option>
-            <option value="سبتمبر">سبتمبر</option>
-            <option value="أكتوبر">أكتوبر</option>
-            <option value="نوفمبر">نوفمبر</option>
-            <option value="ديسمبر">ديسمبر</option>
-          </select>
-          <input type="number" id="filter-year" value="2025" class="w-24 rounded-md border px-3 py-2 text-sm" />
+    <div id="page-error" class="hidden rounded-lg border border-red-200 bg-red-50 p-4 text-red-800" role="alert"></div>
+
+    <!-- Filters + tiers -->
+    <div class="rounded-lg border bg-card p-4 md:p-6 space-y-4">
+      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div>
+          <label for="branch-select" class="block text-sm font-medium mb-2">الفرع</label>
+          <select id="branch-select" class="w-full rounded-md border px-3 py-2 bg-white disabled:bg-gray-50"></select>
+        </div>
+        <div>
+          <label for="month-select" class="block text-sm font-medium mb-2">الشهر</label>
+          <select id="month-select" class="w-full rounded-md border px-3 py-2 bg-white"></select>
+        </div>
+        <div>
+          <label for="year-select" class="block text-sm font-medium mb-2">السنة</label>
+          <select id="year-select" class="w-full rounded-md border px-3 py-2 bg-white"></select>
+        </div>
+        <div class="flex items-end">
           <button
-            id="filter-btn"
-            class="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 text-sm"
+            id="refresh-btn"
+            type="button"
+            class="w-full rounded-md bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:opacity-60"
           >
-            تطبيق
+            تحديث
           </button>
         </div>
       </div>
-
-      <div class="space-y-4" id="bonus-records-list">
-        <p class="text-center text-muted-foreground py-8">جاري التحميل...</p>
-      </div>
+      <div id="tiers-summary" class="rounded-md bg-gray-50 px-4 py-3 text-sm text-muted-foreground">جاري تحميل الشرائح…</div>
     </div>
+
+    <div id="lock-notice" class="hidden rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"></div>
+
+    <!-- Weeks -->
+    <section aria-labelledby="weeks-title" class="space-y-3">
+      <h2 id="weeks-title" class="text-xl font-semibold">أسابيع الشهر</h2>
+      <div id="week-cards" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <div class="col-span-full rounded-lg border bg-card p-6 text-center text-muted-foreground">جاري التحميل…</div>
+      </div>
+      <p id="weeks-note" class="hidden text-sm text-muted-foreground"></p>
+    </section>
+
+    <!-- Selected week -->
+    <section id="week-detail" class="rounded-lg border bg-card p-4 md:p-6">
+      <p class="text-center text-muted-foreground py-6">اختر أسبوعاً لعرض تفاصيل البونص</p>
+    </section>
+
+    <!-- Month summary -->
+    <section id="month-summary" class="rounded-lg border bg-card p-4 md:p-6"></section>
+  </div>
+
+  <!-- Reject dialog -->
+  <div
+    id="reject-dialog"
+    class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="reject-title"
+  >
+    <form id="reject-form" class="w-full max-w-lg rounded-lg bg-white p-6 shadow-xl space-y-4">
+      <h2 id="reject-title" class="text-xl font-bold">رفض طلب البونص</h2>
+      <p id="reject-subtitle" class="text-sm text-muted-foreground"></p>
+      <div>
+        <label for="reject-reason" class="block text-sm font-medium mb-2">سبب الرفض (يصل إلى مشرف الفرع)</label>
+        <textarea
+          id="reject-reason"
+          rows="3"
+          maxlength="500"
+          required
+          class="w-full rounded-md border px-3 py-2"
+          placeholder="مثال: إيرادات يوم 10 غير مكتملة في نظام الكاشير"></textarea>
+      </div>
+      <div class="flex justify-end gap-3">
+        <button type="button" id="reject-cancel" class="rounded-md border px-4 py-2 hover:bg-gray-50">إلغاء</button>
+        <button type="submit" id="reject-submit" class="rounded-md bg-red-600 px-4 py-2 font-medium text-white hover:bg-red-700 disabled:opacity-60">
+          تأكيد الرفض
+        </button>
+      </div>
+    </form>
   </div>
 
   <script>
-    interface EmployeeBonus {
+    import {
+      api,
+      ApiError,
+      escapeHtml,
+      money,
+      loadFinanceContext,
+      fillBranchSelect,
+      fillPeriodSelects,
+      readPeriod,
+      formatDate,
+      toast,
+      withBusy,
+      byId,
+      type FinanceContextPayload,
+    } from '@/lib/finance/client';
+    import { parsePeriod } from '@/lib/finance/catalog';
+
+    type Status = 'pending' | 'approved' | 'rejected' | 'paid';
+    interface Entry {
       employeeId: string;
       employeeName: string;
       totalRevenue: number;
       bonusAmount: number;
-      bonusPercentage: number;
+      tierMinRevenue: number | null;
+      nextTierMinRevenue: number | null;
+      nextTierAmount: number | null;
+      remainingToNext: number | null;
+      progressToNext: number;
+    }
+    interface RecordView {
+      id: string;
+      status: Status;
+      total: number;
+      entries?: Entry[];
+      employeeCount: number;
+      eligibleCount: number;
+      submittedByName: string | null;
+      submittedAt: string | null;
+      approvedByName: string | null;
+      approvedAt: string | null;
+      notes: string | null;
+    }
+    interface WeekItem {
+      week: number;
+      start: string;
+      end: string;
+      days: number;
+      label: string;
+      complete: boolean;
+      record: RecordView | null;
+      duplicateCount: number;
+      multipleApproved: boolean;
+    }
+    interface MonthData {
+      branchName: string;
+      period: string;
+      periodLabel: string;
+      weeks: WeekItem[];
+      approvedTotal: number;
+      pendingCount: number;
+      locked: boolean;
+      payrollStatus: string | null;
+      employees: Array<{ employeeId: string; employeeName: string; approvedBonus: number; weeks: number[] }>;
+    }
+    interface WeekData {
+      week: number;
+      range: { start: string; end: string; days: number };
+      weekLabel: string;
+      periodLabel: string;
+      branchName: string;
+      weekComplete: boolean;
+      revenueRowCount: number;
+      daysWithRevenue: number;
+      branchRevenue: number;
+      attributedRevenue: number;
+      rowsWithoutBreakdown: number;
+      employees: Entry[];
+      unmatched: Array<{ name: string; totalRevenue: number; reason: 'unknown' | 'inactive' | 'ambiguous' }>;
+      totalBonus: number;
+      eligibleCount: number;
+      record: RecordView | null;
+      duplicateCount: number;
+      changedSinceSubmission: boolean;
+      locked: boolean;
+      permissions: { canSubmit: boolean; canApprove: boolean; canApproveDirectly: boolean; isManager: boolean };
     }
 
-    interface BonusCalculation {
-      weekRange: { startDate: string; endDate: string };
-      employeeBonuses: EmployeeBonus[];
-      totalBonusPaid: number;
-      alreadyExists: boolean;
-      revenueCount: number;
+    const STATUS_CHIPS: Record<string, { label: string; cls: string }> = {
+      incomplete: { label: 'لم تكتمل', cls: 'bg-gray-100 text-gray-700' },
+      ready: { label: 'جاهزة للإرسال', cls: 'bg-blue-100 text-blue-800' },
+      pending: { label: 'بانتظار اعتماد المدير', cls: 'bg-amber-100 text-amber-800' },
+      approved: { label: 'معتمدة', cls: 'bg-green-100 text-green-800' },
+      paid: { label: 'مدفوعة', cls: 'bg-green-100 text-green-800' },
+      rejected: { label: 'مرفوضة', cls: 'bg-red-100 text-red-800' },
+    };
+    const UNMATCHED_REASONS: Record<string, string> = {
+      unknown: 'لا يوجد موظف بهذا الاسم في الفرع',
+      inactive: 'الموظف غير نشط',
+      ambiguous: 'الاسم يطابق أكثر من موظف',
+    };
+
+    const branchSelect = byId<HTMLSelectElement>('branch-select');
+    const monthSelect = byId<HTMLSelectElement>('month-select');
+    const yearSelect = byId<HTMLSelectElement>('year-select');
+    const refreshBtn = byId<HTMLButtonElement>('refresh-btn');
+    const weekCards = byId('week-cards');
+    const weeksNote = byId('weeks-note');
+    const detail = byId('week-detail');
+    const monthSummary = byId('month-summary');
+    const lockNotice = byId('lock-notice');
+    const tiersSummary = byId('tiers-summary');
+    const pageError = byId('page-error');
+    const rejectDialog = byId('reject-dialog');
+    const rejectForm = byId<HTMLFormElement>('reject-form');
+    const rejectReason = byId<HTMLTextAreaElement>('reject-reason');
+
+    let ctx: FinanceContextPayload | null = null;
+    let month: MonthData | null = null;
+    let weekData: WeekData | null = null;
+    let selectedWeek: number | null = null;
+    let monthToken = 0;
+    let weekToken = 0;
+
+    const esc = escapeHtml;
+    const m = (value: unknown) => esc(money(value));
+    const chip = (key: string) => {
+      const c = STATUS_CHIPS[key] ?? STATUS_CHIPS.incomplete;
+      return `<span class="inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium ${c.cls}">${esc(c.label)}</span>`;
+    };
+    const weekState = (complete: boolean, record: RecordView | null) => (record ? record.status : complete ? 'ready' : 'incomplete');
+    const branchId = () => branchSelect.value;
+    const period = () => readPeriod(monthSelect, yearSelect);
+
+    function errorBlock(message: string, retryId: string): string {
+      return `<div class="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800 flex flex-wrap items-center justify-between gap-3">
+        <span>${esc(message)}</span>
+        <button type="button" id="${retryId}" class="rounded-md border border-red-300 bg-white px-3 py-1 text-red-700 hover:bg-red-100">إعادة المحاولة</button>
+      </div>`;
     }
 
-    let currentCalculation: BonusCalculation | null = null;
-
-    const monthNames = [
-      'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
-      'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'
-    ];
-
-    // Set current month
-    const now = new Date();
-    document.getElementById('bonus-month')!.value = monthNames[now.getMonth()];
-    document.getElementById('filter-month')!.value = monthNames[now.getMonth()];
-
-    function formatCurrency(amount: number): string {
-      return new Intl.NumberFormat('ar-EG', {
-        minimumFractionDigits: 2
-      }).format(amount) + ' ج.م';
-    }
-
-    function formatDate(dateStr: string): string {
-      return new Date(dateStr).toLocaleDateString('ar-EG');
-    }
-
-    // Calculate bonus
-    document.getElementById('calculate-btn')?.addEventListener('click', async () => {
-      const month = (document.getElementById('bonus-month') as HTMLSelectElement).value;
-      const year = parseInt((document.getElementById('bonus-year') as HTMLInputElement).value);
-      const weekNumber = parseInt((document.getElementById('bonus-week') as HTMLSelectElement).value);
-
-      const btn = document.getElementById('calculate-btn') as HTMLButtonElement;
-      btn.disabled = true;
-      btn.textContent = 'جاري الحساب...';
-
+    function updateUrl() {
+      const params = new URLSearchParams({ branchId: branchId(), period: period() });
+      if (selectedWeek) params.set('week', String(selectedWeek));
       try {
-        const response = await fetch('/api/bonus/calculate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            branchId: 'BR001',
-            weekNumber,
-            month,
-            year
-          })
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-          currentCalculation = data;
-          displayCalculationResults(data);
-        } else {
-          alert(data.error || 'حدث خطأ');
-        }
-      } catch (error) {
-        alert('حدث خطأ في الاتصال');
-      } finally {
-        btn.disabled = false;
-        btn.textContent = 'احسب البونص';
+        history.replaceState(null, '', `/bonus?${params.toString()}`);
+      } catch {
+        // URL sync is a convenience only
       }
-    });
+    }
 
-    function displayCalculationResults(data: BonusCalculation) {
-      const resultsDiv = document.getElementById('calculation-results')!;
-      resultsDiv.classList.remove('hidden');
+    // ---------------------------------------------------------------- tiers
+    async function loadTiers() {
+      try {
+        const data = await api<{ tiers: Array<{ minRevenue: number; amount: number }>; isDefault: boolean }>('/api/bonus/tiers');
+        const items = data.tiers
+          .map(t => `<span class="inline-flex items-center gap-1 rounded-md border bg-white px-2 py-1 text-foreground">إيراد ≥ <strong>${m(t.minRevenue)}</strong> ← بونص <strong class="text-green-700">${m(t.amount)}</strong></span>`)
+          .join(' ');
+        tiersSummary.innerHTML = `<div class="flex flex-wrap items-center gap-2">
+          <span class="font-medium text-foreground">شرائح البونص الأسبوعية${data.isDefault ? ' (الافتراضية)' : ''}:</span>${items}
+          ${ctx?.permissions.canApproveFinance ? '<a href="/bonus-settings" class="text-blue-700 underline mr-auto">تعديل الشرائح</a>' : ''}
+        </div>`;
+      } catch (error) {
+        tiersSummary.textContent = error instanceof Error ? `تعذر تحميل الشرائح: ${error.message}` : 'تعذر تحميل الشرائح';
+      }
+    }
 
-      // Update summary
-      document.getElementById('week-range')!.textContent =
-        `${formatDate(data.weekRange.startDate)} - ${formatDate(data.weekRange.endDate)}`;
-      document.getElementById('revenue-count')!.textContent = data.revenueCount.toString();
-      document.getElementById('total-bonus')!.textContent = formatCurrency(data.totalBonusPaid);
+    // ---------------------------------------------------------------- month
+    async function loadMonth(preferredWeek: number | null = null) {
+      const token = ++monthToken;
+      if (!branchId()) return;
+      weekCards.innerHTML = `<div class="col-span-full rounded-lg border bg-card p-6 text-center text-muted-foreground">جاري التحميل…</div>`;
+      monthSummary.innerHTML = '';
+      try {
+        const data = await api<MonthData>(`/api/bonus/list?${new URLSearchParams({ branchId: branchId(), period: period() })}`);
+        if (token !== monthToken) return;
+        month = data;
+        renderLock();
+        renderMonthSummary();
+        const weeks = data.weeks.map(w => w.week);
+        let target = preferredWeek && weeks.includes(preferredWeek) ? preferredWeek : selectedWeek && weeks.includes(selectedWeek) ? selectedWeek : null;
+        if (!target) target = pickDefaultWeek(data);
+        renderWeekCards(target);
+        if (target) await loadWeek(target);
+      } catch (error) {
+        if (token !== monthToken) return;
+        weekCards.innerHTML = `<div class="col-span-full">${errorBlock(error instanceof Error ? error.message : 'تعذر تحميل البيانات', 'retry-month')}</div>`;
+        byId('retry-month').addEventListener('click', () => loadMonth(selectedWeek));
+        detail.innerHTML = '';
+      }
+    }
 
-      // Update table
-      const tbody = document.getElementById('bonus-table-body')!;
+    function pickDefaultWeek(data: MonthData): number | null {
+      if (data.weeks.length === 0) return null;
+      if (ctx?.permissions.canApproveFinance) {
+        const pending = data.weeks.find(w => w.record?.status === 'pending');
+        if (pending) return pending.week;
+      }
+      const complete = data.weeks.filter(w => w.complete);
+      const open = [...complete].reverse().find(w => !w.record || w.record.status !== 'approved');
+      return (open ?? complete[complete.length - 1] ?? data.weeks[0]).week;
+    }
 
-      if (data.employeeBonuses.length === 0) {
-        tbody.innerHTML = `
-          <tr>
-            <td colspan="4" class="text-center p-8 text-muted-foreground">
-              لا توجد إيرادات للموظفين في هذا الأسبوع
-            </td>
-          </tr>
-        `;
+    function renderLock() {
+      if (!month) return;
+      if (month.locked) {
+        lockNotice.textContent = `مسير رواتب ${month.periodLabel} لهذا الفرع معتمد — لا يمكن إرسال أو اعتماد بونص جديد لهذا الشهر. لإضافة بونص يجب على المدير إعادة فتح المسير أولاً.`;
+        lockNotice.classList.remove('hidden');
       } else {
-        tbody.innerHTML = data.employeeBonuses.map(eb => `
-          <tr class="border-b hover:bg-gray-50">
-            <td class="p-3 font-medium">${eb.employeeName}</td>
-            <td class="p-3">${formatCurrency(eb.totalRevenue)}</td>
-            <td class="p-3">${eb.bonusPercentage}%</td>
-            <td class="p-3 font-bold text-green-600">${formatCurrency(eb.bonusAmount)}</td>
-          </tr>
-        `).join('');
+        lockNotice.classList.add('hidden');
       }
+    }
 
-      // Show warning if already exists
-      const warningDiv = document.getElementById('already-exists-warning')!;
-      if (data.alreadyExists) {
-        warningDiv.classList.remove('hidden');
+    function renderWeekCards(active: number | null) {
+      if (!month) return;
+      weekCards.innerHTML = month.weeks
+        .map(w => {
+          const state = weekState(w.complete, w.record);
+          const selected = w.week === active;
+          const amount = w.record ? `<p class="mt-3 text-lg font-bold">${m(w.record.total)}</p><p class="text-xs text-muted-foreground">${esc(w.record.eligibleCount)} موظف مستحق</p>` : `<p class="mt-3 text-lg font-bold text-muted-foreground">—</p><p class="text-xs text-muted-foreground">${w.complete ? 'لم يُرسل بعد' : 'الأسبوع جارٍ أو لم يبدأ'}</p>`;
+          const warn = w.multipleApproved ? `<p class="mt-2 text-xs text-red-700">⚠ أكثر من سجل معتمد لهذا الأسبوع</p>` : '';
+          return `<button type="button" data-week="${esc(w.week)}" aria-pressed="${selected}"
+            class="week-card text-right rounded-lg border bg-card p-4 transition hover:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400 ${selected ? 'border-blue-500 ring-2 ring-blue-500' : ''}">
+            <div class="flex items-start justify-between gap-2">
+              <span class="font-semibold">الأسبوع ${esc(w.week)}</span>
+              ${chip(state)}
+            </div>
+            <p class="mt-1 text-xs text-muted-foreground">${esc(w.label)} (${esc(w.days)} ${w.days > 2 && w.days < 11 ? 'أيام' : 'يوم'})</p>
+            ${amount}${warn}
+          </button>`;
+        })
+        .join('');
+      weekCards.querySelectorAll<HTMLButtonElement>('.week-card').forEach(btn =>
+        btn.addEventListener('click', () => {
+          const w = Number(btn.dataset.week);
+          renderWeekCards(w);
+          loadWeek(w);
+        }),
+      );
+      const p = parsePeriod(month.period);
+      if (month.weeks.length === 4 && p) {
+        weeksNote.textContent = `${month.periodLabel} يتكون من 28 يوماً فقط، لذلك لا يوجد أسبوع خامس.`;
+        weeksNote.classList.remove('hidden');
       } else {
-        warningDiv.classList.add('hidden');
+        weeksNote.classList.add('hidden');
       }
     }
 
-    // Save draft
-    document.getElementById('save-draft-btn')?.addEventListener('click', () => {
-      saveBonus(false);
-    });
+    function renderMonthSummary() {
+      if (!month) return;
+      const rows = month.employees
+        .map(e => `<tr class="border-b last:border-0">
+            <td class="p-2">${esc(e.employeeName)}</td>
+            <td class="p-2 text-muted-foreground">${e.weeks.map(w => `الأسبوع ${esc(w)}`).join('، ')}</td>
+            <td class="p-2 font-semibold text-green-700">${m(e.approvedBonus)}</td>
+          </tr>`)
+        .join('');
+      const payroll = month.payrollStatus
+        ? `حالة مسير الرواتب لهذا الشهر: <strong>${esc({ draft: 'مسودة', approved: 'معتمد', paid: 'مدفوع' }[month.payrollStatus] ?? month.payrollStatus)}</strong>`
+        : 'لم يُنشأ مسير الرواتب لهذا الشهر بعد';
+      monthSummary.innerHTML = `
+        <div class="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h2 class="text-xl font-semibold">ملخص ${esc(month.periodLabel)} — ${esc(month.branchName)}</h2>
+            <p class="mt-1 text-sm text-muted-foreground">${payroll}</p>
+          </div>
+          <div class="text-left">
+            <p class="text-sm text-muted-foreground">إجمالي البونص المعتمد</p>
+            <p class="text-3xl font-bold text-green-700">${m(month.approvedTotal)}</p>
+            <p class="text-xs text-muted-foreground">سيُضاف إلى مسير الرواتب تلقائياً</p>
+          </div>
+        </div>
+        ${month.pendingCount > 0 ? `<p class="mt-3 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">${esc(month.pendingCount)} ${month.pendingCount === 1 ? 'أسبوع' : 'أسابيع'} بانتظار اعتماد المدير — لا يدخل في المسير قبل الاعتماد.</p>` : ''}
+        ${rows
+          ? `<div class="mt-4 overflow-x-auto"><table class="w-full text-sm">
+              <thead><tr class="border-b text-muted-foreground"><th class="p-2 text-right font-medium">الموظف</th><th class="p-2 text-right font-medium">الأسابيع المعتمدة</th><th class="p-2 text-right font-medium">بونص الشهر</th></tr></thead>
+              <tbody>${rows}</tbody></table></div>`
+          : '<p class="mt-4 text-sm text-muted-foreground">لا يوجد بونص معتمد لهذا الشهر بعد.</p>'}`;
+    }
 
-    // Approve and save
-    document.getElementById('approve-save-btn')?.addEventListener('click', () => {
-      if (confirm('هل أنت متأكد من الموافقة على هذا البونص؟')) {
-        saveBonus(true);
-      }
-    });
-
-    async function saveBonus(approved: boolean) {
-      if (!currentCalculation) return;
-
-      const month = (document.getElementById('bonus-month') as HTMLSelectElement).value;
-      const year = parseInt((document.getElementById('bonus-year') as HTMLInputElement).value);
-      const weekNumber = parseInt((document.getElementById('bonus-week') as HTMLSelectElement).value);
-
+    // ---------------------------------------------------------------- week
+    async function loadWeek(week: number) {
+      selectedWeek = week;
+      updateUrl();
+      const token = ++weekToken;
+      detail.innerHTML = `<p class="py-8 text-center text-muted-foreground">جاري حساب بونص الأسبوع ${esc(week)} من إيرادات الكاشير…</p>`;
       try {
-        const response = await fetch('/api/bonus/save', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            branchId: 'BR001',
-            weekNumber,
-            month,
-            year,
-            employeeBonuses: currentCalculation.employeeBonuses,
-            totalBonusPaid: currentCalculation.totalBonusPaid,
-            approved
-          })
-        });
+        const data = await api<WeekData>('/api/bonus/calculate', { body: { branchId: branchId(), period: period(), week } });
+        if (token !== weekToken) return;
+        weekData = data;
+        renderWeek();
+      } catch (error) {
+        if (token !== weekToken) return;
+        detail.innerHTML = errorBlock(error instanceof Error ? error.message : 'تعذر حساب البونص', 'retry-week');
+        byId('retry-week').addEventListener('click', () => loadWeek(week));
+      }
+    }
 
-        const data = await response.json();
+    function tierCell(e: Entry): string {
+      if (e.tierMinRevenue === null || e.bonusAmount <= 0) return '<span class="text-xs text-muted-foreground">لم يبلغ أي شريحة</span>';
+      return `<span class="inline-block whitespace-nowrap rounded bg-green-50 px-2 py-0.5 text-xs text-green-800">إيراد ≥ ${m(e.tierMinRevenue)}</span>`;
+    }
 
-        if (data.success) {
-          alert(approved ? 'تم الموافقة والحفظ بنجاح!' : 'تم الحفظ كمسودة بنجاح!');
-          document.getElementById('calculation-results')!.classList.add('hidden');
-          currentCalculation = null;
-          loadBonusRecords();
+    function progressCell(e: Entry): string {
+      if (e.nextTierMinRevenue === null || e.remainingToNext === null) {
+        return e.bonusAmount > 0 ? '<span class="text-xs font-medium text-green-700">✓ بلغ أعلى شريحة</span>' : '<span class="text-xs text-muted-foreground">—</span>';
+      }
+      const pct = Math.max(0, Math.min(100, Math.round((Number(e.progressToNext) || 0) * 100)));
+      const nextBonus = e.nextTierAmount !== null ? ` (بونص ${m(e.nextTierAmount)})` : '';
+      return `<div class="min-w-[180px]">
+        <div class="mb-1 flex justify-between gap-2 text-xs"><span>متبقٍ ${m(e.remainingToNext)}</span><span class="text-muted-foreground">للوصول إلى ${m(e.nextTierMinRevenue)}${nextBonus}</span></div>
+        <div class="h-2 rounded-full bg-gray-100" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><div class="h-2 rounded-full bg-blue-500" style="width:${pct}%"></div></div>
+      </div>`;
+    }
+
+    function renderWeek() {
+      const d = weekData;
+      if (!d) return;
+      const record = d.record;
+      const state = weekState(d.weekComplete, record);
+      const showStored = !!record && (record.status === 'approved' || record.status === 'paid') && Array.isArray(record.entries) && record.entries.length > 0;
+      const rows: Entry[] = showStored ? record!.entries! : d.employees;
+      const shownTotal = showStored ? record!.total : d.totalBonus;
+      const shownRevenue = rows.reduce((s, e) => s + (Number(e.totalRevenue) || 0), 0);
+
+      const notes: string[] = [];
+      if (record?.status === 'pending') {
+        notes.push(`<p>أُرسل للاعتماد${record.submittedByName ? ` بواسطة <strong>${esc(record.submittedByName)}</strong>` : ''} في ${esc(formatDate(record.submittedAt, true))} بإجمالي ${m(record.total)}.</p>`);
+      }
+      if (record && (record.status === 'approved' || record.status === 'paid')) {
+        notes.push(`<p class="text-green-800">اعتمده <strong>${esc(record.approvedByName ?? '—')}</strong>${record.approvedAt ? ` في ${esc(formatDate(record.approvedAt, true))}` : ''} — يُضاف تلقائياً إلى مسير رواتب ${esc(d.periodLabel)}.</p>`);
+      }
+      if (record?.status === 'rejected') {
+        notes.push(`<p class="text-red-800">رُفض الطلب${record.notes ? ` — السبب: <strong>${esc(record.notes)}</strong>` : ''}. يمكن مراجعة الإيرادات ثم إعادة الإرسال.</p>`);
+      }
+      const warnings: string[] = [];
+      if (record?.status === 'pending' && d.changedSinceSubmission) {
+        warnings.push(`تغيّرت إيرادات هذا الأسبوع أو شرائح البونص منذ إرسال الطلب (المُرسَل ${m(record.total)} — الحالي ${m(d.totalBonus)}). يجب إعادة الإرسال بالأرقام الحالية قبل الاعتماد.`);
+      }
+      if (showStored && d.changedSinceSubmission) {
+        warnings.push(`تغيّرت الإيرادات بعد الاعتماد. الجدول يعرض الأرقام المعتمدة (${m(record!.total)})، والحساب الحالي ${m(d.totalBonus)}.`);
+      }
+      if (!d.weekComplete) warnings.push(`الأسبوع لم يكتمل بعد (ينتهي ${esc(formatDate(d.range.end))}) — الأرقام مبدئية ويمكن إرسالها للاعتماد بعد انتهائه.`);
+      if (d.revenueRowCount === 0) warnings.push('لا توجد إيرادات مسجلة لهذا الأسبوع. تأكد من وصول إيرادات الكاشير إلى صفحة الإيرادات.');
+      if (d.rowsWithoutBreakdown > 0) warnings.push(`${esc(d.rowsWithoutBreakdown)} من سجلات الإيراد لا تحتوي على توزيع حسب الموظف، لذلك لا تدخل في حساب البونص.`);
+      if (d.duplicateCount > 0) warnings.push(`يوجد ${esc(d.duplicateCount)} سجل بونص إضافي قديم لهذا الأسبوع.`);
+
+      const unmatched = d.unmatched.length
+        ? `<div class="rounded-lg border border-amber-200 bg-amber-50 p-4">
+            <p class="font-medium text-amber-900">أسماء من نظام الكاشير لا تطابق موظفي الفرع</p>
+            <p class="mt-1 text-sm text-amber-800">إيرادات هذه الأسماء لا تُحتسب في البونص. عدّل اسم الموظف في صفحة الموظفين ليطابق اسمه في الكاشير ثم حدّث الصفحة.</p>
+            <ul class="mt-2 space-y-1 text-sm text-amber-900">${d.unmatched
+              .map(u => `<li>• <strong>${esc(u.name)}</strong> — ${m(u.totalRevenue)} <span class="text-amber-700">(${esc(UNMATCHED_REASONS[u.reason] ?? '')})</span></li>`)
+              .join('')}</ul>
+          </div>`
+        : '';
+
+      const table = rows.length
+        ? `<div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b text-muted-foreground">
+                  <th class="p-3 text-right font-medium">الموظف</th>
+                  <th class="p-3 text-right font-medium">إيراد الفترة</th>
+                  <th class="p-3 text-right font-medium">الشريحة المحققة</th>
+                  <th class="p-3 text-right font-medium">البونص</th>
+                  <th class="p-3 text-right font-medium">المتبقي للشريحة التالية</th>
+                </tr>
+              </thead>
+              <tbody>${rows
+                .map(e => `<tr class="border-b hover:bg-gray-50">
+                  <td class="p-3 font-medium">${esc(e.employeeName)}</td>
+                  <td class="p-3 tabular-nums whitespace-nowrap">${m(e.totalRevenue)}</td>
+                  <td class="p-3">${tierCell(e)}</td>
+                  <td class="p-3 font-bold whitespace-nowrap ${e.bonusAmount > 0 ? 'text-green-700' : 'text-muted-foreground'}">${m(e.bonusAmount)}</td>
+                  <td class="p-3">${progressCell(e)}</td>
+                </tr>`)
+                .join('')}</tbody>
+              <tfoot>
+                <tr class="font-semibold">
+                  <td class="p-3">الإجمالي</td>
+                  <td class="p-3 whitespace-nowrap">${m(shownRevenue)}</td>
+                  <td class="p-3"></td>
+                  <td class="p-3 whitespace-nowrap text-green-700">${m(shownTotal)}</td>
+                  <td class="p-3"></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>`
+        : '<p class="py-6 text-center text-muted-foreground">لا يوجد موظفون نشطون في هذا الفرع.</p>';
+
+      detail.innerHTML = `
+        <div class="space-y-5">
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 class="text-xl font-semibold">الأسبوع ${esc(d.week)} — ${esc(d.weekLabel)} ${esc(d.periodLabel.split(' ')[1] ?? '')}</h2>
+              <p class="text-sm text-muted-foreground">${esc(d.branchName)} • من ${esc(formatDate(d.range.start))} إلى ${esc(formatDate(d.range.end))}</p>
+            </div>
+            ${chip(state)}
+          </div>
+
+          ${notes.length ? `<div class="rounded-md border bg-gray-50 p-3 text-sm space-y-1">${notes.join('')}</div>` : ''}
+          ${warnings.map(w => `<p class="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">⚠ ${w}</p>`).join('')}
+
+          <div class="grid gap-3 grid-cols-2 lg:grid-cols-4">
+            <div class="rounded-lg border p-3"><p class="text-xs text-muted-foreground">سجلات الإيراد</p><p class="mt-1 text-xl font-bold">${esc(d.revenueRowCount)}</p></div>
+            <div class="rounded-lg border p-3"><p class="text-xs text-muted-foreground">أيام بها إيراد</p><p class="mt-1 text-xl font-bold">${esc(d.daysWithRevenue)} <span class="text-sm font-normal text-muted-foreground">من ${esc(d.range.days)}</span></p></div>
+            <div class="rounded-lg border p-3"><p class="text-xs text-muted-foreground">إيراد الفرع في الأسبوع</p><p class="mt-1 text-xl font-bold">${m(d.branchRevenue)}</p><p class="text-xs text-muted-foreground">منها ${m(d.attributedRevenue)} موزعة على الموظفين</p></div>
+            <div class="rounded-lg border border-green-200 bg-green-50 p-3"><p class="text-xs text-green-800">إجمالي البونص</p><p class="mt-1 text-xl font-bold text-green-700">${m(shownTotal)}</p><p class="text-xs text-green-800">${esc(showStored ? record!.eligibleCount : d.eligibleCount)} موظف مستحق</p></div>
+          </div>
+
+          ${unmatched}
+          ${table}
+          <div id="week-actions" class="flex flex-wrap items-center justify-end gap-3 border-t pt-4"></div>
+        </div>`;
+      renderActions();
+    }
+
+    function renderActions() {
+      const d = weekData;
+      const host = document.getElementById('week-actions');
+      if (!d || !host) return;
+      const record = d.record;
+      const p = d.permissions;
+      const parts: string[] = [];
+      const hint = (text: string) => `<p class="ml-auto text-sm text-muted-foreground">${text}</p>`;
+      const noRevenue = d.revenueRowCount === 0;
+
+      if (d.locked) {
+        parts.push(hint('مسير رواتب هذا الشهر معتمد — البونص مقفل.'));
+      } else if (record && (record.status === 'approved' || record.status === 'paid')) {
+        parts.push(hint('البونص معتمد ويُضاف تلقائياً إلى مسير الرواتب.'));
+      } else if (!d.weekComplete) {
+        parts.push(hint(`يمكن الإرسال للاعتماد بعد انتهاء الأسبوع في ${esc(formatDate(d.range.end))}.`));
+      } else if (p.isManager) {
+        if (record?.status === 'pending' && !d.changedSinceSubmission) {
+          parts.push(`<button type="button" data-action="reject" class="rounded-md border border-red-300 px-4 py-2 text-red-700 hover:bg-red-50">رفض</button>`);
+          parts.push(`<button type="button" data-action="approve" class="rounded-md bg-green-600 px-5 py-2 font-medium text-white hover:bg-green-700 disabled:opacity-60">اعتماد البونص</button>`);
         } else {
-          alert(data.error || 'حدث خطأ');
+          if (record?.status === 'pending') parts.push(`<button type="button" data-action="reject" class="rounded-md border border-red-300 px-4 py-2 text-red-700 hover:bg-red-50">رفض</button>`);
+          if (p.canApproveDirectly) {
+            parts.push(`<button type="button" data-action="approve-direct" ${noRevenue ? 'disabled' : ''} class="rounded-md bg-green-600 px-5 py-2 font-medium text-white hover:bg-green-700 disabled:opacity-60">${record?.status === 'pending' ? 'تحديث الأرقام واعتماد' : 'اعتماد البونص'}</button>`);
+          }
+        }
+      } else if (p.canSubmit) {
+        if (record?.status === 'pending' && !d.changedSinceSubmission) {
+          parts.push(hint('تم الإرسال — بانتظار اعتماد المدير.'));
+        } else {
+          const label = record?.status === 'pending' ? 'إعادة الإرسال بالأرقام الحالية' : record?.status === 'rejected' ? 'إعادة الإرسال للاعتماد' : 'إرسال للاعتماد';
+          parts.push(`<button type="button" data-action="submit" ${noRevenue ? 'disabled' : ''} class="rounded-md bg-blue-600 px-5 py-2 font-medium text-white hover:bg-blue-700 disabled:opacity-60">${label}</button>`);
+        }
+      } else if (record?.status === 'pending') {
+        parts.push(hint('بانتظار اعتماد المدير.'));
+      }
+      if (noRevenue && !d.locked && d.weekComplete && (!record || record.status !== 'approved')) {
+        parts.push(hint('لا يمكن الإرسال بدون إيرادات مسجلة.'));
+      }
+      host.innerHTML = parts.join('');
+      host.querySelectorAll<HTMLButtonElement>('button[data-action]').forEach(btn => btn.addEventListener('click', () => onAction(btn)));
+    }
+
+    async function onAction(btn: HTMLButtonElement) {
+      const d = weekData;
+      if (!d) return;
+      const action = btn.dataset.action;
+      const label = `بونص الأسبوع ${d.week} (${d.weekLabel})`;
+      try {
+        if (action === 'submit') {
+          if (!confirm(`إرسال ${label} بإجمالي ${money(d.totalBonus)} لاعتماد المدير؟`)) return;
+          const r = await withBusy(btn, 'جاري الإرسال…', () =>
+            api<{ message: string }>('/api/bonus/save', { body: { branchId: branchId(), period: period(), week: d.week } }),
+          );
+          toast(r.message, 'success');
+        } else if (action === 'approve-direct') {
+          if (!confirm(`اعتماد ${label} بإجمالي ${money(d.totalBonus)}؟ سيُضاف إلى مسير رواتب ${d.periodLabel}.`)) return;
+          const r = await withBusy(btn, 'جاري الاعتماد…', () =>
+            api<{ message: string }>('/api/bonus/save', { body: { branchId: branchId(), period: period(), week: d.week, approve: true } }),
+          );
+          toast(r.message, 'success');
+        } else if (action === 'approve') {
+          if (!d.record) return;
+          if (!confirm(`اعتماد ${label} بإجمالي ${money(d.record.total)}؟ سيُضاف إلى مسير رواتب ${d.periodLabel}.`)) return;
+          const id = d.record.id;
+          const r = await withBusy(btn, 'جاري الاعتماد…', () => api<{ message: string }>('/api/bonus/approve', { body: { id } }));
+          toast(r.message, 'success');
+        } else if (action === 'reject') {
+          openReject();
+          return;
         }
       } catch (error) {
-        alert('حدث خطأ في الاتصال');
+        toast(error instanceof Error ? error.message : 'حدث خطأ غير متوقع', 'error');
+        if (!(error instanceof ApiError) || error.status !== 409) return;
       }
+      await loadMonth(d.week);
     }
 
-    // Load bonus records
-    async function loadBonusRecords() {
-      const month = (document.getElementById('filter-month') as HTMLSelectElement).value;
-      const year = (document.getElementById('filter-year') as HTMLInputElement).value;
-
+    // ---------------------------------------------------------------- reject dialog
+    function openReject() {
+      if (!weekData?.record) return;
+      byId('reject-subtitle').textContent = `بونص الأسبوع ${weekData.week} (${weekData.weekLabel}) — ${weekData.branchName} — ${money(weekData.record.total)}`;
+      rejectReason.value = '';
+      rejectDialog.classList.remove('hidden');
+      rejectReason.focus();
+    }
+    function closeReject() {
+      rejectDialog.classList.add('hidden');
+    }
+    byId('reject-cancel').addEventListener('click', closeReject);
+    rejectDialog.addEventListener('click', e => {
+      if (e.target === rejectDialog) closeReject();
+    });
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && !rejectDialog.classList.contains('hidden')) closeReject();
+    });
+    rejectForm.addEventListener('submit', async e => {
+      e.preventDefault();
+      const d = weekData;
+      if (!d?.record) return;
+      const reason = rejectReason.value.trim();
+      if (reason.length < 3) {
+        toast('يرجى كتابة سبب الرفض', 'error');
+        rejectReason.focus();
+        return;
+      }
+      const id = d.record.id;
       try {
-        const response = await fetch(`/api/bonus/list?month=${month}&year=${year}`);
-        const data = await response.json();
-
-        if (data.success) {
-          displayBonusRecords(data.bonusRecords);
-        } else {
-          alert(data.error || 'حدث خطأ');
-        }
+        const r = await withBusy(byId<HTMLButtonElement>('reject-submit'), 'جاري الرفض…', () =>
+          api<{ message: string }>('/api/bonus/reject', { body: { id, reason } }),
+        );
+        toast(r.message, 'success');
+        closeReject();
       } catch (error) {
-        alert('حدث خطأ في الاتصال');
+        toast(error instanceof Error ? error.message : 'حدث خطأ غير متوقع', 'error');
+        if (!(error instanceof ApiError) || error.status !== 409) return;
+        closeReject();
       }
+      await loadMonth(d.week);
+    });
+
+    // ---------------------------------------------------------------- init
+    function onFilterChange() {
+      selectedWeek = null;
+      weekData = null;
+      detail.innerHTML = '<p class="text-center text-muted-foreground py-6">اختر أسبوعاً لعرض تفاصيل البونص</p>';
+      updateUrl();
+      loadMonth();
     }
 
-    function displayBonusRecords(records: any[]) {
-      const listDiv = document.getElementById('bonus-records-list')!;
-
-      if (records.length === 0) {
-        listDiv.innerHTML = '<p class="text-center text-muted-foreground py-8">لا توجد سجلات بونص</p>';
+    async function init() {
+      const params = new URLSearchParams(location.search);
+      try {
+        ctx = await loadFinanceContext();
+      } catch (error) {
+        pageError.innerHTML = errorBlock(error instanceof Error ? error.message : 'تعذر تحميل بيانات المستخدم', 'retry-init');
+        pageError.classList.remove('hidden');
+        byId('retry-init').addEventListener('click', () => location.reload());
+        weekCards.innerHTML = '';
+        tiersSummary.textContent = '';
         return;
       }
 
-      listDiv.innerHTML = records.map(record => {
-        const isApproved = record.approved_by !== null;
-        const employeeBonuses = record.employee_bonuses || [];
+      const p = ctx.permissions;
+      if (!p.canManageBonus && !p.canApproveFinance && !p.canViewReports) {
+        pageError.textContent = 'ليست لديك صلاحية لعرض البونص.';
+        pageError.classList.remove('hidden');
+        weekCards.innerHTML = '';
+        tiersSummary.textContent = '';
+        return;
+      }
+      if (p.canApproveFinance) byId('settings-link').classList.remove('hidden');
 
-        return `
-          <div class="rounded-lg border p-4">
-            <div class="flex items-center justify-between mb-2">
-              <div>
-                <h4 class="font-semibold">الأسبوع ${record.week_number} - ${record.month} ${record.year}</h4>
-                <p class="text-sm text-muted-foreground">
-                  ${employeeBonuses.length} موظف • ${formatCurrency(record.total_bonus_paid)}
-                </p>
-              </div>
-              <div>
-                <span class="px-3 py-1 rounded text-sm ${isApproved ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}">
-                  ${isApproved ? '✓ معتمد' : 'مسودة'}
-                </span>
-              </div>
-            </div>
-            ${isApproved ? `
-              <p class="text-sm text-muted-foreground">
-                اعتمد بواسطة: ${record.approved_by} في ${formatDate(record.approved_at)}
-              </p>
-            ` : ''}
-          </div>
-        `;
-      }).join('');
+      fillBranchSelect(branchSelect, ctx);
+      const wantedBranch = params.get('branchId');
+      if (wantedBranch && !branchSelect.disabled && [...branchSelect.options].some(o => o.value === wantedBranch)) {
+        branchSelect.value = wantedBranch;
+      }
+      const wantedPeriod = params.get('period');
+      fillPeriodSelects(monthSelect, yearSelect, wantedPeriod && parsePeriod(wantedPeriod) ? wantedPeriod : undefined);
+      if (!branchSelect.value) {
+        pageError.textContent = 'لا يوجد فرع مرتبط بحسابك — تواصل مع المدير.';
+        pageError.classList.remove('hidden');
+        weekCards.innerHTML = '';
+        return;
+      }
+
+      branchSelect.addEventListener('change', onFilterChange);
+      monthSelect.addEventListener('change', onFilterChange);
+      yearSelect.addEventListener('change', onFilterChange);
+      refreshBtn.addEventListener('click', () => withBusy(refreshBtn, 'جاري التحديث…', () => loadMonth(selectedWeek)));
+
+      const week = Number(params.get('week'));
+      loadTiers();
+      await loadMonth(Number.isInteger(week) && week >= 1 && week <= 5 ? week : null);
     }
 
-    // Filter button
-    document.getElementById('filter-btn')?.addEventListener('click', loadBonusRecords);
-
-    // Initial load
-    loadBonusRecords();
+    init();
   </script>
 </MainLayout>

@@ -1,0 +1,325 @@
+---
+import MainLayout from '@/layouts/MainLayout.astro';
+
+// Check authentication
+const cookieHeader = Astro.request.headers.get('Cookie');
+if (!cookieHeader?.includes('session=')) {
+  return Astro.redirect('/auth/login');
+}
+---
+
+<MainLayout title="إعدادات شرائح البونص - SymbolAI">
+  <div class="mx-auto max-w-4xl space-y-6">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div>
+        <h1 class="text-3xl font-bold">إعدادات شرائح البونص</h1>
+        <p class="mt-2 text-muted-foreground leading-relaxed">
+          يحدد المدير هنا مقدار البونص الأسبوعي حسب إيراد الموظف في الأسبوع (من إيرادات الكاشير). يحصل الموظف على بونص
+          <strong>أعلى شريحة</strong> يبلغها إيراده فقط، ولا تُجمع الشرائح.
+        </p>
+      </div>
+      <a href="/bonus" class="shrink-0 rounded-md border px-4 py-2 text-sm font-medium hover:bg-gray-50">العودة إلى البونص</a>
+    </div>
+
+    <div id="loading" class="rounded-lg border bg-card p-8 text-center text-muted-foreground">جاري التحميل…</div>
+    <div id="page-error" class="hidden rounded-lg border border-red-200 bg-red-50 p-4 text-red-800" role="alert"></div>
+
+    <!-- Non-managers -->
+    <div id="denied" class="hidden space-y-4">
+      <div class="rounded-lg border border-amber-200 bg-amber-50 p-6">
+        <h2 class="text-xl font-semibold text-amber-900">هذه الصفحة للمدير فقط</h2>
+        <p class="mt-2 text-amber-900 leading-relaxed">
+          شرائح البونص يحددها المدير العام وتُطبق على جميع الفروع. يمكن لمشرف الفرع متابعة بونص موظفيه وإرساله للاعتماد من
+          <a href="/bonus" class="underline">صفحة البونص</a>. لاقتراح تعديل على الشرائح تواصل مع المدير.
+        </p>
+      </div>
+      <div id="readonly-tiers" class="rounded-lg border bg-card p-6"></div>
+    </div>
+
+    <!-- Manager editor -->
+    <div id="editor" class="hidden space-y-6">
+      <section class="rounded-lg border bg-card p-4 md:p-6 space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <h2 class="text-xl font-semibold">الشرائح</h2>
+          <p id="updated-info" class="text-sm text-muted-foreground"></p>
+        </div>
+        <div id="tier-rows" class="space-y-3"></div>
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <button type="button" id="add-row" class="rounded-md border border-dashed border-blue-400 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-50">
+            + إضافة شريحة
+          </button>
+          <p id="row-count" class="text-xs text-muted-foreground"></p>
+        </div>
+        <p id="validation" class="hidden rounded-md bg-red-50 px-3 py-2 text-sm text-red-800" role="alert"></p>
+      </section>
+
+      <section class="rounded-lg border bg-card p-4 md:p-6 space-y-4">
+        <h2 class="text-xl font-semibold">معاينة</h2>
+        <ul id="examples" class="space-y-2 text-sm"></ul>
+        <div class="rounded-md bg-gray-50 p-4">
+          <label for="try-revenue" class="block text-sm font-medium mb-2">جرّب: إيراد موظف في الأسبوع</label>
+          <div class="flex flex-wrap items-center gap-3">
+            <div class="flex items-center gap-2">
+              <input id="try-revenue" type="number" min="0" step="0.01" inputmode="decimal" dir="ltr" value="2000" class="w-40 rounded-md border px-3 py-2 text-left" />
+              <span class="text-sm">ر.س</span>
+            </div>
+            <p id="try-result" class="text-sm font-medium"></p>
+          </div>
+        </div>
+        <p class="text-xs text-muted-foreground leading-relaxed">
+          تُطبق الشرائح الجديدة على الأسابيع التي لم تُعتمد بعد. البونص المعتمد سابقاً لا يتغير، وطلبات البونص المرسلة
+          بانتظار الاعتماد تحتاج إلى إعادة إرسال لتُحسب بالشرائح الجديدة.
+        </p>
+      </section>
+
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <button type="button" id="reset-defaults" class="rounded-md border px-4 py-2 text-sm hover:bg-gray-50 disabled:opacity-60">
+          استعادة الشرائح الافتراضية
+        </button>
+        <div class="flex flex-wrap gap-3">
+          <button type="button" id="discard" class="rounded-md border px-4 py-2 hover:bg-gray-50 disabled:opacity-50">تراجع عن التغييرات</button>
+          <button type="button" id="save" class="rounded-md bg-blue-600 px-6 py-2 font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+            حفظ الشرائح
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    import { api, escapeHtml, money, loadFinanceContext, formatDate, toast, withBusy, byId } from '@/lib/finance/client';
+    import { DEFAULT_BONUS_TIERS, MAX_BONUS_TIERS, evaluateTier, validateTiers, type BonusTier } from '@/lib/finance/bonus';
+
+    interface TiersResponse {
+      tiers: BonusTier[];
+      isDefault: boolean;
+      invalidStored?: boolean;
+      updatedAt: string | null;
+      updatedByName: string | null;
+    }
+    interface Row {
+      minRevenue: string;
+      amount: string;
+    }
+
+    const esc = escapeHtml;
+    const m = (value: unknown) => esc(money(value));
+    const loading = byId('loading');
+    const pageError = byId('page-error');
+    const editor = byId('editor');
+    const rowsHost = byId('tier-rows');
+    const validationBox = byId('validation');
+    const examples = byId('examples');
+    const tryInput = byId<HTMLInputElement>('try-revenue');
+    const tryResult = byId('try-result');
+    const saveBtn = byId<HTMLButtonElement>('save');
+    const discardBtn = byId<HTMLButtonElement>('discard');
+    const addBtn = byId<HTMLButtonElement>('add-row');
+    const resetBtn = byId<HTMLButtonElement>('reset-defaults');
+
+    let rows: Row[] = [];
+    let saved: BonusTier[] = [];
+    let current: BonusTier[] | null = null; // valid normalized rows, or null while invalid
+
+    const toRows = (tiers: readonly BonusTier[]): Row[] => tiers.map(t => ({ minRevenue: String(t.minRevenue), amount: String(t.amount) }));
+    const sameTiers = (a: readonly BonusTier[] | null, b: readonly BonusTier[]) => !!a && JSON.stringify(a) === JSON.stringify(b);
+
+    function tierList(tiers: readonly BonusTier[]): string {
+      return `<ol class="space-y-2">${tiers
+        .map((t, i) => `<li class="flex flex-wrap items-center gap-2 rounded-md border px-3 py-2 text-sm">
+          <span class="text-muted-foreground">الشريحة ${i + 1}:</span>
+          إيراد أسبوعي ≥ <strong>${m(t.minRevenue)}</strong> ← بونص <strong class="text-green-700">${m(t.amount)}</strong>
+        </li>`)
+        .join('')}</ol>`;
+    }
+
+    function renderRows() {
+      rowsHost.innerHTML = rows
+        .map(
+          (row, i) => `<div class="tier-row flex flex-wrap items-center gap-3 rounded-md border p-3" data-index="${i}">
+            <span class="w-20 text-sm font-medium text-muted-foreground">الشريحة ${i + 1}</span>
+            <label class="flex items-center gap-2 text-sm">
+              <span>من إيراد ≥</span>
+              <input type="number" min="0.01" step="0.01" inputmode="decimal" dir="ltr" data-field="minRevenue" data-index="${i}"
+                value="${esc(row.minRevenue)}" aria-label="حد الإيراد للشريحة ${i + 1}" class="w-36 rounded-md border px-3 py-2 text-left" />
+              <span>ر.س</span>
+            </label>
+            <span class="text-muted-foreground" aria-hidden="true">←</span>
+            <label class="flex items-center gap-2 text-sm">
+              <span>بونص</span>
+              <input type="number" min="0.01" step="0.01" inputmode="decimal" dir="ltr" data-field="amount" data-index="${i}"
+                value="${esc(row.amount)}" aria-label="مبلغ بونص الشريحة ${i + 1}" class="w-28 rounded-md border px-3 py-2 text-left" />
+              <span>ر.س</span>
+            </label>
+            <button type="button" data-remove="${i}" ${rows.length <= 1 ? 'disabled' : ''}
+              class="mr-auto rounded-md px-3 py-2 text-sm text-red-700 hover:bg-red-50 disabled:opacity-40" aria-label="حذف الشريحة ${i + 1}">حذف</button>
+          </div>`,
+        )
+        .join('');
+      rowsHost.querySelectorAll<HTMLInputElement>('input[data-field]').forEach(input =>
+        input.addEventListener('input', () => {
+          const i = Number(input.dataset.index);
+          const field = input.dataset.field as keyof Row;
+          if (rows[i]) rows[i][field] = input.value;
+          refresh();
+        }),
+      );
+      rowsHost.querySelectorAll<HTMLButtonElement>('button[data-remove]').forEach(btn =>
+        btn.addEventListener('click', () => {
+          rows.splice(Number(btn.dataset.remove), 1);
+          renderRows();
+          refresh();
+        }),
+      );
+    }
+
+    function refresh() {
+      const result = validateTiers(rows.map(r => ({ minRevenue: r.minRevenue.trim(), amount: r.amount.trim() })));
+      rowsHost.querySelectorAll<HTMLElement>('.tier-row').forEach(el => el.classList.remove('border-red-400', 'bg-red-50'));
+      if (result.ok) {
+        current = result.tiers;
+        validationBox.classList.add('hidden');
+      } else {
+        current = null;
+        validationBox.textContent = result.error;
+        validationBox.classList.remove('hidden');
+        if (result.index !== undefined) rowsHost.querySelector(`.tier-row[data-index="${result.index}"]`)?.classList.add('border-red-400', 'bg-red-50');
+      }
+      const dirty = !sameTiers(current, saved) || (current === null && rows.length > 0);
+      saveBtn.disabled = !current || !dirty;
+      discardBtn.disabled = !dirty;
+      addBtn.disabled = rows.length >= MAX_BONUS_TIERS;
+      byId('row-count').textContent = `${rows.length} من ${MAX_BONUS_TIERS} شرائح كحد أقصى`;
+      renderPreview();
+    }
+
+    function renderPreview() {
+      if (!current) {
+        examples.innerHTML = '<li class="text-muted-foreground">صحّح الشرائح لعرض المعاينة.</li>';
+        tryResult.textContent = '';
+        return;
+      }
+      const tiers = current;
+      const lines: string[] = [];
+      lines.push(`<li>• موظف إيراده أقل من <strong>${m(tiers[0].minRevenue)}</strong> في الأسبوع لا يحصل على بونص.</li>`);
+      tiers.forEach((t, i) => {
+        const next = tiers[i + 1];
+        const sample = next ? Math.round(((t.minRevenue + next.minRevenue) / 2) * 100) / 100 : Math.round(t.minRevenue * 1.25 * 100) / 100;
+        const result = evaluateTier(sample, tiers);
+        lines.push(`<li>• موظف إيراده <strong>${m(sample)}</strong> في الأسبوع يحصل على <strong class="text-green-700">${m(result.amount)}</strong>${next ? ` (يحتاج ${m(next.minRevenue - sample)} إضافية ليصل إلى بونص ${m(next.amount)})` : ' (أعلى شريحة)'}.</li>`);
+      });
+      examples.innerHTML = lines.join('');
+      renderTry();
+    }
+
+    function renderTry() {
+      if (!current) return;
+      const value = Number(tryInput.value);
+      if (!tryInput.value.trim() || !Number.isFinite(value) || value < 0) {
+        tryResult.textContent = 'أدخل مبلغاً صحيحاً';
+        tryResult.className = 'text-sm font-medium text-muted-foreground';
+        return;
+      }
+      const r = evaluateTier(value, current);
+      tryResult.innerHTML = r.amount > 0
+        ? `يحصل على <span class="text-green-700">${m(r.amount)}</span>${r.nextTier ? ` — متبقٍ ${m(r.remainingToNext)} للشريحة التالية (${m(r.nextTier.amount)})` : ' — أعلى شريحة'}`
+        : `لا بونص — متبقٍ ${m(r.remainingToNext)} للوصول إلى الشريحة الأولى (${m(r.nextTier?.amount ?? 0)})`;
+      tryResult.className = 'text-sm font-medium';
+    }
+
+    function showUpdated(data: TiersResponse) {
+      const info = byId('updated-info');
+      if (data.invalidStored) info.textContent = 'تعذر قراءة الشرائح المحفوظة — تُطبق الشرائح الافتراضية حالياً';
+      else if (data.isDefault) info.textContent = 'تُطبق الشرائح الافتراضية حالياً';
+      else info.textContent = `آخر تعديل: ${formatDate(data.updatedAt, true)}${data.updatedByName ? ` بواسطة ${data.updatedByName}` : ''}`;
+    }
+
+    function load(data: TiersResponse) {
+      saved = data.tiers.map(t => ({ minRevenue: t.minRevenue, amount: t.amount }));
+      rows = toRows(saved);
+      showUpdated(data);
+      renderRows();
+      refresh();
+    }
+
+    addBtn.addEventListener('click', () => {
+      if (rows.length >= MAX_BONUS_TIERS) return;
+      const last = current?.[current.length - 1];
+      rows.push(last ? { minRevenue: String(last.minRevenue + 500), amount: String(last.amount + 25) } : { minRevenue: '', amount: '' });
+      renderRows();
+      refresh();
+      rowsHost.querySelector<HTMLInputElement>(`input[data-index="${rows.length - 1}"][data-field="minRevenue"]`)?.focus();
+    });
+
+    discardBtn.addEventListener('click', () => {
+      rows = toRows(saved);
+      renderRows();
+      refresh();
+    });
+
+    tryInput.addEventListener('input', renderTry);
+
+    saveBtn.addEventListener('click', async () => {
+      if (!current) return;
+      const tiers = current;
+      try {
+        const data = await withBusy(saveBtn, 'جاري الحفظ…', () =>
+          api<TiersResponse & { message: string }>('/api/bonus/tiers', { body: { tiers } }),
+        );
+        toast(data.message || 'تم حفظ الشرائح', 'success');
+        load({ ...data, updatedAt: new Date().toISOString(), invalidStored: false });
+      } catch (error) {
+        toast(error instanceof Error ? error.message : 'تعذر حفظ الشرائح', 'error');
+      } finally {
+        refresh();
+      }
+    });
+
+    resetBtn.addEventListener('click', async () => {
+      const defaults = DEFAULT_BONUS_TIERS.map(t => `${money(t.minRevenue)} ← ${money(t.amount)}`).join('، ');
+      if (!confirm(`استعادة الشرائح الافتراضية (${defaults})؟ سيتم استبدال الشرائح الحالية.`)) return;
+      try {
+        const data = await withBusy(resetBtn, 'جاري الاستعادة…', () =>
+          api<TiersResponse & { message: string }>('/api/bonus/tiers', { body: { reset: true } }),
+        );
+        toast(data.message || 'تمت الاستعادة', 'success');
+        load({ tiers: data.tiers, isDefault: true, updatedAt: null, updatedByName: null });
+      } catch (error) {
+        toast(error instanceof Error ? error.message : 'تعذرت الاستعادة', 'error');
+      }
+    });
+
+    window.addEventListener('beforeunload', e => {
+      if (!editor.classList.contains('hidden') && !discardBtn.disabled) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    });
+
+    async function init() {
+      try {
+        const ctx = await loadFinanceContext();
+        const data = await api<TiersResponse>('/api/bonus/tiers').catch(() => null);
+        loading.classList.add('hidden');
+        if (!ctx.permissions.canApproveFinance) {
+          byId('denied').classList.remove('hidden');
+          byId('readonly-tiers').innerHTML = data
+            ? `<h2 class="mb-3 text-lg font-semibold">الشرائح الحالية${data.isDefault ? ' (الافتراضية)' : ''}</h2>${tierList(data.tiers)}`
+            : '<p class="text-sm text-muted-foreground">لا يمكن عرض الشرائح لحسابك.</p>';
+          return;
+        }
+        if (!data) throw new Error('تعذر تحميل شرائح البونص');
+        editor.classList.remove('hidden');
+        load(data);
+      } catch (error) {
+        loading.classList.add('hidden');
+        pageError.innerHTML = `<div class="flex flex-wrap items-center justify-between gap-3"><span>${esc(error instanceof Error ? error.message : 'تعذر تحميل الصفحة')}</span>
+          <button type="button" id="retry" class="rounded-md border border-red-300 bg-white px-3 py-1 text-red-700 hover:bg-red-100">إعادة المحاولة</button></div>`;
+        pageError.classList.remove('hidden');
+        byId('retry').addEventListener('click', () => location.reload());
+      }
+    }
+
+    init();
+  </script>
+</MainLayout>

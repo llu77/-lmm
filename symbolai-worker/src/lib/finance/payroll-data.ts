@@ -158,8 +158,20 @@ export async function loadApprovedBonuses(
   const byName = new Map(employees.map(e => [normalizeName(e.name), e]));
   const out: PayrollAdjustmentInput[] = [];
 
+  // The old bonus page inserted a new row on every save, so a week can have
+  // several approved rows. Pay each week once: keep its most recent approval.
+  const latestPerWeek = new Map<string, Record<string, unknown>>();
+  const recency = (row: Record<string, unknown>) => String(row.approved_at ?? row.created_at ?? '');
   for (const row of result.results ?? []) {
     if (!isBonusRecordApproved(row)) continue;
+    const week = String(row.week_number ?? row.id);
+    const current = latestPerWeek.get(week);
+    if (!current || recency(row) > recency(current) || (recency(row) === recency(current) && String(row.id) > String(current.id))) {
+      latestPerWeek.set(week, row);
+    }
+  }
+
+  for (const row of latestPerWeek.values()) {
     let entries: BonusEntry[] = [];
     try {
       const parsed = JSON.parse(String(row.employee_bonuses ?? '[]'));

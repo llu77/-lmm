@@ -1,70 +1,62 @@
 import type { APIRoute } from 'astro';
-import {
-  authenticateRequest,
-  resolveBranchFilter,
-  createSuccessResponse,
-  withErrorHandling
-} from '@/lib/api-helpers';
-import { bonusQueries } from '@/lib/db';
+import { financeAuth, ok, fail, resolveBranchId, getBranchName, canApproveFinance } from '@/lib/finance/http';
+import { currentPeriod, parseMonth, parsePeriod, periodLabelAr, toPeriod } from '@/lib/finance/catalog';
+import { getOpenRun } from '@/lib/finance/payroll-data';
+import { loadPeriodOverview } from '@/lib/finance/bonus';
 
-export const GET: APIRoute = withErrorHandling(async ({ request, locals }) => {
-  // Authenticate request with required permission
-  const authResult = await authenticateRequest({
-    kv: locals.runtime.env.SESSIONS,
-    db: locals.runtime.env.DB,
-    request,
-    requiredPermission: 'canViewReports'
-  });
+/**
+ * Month overview of the weekly bonus: the 5 (or 4) weeks with their date range,
+ * completeness and stored request, the approved total that reaches payroll,
+ * and the number of requests awaiting the manager.
+ * Query: branchId, period=YYYY-MM (or month & year).
+ */
+export const GET: APIRoute = async context => {
+  const auth = await financeAuth(context, ['canManageBonus', 'canManageSettings', 'canViewReports']);
+  if (auth instanceof Response) return auth;
+  const { db, session } = auth;
 
-  if (authResult instanceof Response) {
-    return authResult;
+  const url = new URL(context.request.url);
+  const branchId = resolveBranchId(session, url.searchParams.get('branchId'));
+  if (branchId instanceof Response) return branchId;
+
+  let period = (url.searchParams.get('period') ?? '').trim();
+  if (!period) {
+    const month = parseMonth(url.searchParams.get('month'));
+    const year = Number(url.searchParams.get('year'));
+    period = month && Number.isInteger(year) && year > 0 ? toPeriod(year, month) : currentPeriod();
   }
+  if (!parsePeriod(period)) return fail('الشهر غير صالح — استخدم الصيغة YYYY-MM', 400);
 
-  // Extract query parameters
-  const url = new URL(request.url);
-  const requestedBranchId = url.searchParams.get('branchId');
-  const month = url.searchParams.get('month');
-  const year = url.searchParams.get('year');
-
-  // Resolve branch filtering (use session branch if not provided)
-  const branchId = await resolveBranchFilter({
-    session: authResult,
-    requestedBranchId: requestedBranchId || authResult.branchId || 'BR001'
-  });
-
-  if (branchId instanceof Response) {
-    return branchId;
+  try {
+    const [overview, branchName, run] = await Promise.all([
+      loadPeriodOverview(db, branchId, period),
+      getBranchName(db, branchId),
+      getOpenRun(db, branchId, period),
+    ]);
+    const weeks = overview.weeks.map(w => ({
+      ...w,
+      // The month view does not need every employee line.
+      record: w.record ? { ...w.record, entries: undefined } : null,
+    }));
+    return ok({
+      branchId,
+      branchName,
+      period,
+      periodLabel: periodLabelAr(period),
+      weeks,
+      approvedTotal: overview.approvedTotal,
+      monthApprovedTotal: overview.approvedTotal,
+      pendingCount: overview.pendingCount,
+      locked: overview.locked,
+      payrollStatus: run?.status ?? null,
+      employees: overview.employees,
+      permissions: {
+        canSubmit: session.permissions.canManageBonus || canApproveFinance(session),
+        isManager: canApproveFinance(session),
+      },
+    });
+  } catch (error) {
+    console.error('List bonus error:', error);
+    return fail('تعذر تحميل سجلات البونص', 500);
   }
-
-  // Default to current month if not provided
-  let finalMonth = month;
-  let finalYear = year ? parseInt(year) : undefined;
-
-  if (!finalMonth || !finalYear) {
-    const now = new Date();
-    const monthNames = [
-      'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
-      'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'
-    ];
-    finalMonth = monthNames[now.getMonth()];
-    finalYear = now.getFullYear();
-  }
-
-  const result = await bonusQueries.getByBranchAndPeriod(
-    locals.runtime.env.DB,
-    branchId as string,
-    finalMonth,
-    finalYear!
-  );
-
-  // Parse employee bonuses JSON
-  const bonusRecords = (result.results || []).map((record: any) => ({
-    ...record,
-    employee_bonuses: record.employee_bonuses ? JSON.parse(record.employee_bonuses) : []
-  }));
-
-  return createSuccessResponse({
-    bonusRecords,
-    count: bonusRecords.length
-  });
-});
+};
