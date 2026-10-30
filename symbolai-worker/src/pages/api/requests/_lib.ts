@@ -440,6 +440,21 @@ export function describeFinancial(f: RequestFinancial | null, currency: Currency
   return lines;
 }
 
+const EMAIL_HTML_ESCAPES: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+
+/**
+ * Makes user-supplied text safe to pass to the e-mail triggers: src/lib/email.ts
+ * splices template variables into HTML verbatim, through String.replace with a
+ * string replacement (where `$&`, `$'`, `$1`, ... are special). So the text is
+ * HTML-escaped and every `$` becomes the `&#36;` entity.
+ */
+export function emailSafe(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  return String(value)
+    .replace(/[&<>"']/g, ch => EMAIL_HTML_ESCAPES[ch])
+    .replace(/\$/g, '&#36;');
+}
+
 export function shortRequestNo(id: string): string {
   return id.replace(/^req_/, '').slice(-8).toUpperCase();
 }

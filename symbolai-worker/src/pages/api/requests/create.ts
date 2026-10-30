@@ -1,7 +1,7 @@
 // POST /api/requests/create — submit an employee request (سلفة، إجازة، صرف
 // متأخرات، استئذان، مخالفة، استقالة). The request is linked to an employee
-// record (picked by a manager, or matched for self-service by name / national
-// id) so that its approval can be posted to payroll.
+// record (picked by a manager, or — for self-service — matched by the
+// account's full name only) so that its approval can be posted to payroll.
 
 import type { APIRoute } from 'astro';
 import {
@@ -34,6 +34,7 @@ import {
   matchEmployee,
   runSideEffect,
   emailEnv,
+  emailSafe,
   type LeaveType,
 } from './_lib';
 
@@ -151,6 +152,7 @@ export const POST: APIRoute = async context => {
     const branchEmployees = await loadBranchEmployees(db, branchId);
 
     let linked: { id: string; name: string; nationalId: string | null } | null = null;
+    const accountHasFullName = actor.displayName !== actor.username;
 
     if (canFileForOthers) {
       if (requestedEmployeeId) {
@@ -163,8 +165,11 @@ export const POST: APIRoute = async context => {
         linked = matchEmployee(branchEmployees, [typedName || actor.displayName], typedNationalId);
       }
     } else {
-      // Self-service: the trusted account name first, then the national id.
-      linked = matchEmployee(branchEmployees, [actor.displayName], typedNationalId);
+      // Self-service: linked ONLY by the account's own full name. Anything the
+      // user types (a national id, a name) is unverified and could be a
+      // colleague's, so it never selects the employee record — an unmatched
+      // request stays unlinked and the supervisor links it when approving.
+      linked = accountHasFullName ? matchEmployee(branchEmployees, [actor.displayName]) : null;
       if (requestedEmployeeId && requestedEmployeeId !== linked?.id) {
         return fail('لا يمكنك تقديم طلب باسم موظف آخر', 403);
       }
@@ -173,11 +178,11 @@ export const POST: APIRoute = async context => {
     if (requestType === 'مخالفة' && !linked && !typedName) return fail('يرجى اختيار الموظف المخالف');
 
     // Self-service users file under their account name; a typed name is only
-    // used when the account has no full name.
-    const accountHasFullName = actor.displayName !== actor.username;
+    // used when the account has no full name. A linked record's own name and
+    // national id win over typed values.
     const employeeName =
       linked?.name || (canFileForOthers || !accountHasFullName ? typedName || actor.displayName : actor.displayName);
-    const nationalId = linked?.nationalId || typedNationalId || null;
+    const nationalId = linked && !canFileForOthers ? linked.nationalId || null : linked?.nationalId || typedNationalId || null;
     if (!employeeName) return fail('اسم الموظف مطلوب');
 
     // ---- write request + meta atomically -------------------------------------
@@ -237,13 +242,15 @@ export const POST: APIRoute = async context => {
         { excludeUserId: actor.id },
       );
 
+      // Every user-supplied string is escaped: the e-mail templates splice
+      // variables into HTML verbatim (and through String.replace).
       await runSideEffect(context, async () => {
         await triggerEmployeeRequestCreated(emailEnv(context), {
           requestId: id,
-          employeeName,
-          requestType,
+          employeeName: emailSafe(employeeName),
+          requestType: emailSafe(requestType),
           requestDate,
-          requestDetails: details.full,
+          requestDetails: emailSafe(details.full),
           branchId,
           userId: actor.id,
         });

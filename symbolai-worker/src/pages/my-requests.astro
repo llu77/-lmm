@@ -525,7 +525,7 @@ if (!cookieHeader?.includes('session=')) {
         const me = data.employees[0];
         hint.textContent = me
           ? `سيُربط الطلب بسجلك الوظيفي (${me.name}) ليظهر أثره في مسير الرواتب بعد الاعتماد.`
-          : 'لم يُعثر على سجل موظف مطابق لاسم حسابك — أدخل رقم الهوية ليتم الربط، أو سيحدده المشرف عند الاعتماد.';
+          : 'لم يُعثر على سجل موظف مطابق لاسم حسابك — سيحدد المشرف سجلك عند اعتماد الطلب (رقم الهوية يُحفظ مع الطلب للمراجعة فقط).';
         hint.className = `md:col-span-2 text-xs ${me ? 'text-green-700' : 'text-amber-700'}`;
       } catch {
         hint.textContent = '';

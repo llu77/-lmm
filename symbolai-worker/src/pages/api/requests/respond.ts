@@ -5,10 +5,15 @@
 //   سلفة         → 'advance' deduction, optionally split into monthly installments,
 //                  plus (by default) one payment voucher (سند صرف) for the payout
 //   مخالفة       → optional 'violation' penalty (0 = warning only)
-//   إجازة        → 'unpaid_leave' deduction = unpaid days × daily rate (or an explicit amount)
+//   إجازة        → 'unpaid_leave' deductions, one per calendar month of the leave
+//                  (days × daily rate, ≤ 30 days and ≤ the fixed salary per month;
+//                  an explicit amount is spread over the months by days) — see _leave.ts
 //   صرف متأخرات  → 'dues' earning
 //   استئذان      → optional 'late' deduction
-//   استقالة      → optionally deactivates the employee
+//   استقالة      → optionally deactivates the employee (refused while advance
+//                  installments are still to be deducted)
+// Whoever filed a request, or the employee it concerns, cannot decide it unless
+// they are the manager.
 // Everything (ledger rows, voucher, meta, status change) is written in ONE
 // batch whose statements all re-check that the request is still pending and
 // the target months are still open, so a double approval or a payroll that is
@@ -35,7 +40,6 @@ import {
   parsePeriod,
   periodLabelAr,
   todayIso,
-  toPeriod,
   type AdjustmentCategory,
   type PaymentMethod,
 } from '@/lib/finance/catalog';
@@ -59,6 +63,7 @@ import {
   PENDING_GUARD_SQL,
   describeFinancial,
   emailEnv,
+  emailSafe,
   employeeDailyRate,
   findEmployeeUserIds,
   getOrgCurrency,
@@ -70,6 +75,7 @@ import {
   type NormalizedRequest,
   type RequestFinancial,
 } from './_lib';
+import { planUnpaidLeave, splitLeaveByMonth } from './_leave';
 
 type Employee = NonNullable<Awaited<ReturnType<typeof getBranchEmployee>>>;
 
@@ -106,13 +112,6 @@ const handler: APIRoute = async context => {
       return fail(`لا يمكن الرد على هذا الطلب — ${STATUS_LABELS[request.status] ?? 'تمت معالجته'} مسبقاً`, 409);
     }
 
-    // Segregation of duties: a supervisor's own request is decided by the manager.
-    const isOwnRequest =
-      request.userId === actor.id && normalizeArabicName(request.employeeName) === normalizeArabicName(actor.displayName);
-    if (isOwnRequest && !canApproveFinance(session)) {
-      return fail('لا يمكنك اعتماد أو رفض طلبك الشخصي — يعتمده المدير', 403);
-    }
-
     // ---- employee link -------------------------------------------------------
     const explicitEmployeeId = str(fin.employeeId, 100);
     const employeeId = explicitEmployeeId || request.meta.employeeId || '';
@@ -121,6 +120,25 @@ const handler: APIRoute = async context => {
       const row = await getBranchEmployee(db, employeeId);
       if (row && row.branchId === request.branchId && row.isActive) employee = row;
       else if (explicitEmployeeId) return fail('الموظف المختار غير موجود في فرع الطلب أو غير نشط');
+    }
+
+    // Segregation of duties: whoever filed the request (even for another
+    // employee picked from the list), or the employee it is about, does not
+    // decide it — the manager does.
+    if (!canApproveFinance(session)) {
+      const self = normalizeArabicName(actor.displayName);
+      const filedByActor = !!request.userId && request.userId === actor.id;
+      const aboutActor =
+        !!self &&
+        (normalizeArabicName(request.employeeName) === self || (employee !== null && normalizeArabicName(employee.name) === self));
+      if (filedByActor || aboutActor) {
+        return fail(
+          filedByActor
+            ? 'لا يمكنك اعتماد أو رفض طلب قدّمته بنفسك — يعتمده المدير'
+            : 'لا يمكنك اعتماد أو رفض طلبك الشخصي — يعتمده المدير',
+          403,
+        );
+      }
     }
 
     // ---- build the posting plan ----------------------------------------------
@@ -407,23 +425,37 @@ async function buildPlan(
       if (unpaidDays <= 0 && !explicitAmount) return plan; // paid leave: nothing to post
       if (!employee) return fail(NEEDS_EMPLOYEE);
 
+      // One entry per calendar month of the leave, each in that month's payroll
+      // (or shifted as a block when the approver picks another posting month),
+      // capped at 30 days and at the fixed salary per month.
       const rate = employeeDailyRate(employee);
-      const amount = explicitAmount || fromMinor(Math.round(unpaidDays * toMinor(rate)));
-      if (toMinor(amount) <= 0) return fail('تعذر حساب مبلغ الخصم — لا يوجد راتب مسجل للموظف؛ أدخل المبلغ يدوياً');
-      const leaveStart = request.meta.leaveStart;
-      const period = startInput ?? (leaveStart ? toPeriod(Number(leaveStart.slice(0, 4)), Number(leaveStart.slice(5, 7))) : await defaultStart());
+      const { leaveStart, leaveEnd } = request.meta;
+      const hasDates = !!(leaveStart && leaveEnd && splitLeaveByMonth(leaveStart, leaveEnd).length > 0);
+      const entries = planUnpaidLeave({
+        leaveStart: hasDates ? leaveStart : null,
+        leaveEnd: hasDates ? leaveEnd : null,
+        unpaidDays,
+        dailyRate: rate,
+        fixedSalary: fromMinor(toMinor(employee.baseSalary) + toMinor(employee.supervisorAllowance) + toMinor(employee.incentives)),
+        explicitAmount: explicitAmount || null,
+        postingStart: hasDates ? startInput ?? null : startInput ?? (await defaultStart()),
+      });
+      if (entries.length === 0) return fail('تعذر حساب مبلغ الخصم — لا يوجد راتب مسجل للموظف؛ أدخل المبلغ يدوياً');
       plan.unpaidDays = unpaidDays > 0 ? unpaidDays : null;
       plan.dailyRate = explicitAmount ? null : rate;
-      const range = request.meta.leaveStart && request.meta.leaveEnd ? ` (${request.meta.leaveStart} – ${request.meta.leaveEnd})` : '';
-      plan.adjustments.push(
-        adjustment(
-          'unpaid_leave',
-          period,
-          amount,
-          `إجازة بدون راتب${unpaidDays > 0 ? ` ${unpaidDays} يوم` : ''}${range} — طلب رقم ${ref}`,
-          explicitAmount ? {} : { quantity: unpaidDays, rate },
-        ),
-      );
+      for (const entry of entries) {
+        const range = entry.start && entry.end ? ` (${entry.start} – ${entry.end})` : '';
+        const cap = entry.capped ? ' — الحد الأقصى للشهر' : '';
+        plan.adjustments.push(
+          adjustment(
+            'unpaid_leave',
+            entry.period,
+            entry.amount,
+            `إجازة بدون راتب${entry.days > 0 ? ` ${entry.days} يوم` : ''}${range}${cap} — طلب رقم ${ref}`,
+            explicitAmount ? {} : { quantity: entry.days, rate },
+          ),
+        );
+      }
       return plan;
     }
 
@@ -448,6 +480,18 @@ async function buildPlan(
     case 'استقالة': {
       if (fin.deactivateEmployee === true) {
         if (!employee) return fail('اختر سجل الموظف المراد إيقافه');
+        // A deactivated employee drops out of every later payroll, which would
+        // strand the advance installments still to be deducted.
+        const outstanding = await outstandingAdvances(db, employee.id, await firstOpenPeriod(db, branchId, currentPeriod()));
+        if (outstanding.length > 0) {
+          const currency = await getOrgCurrency(db);
+          const list = outstanding.map(o => `${periodLabelAr(o.period)}: ${formatMoney(o.amount, currency)}`).join('، ');
+          return fail(
+            `لا يمكن إيقاف سجل الموظف ${employee.name} — عليه أقساط سلف لم تُخصم بعد (${list}). ` +
+              'ألغِ هذه الأقساط أو أعد جدولتها (مثلاً بخصمها من آخر راتب) ثم أعد المحاولة، أو اعتمد الاستقالة دون إيقاف سجل الموظف.',
+            409,
+          );
+        }
         plan.deactivate = true;
       }
       return plan;
@@ -462,6 +506,30 @@ function numberOrUndefined(value: unknown): number | undefined {
   if (value === undefined || value === null || value === '') return undefined;
   const n = Number(value);
   return Number.isFinite(n) ? n : undefined;
+}
+
+/**
+ * The employee's advance installments still to be deducted: active, not yet
+ * attached to an approved payroll, in `fromPeriod` or later. Summed per month.
+ */
+async function outstandingAdvances(
+  db: Parameters<typeof firstOpenPeriod>[0],
+  employeeId: string,
+  fromPeriod: string,
+): Promise<Array<{ period: string; amount: number }>> {
+  const result = await db
+    .prepare(
+      `SELECT period, amount FROM payroll_adjustments
+       WHERE employee_id = ? AND category = 'advance' AND status = 'active' AND payroll_run_id IS NULL AND period >= ?
+       ORDER BY period`,
+    )
+    .bind(employeeId, fromPeriod)
+    .all<{ period: string; amount: number }>();
+  const byPeriod = new Map<string, number>();
+  for (const row of result.results ?? []) {
+    byPeriod.set(String(row.period), (byPeriod.get(String(row.period)) ?? 0) + toMinor(Number(row.amount) || 0));
+  }
+  return [...byPeriod].map(([period, minor]) => ({ period, amount: fromMinor(minor) }));
 }
 
 interface CommitInfo {
@@ -540,13 +608,15 @@ async function afterCommit(context: Parameters<APIRoute>[0], info: CommitInfo): 
       const row = await db.prepare('SELECT email FROM users_new WHERE id = ?').bind(request.userId).first<{ email: string | null }>();
       employeeEmail = row?.email?.trim() || undefined;
     }
+    // Every user-supplied string is escaped: the e-mail templates splice
+    // variables into HTML verbatim (and through String.replace).
     await triggerEmployeeRequestResponded(emailEnv(context), {
       requestId: request.id,
-      employeeName: request.employeeName,
+      employeeName: emailSafe(request.employeeName),
       employeeEmail,
-      requestType: request.requestType,
+      requestType: emailSafe(request.requestType),
       status: decision,
-      adminResponse: [storedResponse, ...effects].filter(Boolean).join(' — '),
+      adminResponse: emailSafe([storedResponse, ...effects].filter(Boolean).join(' — ')),
       responseDate: todayIso(),
       userId: request.userId ?? undefined,
     });

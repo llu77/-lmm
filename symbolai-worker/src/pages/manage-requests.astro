@@ -138,6 +138,7 @@ if (!cookieHeader?.includes('session=')) {
           <div id="fin-employee-row">
             <label for="fin-employee" class="block text-sm font-medium mb-1">سجل الموظف المرتبط</label>
             <select id="fin-employee" class="w-full rounded-md border px-3 py-2 bg-white"></select>
+            <p id="fin-employee-warning" class="hidden mt-2 rounded-md border border-amber-300 bg-amber-50 p-2 text-sm font-medium text-amber-800" role="alert">الطلب غير مرتبط بسجل موظف — اختر الموظف بعناية</p>
             <p id="fin-employee-info" class="text-xs text-muted-foreground mt-1"></p>
           </div>
 
@@ -195,6 +196,7 @@ if (!cookieHeader?.includes('session=')) {
               </div>
             </div>
             <p id="fin-leave-calc" class="text-xs text-muted-foreground"></p>
+            <p class="text-xs text-muted-foreground">يُقسَّم الخصم على أشهر الإجازة: كل شهر في مسيره، بحد أقصى 30 يوماً وبما لا يتجاوز الراتب الثابت للشهر. إذا كانت أيام الخصم أقل من مدة الإجازة تُحتسب من آخر الإجازة، والمبلغ المختلف يُوزَّع على الأشهر حسب الأيام.</p>
           </div>
 
           <!-- صرف متأخرات -->
@@ -273,7 +275,8 @@ if (!cookieHeader?.includes('session=')) {
       type FinanceContextPayload,
     } from '@/lib/finance/client';
     import { ADJUSTMENT_CATEGORIES, PAYMENT_METHODS, addMonths, periodLabelAr, toPeriod, type AdjustmentCategory } from '@/lib/finance/catalog';
-    import { fromMinor, splitInstallments, toMinor } from '@/lib/finance/money';
+    import { splitInstallments } from '@/lib/finance/money';
+    import { planUnpaidLeave } from '@/pages/api/requests/_leave';
 
     // ---- types -------------------------------------------------------------------
     interface FinancialAdjustment {
@@ -415,6 +418,26 @@ if (!cookieHeader?.includes('session=')) {
       pageError.classList.toggle('hidden', !message);
     }
 
+    function sameName(a: string | null | undefined, b: string | null | undefined): boolean {
+      const norm = (v: string | null | undefined) => (v ?? '').replace(/\s+/g, ' ').trim();
+      return norm(a) !== '' && norm(a) === norm(b);
+    }
+
+    /** Filed by the signed-in user, or about their own employee record (the server enforces the same rule). */
+    function isOwnRequest(r: RequestItem): boolean {
+      if (!ctx) return false;
+      if (r.userId && r.userId === ctx.user.id) return true;
+      if (sameName(r.employeeName, ctx.user.displayName)) return true;
+      const linked = r.meta.employeeId ? employees.find(e => e.id === r.meta.employeeId) : null;
+      return !!linked && sameName(linked.name, ctx.user.displayName);
+    }
+
+    /** Segregation of duties: only the manager decides a request its approver filed or is the subject of. */
+    function canDecideOn(r: RequestItem): boolean {
+      if (!ctx || r.status !== 'pending' || !ctx.permissions.canApproveRequests) return false;
+      return ctx.permissions.canApproveFinance || !isOwnRequest(r);
+    }
+
     // ---- list ------------------------------------------------------------------------
     function renderTable() {
       const q = searchInput.value.trim();
@@ -423,7 +446,6 @@ if (!cookieHeader?.includes('session=')) {
         tbody.innerHTML = `<tr><td colspan="7" class="text-center p-8 text-muted-foreground">لا توجد طلبات مطابقة</td></tr>`;
         return;
       }
-      const canDecide = ctx?.permissions.canApproveRequests ?? false;
       tbody.innerHTML = rows.map(r => `
         <tr class="border-b hover:bg-gray-50 align-top">
           <td class="p-3 font-medium">${escapeHtml(r.employeeName)}${r.meta.employeeId ? '' : '<span class="block text-xs text-amber-700 font-normal">غير مرتبط بسجل موظف</span>'}</td>
@@ -434,7 +456,7 @@ if (!cookieHeader?.includes('session=')) {
           <td class="p-3">${statusBadge(r.status)}</td>
           <td class="p-3 whitespace-nowrap">
             <button type="button" data-review="${escapeHtml(r.id)}" class="text-blue-600 hover:text-blue-800 font-medium">
-              ${r.status === 'pending' && canDecide ? 'مراجعة واعتماد' : 'عرض التفاصيل'}
+              ${canDecideOn(r) ? 'مراجعة واعتماد' : 'عرض التفاصيل'}
             </button>
           </td>
         </tr>`).join('');
@@ -503,7 +525,7 @@ if (!cookieHeader?.includes('session=')) {
       const rows: Array<[string, string]> = [
         ['رقم الطلب', r.id.replace(/^req_/, '').slice(-8).toUpperCase()],
         ['الموظف', r.employeeName],
-        ['رقم الهوية', r.nationalId ?? '—'],
+        [r.meta.employeeId ? 'رقم الهوية' : 'رقم الهوية (كما أدخله مقدّم الطلب — غير متحقق)', r.nationalId ?? '—'],
         ['نوع الطلب', r.requestType],
         ['تاريخ التقديم', formatDate(r.requestDate)],
         ['مقدّم الطلب', r.requesterName ?? '—'],
@@ -572,6 +594,12 @@ if (!cookieHeader?.includes('session=')) {
         const fin = financialHtml(r.meta.financial);
         if (fin) outcome.push(`<div class="mt-3">${fin}</div>`);
       }
+      const canDecide = canDecideOn(r);
+      if (r.status === 'pending' && ctx.permissions.canApproveRequests && !canDecide) {
+        outcome.push(`<div class="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">${
+          r.userId === ctx.user.id ? 'قدّمت هذا الطلب بنفسك' : 'هذا الطلب يخصك'
+        } — يعتمده أو يرفضه المدير.</div>`);
+      }
       byId('review-outcome').innerHTML = outcome.join('');
 
       // Always start from a clean, enabled form (the old page left it disabled).
@@ -579,7 +607,6 @@ if (!cookieHeader?.includes('session=')) {
       setControlsEnabled(true);
       decisionError.classList.add('hidden');
       approvalPanel.classList.add('hidden');
-      const canDecide = r.status === 'pending' && ctx.permissions.canApproveRequests;
       decisionForm.classList.toggle('hidden', !canDecide);
       byId('review-footer').classList.toggle('hidden', canDecide);
       if (canDecide) prepareApproval(r);
@@ -598,11 +625,12 @@ if (!cookieHeader?.includes('session=')) {
       const options = ['<option value="">— بدون ربط —</option>']
         .concat(employees.map(e => `<option value="${escapeHtml(e.id)}">${escapeHtml(e.name)}${e.nationalId ? ` — ${escapeHtml(e.nationalId)}` : ''}</option>`));
       finEmployee.innerHTML = options.join('');
-      if (r.meta.employeeId && employees.some(e => e.id === r.meta.employeeId)) finEmployee.value = r.meta.employeeId;
-      else {
-        const sameName = employees.filter(e => e.name.trim() === r.employeeName.trim());
-        finEmployee.value = sameName.length === 1 ? sameName[0].id : '';
-      }
+      // Only a record the server linked is preselected. The name / national id
+      // on an unlinked request were typed by the requester and are unverified,
+      // so the approver must pick the employee explicitly.
+      const linked = !!r.meta.employeeId && employees.some(e => e.id === r.meta.employeeId);
+      finEmployee.value = linked ? r.meta.employeeId! : '';
+      byId('fin-employee-warning').classList.toggle('hidden', linked);
 
       // type sections
       document.querySelectorAll<HTMLElement>('[data-fin]').forEach(section => {
@@ -634,7 +662,11 @@ if (!cookieHeader?.includes('session=')) {
         ? toPeriod(Number(leaveStart.slice(0, 4)), Number(leaveStart.slice(5, 7)))
         : defaultPeriod;
       fillPeriodSelects(finMonth, finYear, period || undefined);
-      byId('fin-period-label').textContent = r.requestType === 'سلفة' ? 'شهر خصم القسط الأول' : 'شهر الترحيل في مسير الرواتب';
+      byId('fin-period-label').textContent = r.requestType === 'سلفة'
+        ? 'شهر خصم القسط الأول'
+        : r.requestType === 'إجازة' && leaveStart
+          ? 'مسير الشهر الأول من الإجازة (اختر شهراً لاحقاً لتأجيل الخصم كاملاً)'
+          : 'شهر الترحيل في مسير الرواتب';
       byId('fin-voucher-note').textContent = ctx?.permissions.canApproveFinance
         ? 'يصدر السند معتمداً بتوقيعك وختم الشركة.'
         : 'يصدر السند بانتظار اعتماد المدير، ثم يمكن طباعته بالختم.';
@@ -709,17 +741,36 @@ if (!cookieHeader?.includes('session=')) {
           }
           fin.unpaidDays = days;
           fin.startPeriod = period;
-          if (employee) {
-            const amount = fromMinor(Math.round(days * toMinor(employee.dailyRate)));
-            calc.textContent = `الأجر اليومي: ${money(employee.dailyRate)} (الراتب الثابت ${money(employee.fixedSalary)} ÷ 30)${days > 0 ? ` — ${days} × ${money(employee.dailyRate)} = ${money(amount)}` : ''}`;
-          } else {
-            calc.textContent = 'اختر سجل الموظف لحساب الأجر اليومي.';
-          }
+          calc.textContent = employee
+            ? `الأجر اليومي: ${money(employee.dailyRate)} (الراتب الثابت ${money(employee.fixedSalary)} ÷ 30)`
+            : 'اختر سجل الموظف لحساب الأجر اليومي.';
           if (override) fin.amount = override;
           if (days > 0 || override) {
             plan.needsEmployee = true;
-            const amount = override || (employee ? fromMinor(Math.round(days * toMinor(employee.dailyRate))) : 0);
-            plan.lines.push(`تُخصم ${employee || override ? money(amount) : '—'} (إجازة بدون راتب${days > 0 ? ` ${days} يوم` : ''}) من راتب ${periodLabelAr(period)}`);
+            if (!employee && !override) {
+              plan.lines.push(`تُخصم إجازة بدون راتب ${days} يوم — اختر سجل الموظف لحساب المبلغ`);
+              break;
+            }
+            // Same plan the server posts (one entry per calendar month of the leave).
+            const entries = planUnpaidLeave({
+              leaveStart: r.meta.leaveStart,
+              leaveEnd: r.meta.leaveEnd,
+              unpaidDays: days,
+              dailyRate: employee?.dailyRate ?? 0,
+              fixedSalary: employee?.fixedSalary ?? 0,
+              explicitAmount: override || null,
+              postingStart: period,
+            });
+            if (entries.length === 0) {
+              plan.error = 'تعذر حساب مبلغ الخصم — لا يوجد راتب مسجل للموظف؛ أدخل المبلغ يدوياً';
+              break;
+            }
+            for (const e of entries) {
+              const range = e.start && e.end ? ` من ${formatDate(e.start)} إلى ${formatDate(e.end)}` : '';
+              plan.lines.push(
+                `تُخصم ${money(e.amount)} (إجازة بدون راتب ${e.days} يوم${range}${e.capped ? ' — الحد الأقصى للشهر' : ''}) من راتب ${periodLabelAr(e.period)}`,
+              );
+            }
           }
           break;
         }

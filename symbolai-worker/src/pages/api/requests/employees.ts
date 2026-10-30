@@ -20,7 +20,8 @@ export const GET: APIRoute = async context => {
 
   try {
     const employees = await loadBranchEmployees(db, branchId);
-    const self = matchEmployee(employees, [actor.displayName]);
+    // Same rule as /api/requests/create: only the account's full name identifies its employee record.
+    const self = actor.displayName !== actor.username ? matchEmployee(employees, [actor.displayName]) : null;
     const fullList = p.canManageRequests || p.canManageEmployees || p.canApproveRequests;
 
     if (!fullList) {

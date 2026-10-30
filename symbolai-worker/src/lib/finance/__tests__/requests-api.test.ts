@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { setup, call } from './harness';
 import { computeBranchPayroll } from '../payroll-data';
 import { dailyRate } from '../payroll-engine';
-import { currentPeriod, todayIso } from '../catalog';
+import { addMonths, currentPeriod, periodLabelAr, todayIso } from '../catalog';
 import { POST as createRequest } from '../../../pages/api/requests/create';
 import { POST as respondRequest, PUT as respondRequestPut } from '../../../pages/api/requests/respond';
 import { GET as listAll } from '../../../pages/api/requests/all';
@@ -33,6 +33,26 @@ function adjustments(ctx: Ctx, sourceId: string) {
 
 function requestRow(ctx: Ctx, id: string) {
   return ctx.DB.one<Record<string, any>>('SELECT * FROM employee_requests WHERE id = ?', id)!;
+}
+
+/** Adds a user account (and session) to the seeded database; returns its session token. */
+async function addUser(ctx: Ctx, id: string, username: string, fullName: string | null, roleId: string, branchId: string | null) {
+  ctx.DB.raw
+    .prepare(`INSERT INTO users_new (id, username, password, full_name, role_id, branch_id, is_active) VALUES (?, ?, 'x', ?, ?, ?, 1)`)
+    .run(id, username, fullName, roleId, branchId);
+  const token = `tok_${id}`;
+  await ctx.env.SESSIONS.put(
+    `session:${token}`,
+    JSON.stringify({ userId: id, username, role: 'employee', createdAt: Date.now(), expiresAt: Date.now() + 3_600_000 }),
+  );
+  return token;
+}
+
+function addEmployee(ctx: Ctx, id: string, name: string, nationalId: string, baseSalary: number) {
+  ctx.DB.raw
+    .prepare(`INSERT INTO employees (id, branch_id, employee_name, national_id, base_salary, supervisor_allowance, incentives, is_active)
+              VALUES (?, 'branch_1010', ?, ?, ?, 0, 0, 1)`)
+    .run(id, name, nationalId, baseSalary);
 }
 
 for (const variant of VARIANTS) {
@@ -352,7 +372,10 @@ for (const variant of VARIANTS) {
     assert.equal(row.employee_name, 'محمد إسماعيل');
     assert.equal(row.national_id, '1002');
 
-    const res = await respond(ctx, 'supervisor', { id, status: 'approved', financial: { amount: 100, startPeriod: '2026-11' } });
+    // the supervisor who filed it cannot decide it — the manager does
+    const ownDecision = await respond(ctx, 'supervisor', { id, status: 'approved', financial: { amount: 100, startPeriod: '2026-11' } });
+    assert.equal(ownDecision.status, 403);
+    const res = await respond(ctx, 'admin', { id, status: 'approved', financial: { amount: 100, startPeriod: '2026-11' } });
     assert.equal(res.status, 200, JSON.stringify(res.body));
     const [adj] = adjustments(ctx, id);
     assert.equal(adj.category, 'violation');
@@ -384,7 +407,7 @@ for (const variant of VARIANTS) {
     ctx.DB.raw.exec(`UPDATE employees SET is_active = 1 WHERE id = 'emp_2'`);
     assert.equal(ctx.DB.query('SELECT * FROM payroll_adjustments').length, 0);
 
-    const linked = await respond(ctx, 'supervisor', { id, status: 'approved', financial: { employeeId: 'emp_2', createVoucher: false, startPeriod: '2026-11' } });
+    const linked = await respond(ctx, 'admin', { id, status: 'approved', financial: { employeeId: 'emp_2', createVoucher: false, startPeriod: '2026-11' } });
     assert.equal(linked.status, 200, JSON.stringify(linked.body));
     const [adj] = adjustments(ctx, id);
     assert.equal(adj.employee_id, 'emp_2');
@@ -556,6 +579,220 @@ for (const variant of VARIANTS) {
     assert.equal(partner.status, 403);
     const admin = await call(listEmployees, ctx.env, { token: ctx.data.users.admin.token, query: { branchId: 'branch_2020' } });
     assert.deepEqual(admin.body.employees.map((e: any) => e.id), ['emp_3']);
+  });
+
+  test(`[${variant}] self-service requests link only by the account's full name — a typed national id never links or renames`, async () => {
+    const ctx = await setup(variant);
+    // An employee account whose name matches no employee record types a colleague's national id.
+    const token = await addUser(ctx, 'u_x', 'xemp', 'سعيد', 'role_employee', 'branch_1010');
+    const created = await call(createRequest, ctx.env, { token, body: { requestType: 'سلفة', advanceAmount: 1500, nationalId: '1002', employeeName: 'محمد إسماعيل' } });
+    assert.equal(created.status, 201, JSON.stringify(created.body));
+    assert.equal(created.body.linkedEmployee, null, 'must not be linked to emp_2 through the typed national id');
+    const id = created.body.requestId;
+    const row = requestRow(ctx, id);
+    assert.equal(row.employee_name, 'سعيد', 'the employee name is the account name, never the record found by the typed id');
+    assert.equal(row.national_id, '1002', 'the typed id may be stored for review');
+    const meta = ctx.DB.one<Record<string, any>>('SELECT * FROM employee_request_meta WHERE request_id = ?', id)!;
+    assert.equal(meta.employee_id, null);
+
+    // the picker does not offer a record either
+    const picker = await call(listEmployees, ctx.env, { token });
+    assert.deepEqual(picker.body.employees, []);
+    assert.equal(picker.body.selfEmployeeId, null);
+    // asking for the colleague's record explicitly is refused
+    const explicit = await call(createRequest, ctx.env, { token, body: { requestType: 'سلفة', advanceAmount: 100, employeeId: 'emp_2' } });
+    assert.equal(explicit.status, 403);
+
+    // approval without an explicit employee choice is refused and posts nothing
+    const noChoice = await respond(ctx, 'supervisor', { id, status: 'approved', financial: { amount: 1500, startPeriod: '2026-11', createVoucher: true } });
+    assert.equal(noChoice.status, 400);
+    assert.ok(String(noChoice.body.error).includes('موظف'));
+    assert.equal(ctx.DB.query('SELECT * FROM payroll_adjustments').length, 0);
+    assert.equal(ctx.DB.query('SELECT * FROM financial_vouchers').length, 0);
+    assert.equal(requestRow(ctx, id).status, 'pending');
+
+    // an account that matches by name is linked to its own record; a colleague's typed id is ignored
+    const own = await create(ctx, 'employee', { requestType: 'سلفة', advanceAmount: 200, nationalId: '1002' });
+    assert.equal(own.status, 201, JSON.stringify(own.body));
+    assert.deepEqual(own.body.linkedEmployee, { id: 'emp_1', name: 'أحمد علي' });
+    assert.equal(requestRow(ctx, own.body.requestId).national_id, '1001');
+
+    // an account without a full name is never linked, whatever it types
+    const anonToken = await addUser(ctx, 'u_y', 'yemp', null, 'role_employee', 'branch_1010');
+    const anon = await call(createRequest, ctx.env, { token: anonToken, body: { requestType: 'سلفة', advanceAmount: 300, employeeName: 'محمد إسماعيل', nationalId: '1002' } });
+    assert.equal(anon.status, 201, JSON.stringify(anon.body));
+    assert.equal(anon.body.linkedEmployee, null);
+    const anonDefault = await respond(ctx, 'supervisor', { id: anon.body.requestId, status: 'approved', financial: { startPeriod: '2026-11' } });
+    assert.equal(anonDefault.status, 400);
+  });
+
+  test(`[${variant}] unpaid leave over a 31-day month deducts at most 30 days and never more than the fixed salary`, async () => {
+    const ctx = await setup(variant);
+    const created = await create(ctx, 'employee', { requestType: 'إجازة', leaveType: 'unpaid', leaveStart: '2027-01-01', leaveEnd: '2027-01-31' });
+    assert.equal(created.status, 201, JSON.stringify(created.body));
+    const id = created.body.requestId;
+    const res = await respond(ctx, 'supervisor', { id, status: 'approved', financial: {} });
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    const ledger = adjustments(ctx, id);
+    assert.equal(ledger.length, 1);
+    assert.equal(ledger[0].period, '2027-01');
+    assert.equal(ledger[0].category, 'unpaid_leave');
+    assert.equal(ledger[0].quantity, 30);
+    assert.equal(ledger[0].amount, 3500, 'capped at the fixed salary (30 × 116.67 = 3500.10)');
+    const payroll = await computeBranchPayroll(ctx.DB as any, 'branch_1010', '2027-01');
+    const item = payroll.items.find(i => i.employeeId === 'emp_1')!;
+    assert.equal(item.absenceDeductions, 3500);
+    assert.equal(item.netSalary, 0);
+    assert.ok(!item.warnings.some(w => w.includes('بالسالب')));
+  });
+
+  test(`[${variant}] unpaid leave across months posts one entry per calendar month; explicit amounts are spread by days`, async () => {
+    const ctx = await setup(variant);
+    const leave = { requestType: 'إجازة', leaveType: 'unpaid', leaveStart: '2026-11-15', leaveEnd: '2027-01-14' };
+    const created = await create(ctx, 'employee', leave);
+    assert.equal(created.status, 201, JSON.stringify(created.body));
+    const id = created.body.requestId;
+    const res = await respond(ctx, 'supervisor', { id, status: 'approved', financial: {} });
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    const ledger = adjustments(ctx, id);
+    assert.deepEqual(ledger.map(a => a.period), ['2026-11', '2026-12', '2027-01']);
+    assert.deepEqual(ledger.map(a => a.quantity), [16, 30, 14]);
+    assert.deepEqual(ledger.map(a => a.amount), [1866.72, 3500, 1633.38]);
+    assert.ok(ledger.every(a => a.category === 'unpaid_leave' && a.employee_id === 'emp_1' && a.rate === 116.67));
+    assert.ok(String(ledger[0].description).includes('2026-11-15 – 2026-11-30'));
+    assert.equal(res.body.financial.adjustments.length, 3);
+    for (const [period, deducted, net] of [['2026-11', 1866.72, 1633.28], ['2026-12', 3500, 0], ['2027-01', 1633.38, 1866.62]] as const) {
+      const payroll = await computeBranchPayroll(ctx.DB as any, 'branch_1010', period);
+      const item = payroll.items.find(i => i.employeeId === 'emp_1')!;
+      assert.equal(item.absenceDeductions, deducted, period);
+      assert.equal(item.netSalary, net, period);
+    }
+
+    // an explicit amount is distributed over the months by days, halala-exact
+    const explicit = await create(ctx, 'employee', leave);
+    const explicitRes = await respond(ctx, 'supervisor', { id: explicit.body.requestId, status: 'approved', financial: { amount: 1000 } });
+    assert.equal(explicitRes.status, 200, JSON.stringify(explicitRes.body));
+    const spread = adjustments(ctx, explicit.body.requestId);
+    assert.deepEqual(spread.map(a => a.period), ['2026-11', '2026-12', '2027-01']);
+    assert.deepEqual(spread.map(a => a.amount), [266.66, 500, 233.34]);
+
+    // every target month must be open: a locked middle month refuses the whole posting
+    const third = await create(ctx, 'employee', leave);
+    ctx.DB.raw.exec(`INSERT INTO payroll_runs (id, branch_id, period, status) VALUES ('run_dec', 'branch_1010', '2026-12', 'approved')`);
+    const locked = await respond(ctx, 'supervisor', { id: third.body.requestId, status: 'approved', financial: {} });
+    assert.equal(locked.status, 409);
+    assert.ok(String(locked.body.error).includes('ديسمبر 2026'));
+    assert.equal(adjustments(ctx, third.body.requestId).length, 0);
+    assert.equal(requestRow(ctx, third.body.requestId).status, 'pending');
+    // ... and the approver can move the schedule as a block to open months
+    const shifted = await respond(ctx, 'supervisor', { id: third.body.requestId, status: 'approved', financial: { startPeriod: '2027-01' } });
+    assert.equal(shifted.status, 200, JSON.stringify(shifted.body));
+    assert.deepEqual(adjustments(ctx, third.body.requestId).map(a => [a.period, a.quantity]), [['2027-01', 16], ['2027-02', 30], ['2027-03', 14]]);
+  });
+
+  test(`[${variant}] a resignation cannot deactivate an employee who still has advance installments to deduct`, async () => {
+    const ctx = await setup(variant);
+    const start = addMonths(currentPeriod(), 1);
+    const advance = await create(ctx, 'employee', { requestType: 'سلفة', advanceAmount: 1200, installments: 3 });
+    const approved = await respond(ctx, 'supervisor', { id: advance.body.requestId, status: 'approved', financial: { installments: 3, startPeriod: start, createVoucher: false } });
+    assert.equal(approved.status, 200, JSON.stringify(approved.body));
+
+    const resignation = await create(ctx, 'employee', { requestType: 'استقالة', resignationDate: '2026-11-30', resignationReason: 'سفر' });
+    const refused = await respond(ctx, 'supervisor', { id: resignation.body.requestId, status: 'approved', financial: { deactivateEmployee: true } });
+    assert.equal(refused.status, 409);
+    for (let i = 0; i < 3; i++) assert.ok(String(refused.body.error).includes(periodLabelAr(addMonths(start, i))), refused.body.error);
+    assert.ok(String(refused.body.error).includes('400.00'));
+    assert.ok(String(refused.body.error).includes('دون إيقاف'));
+    assert.equal(ctx.DB.one<{ is_active: number }>(`SELECT is_active FROM employees WHERE id = 'emp_1'`)!.is_active, 1);
+    assert.equal(requestRow(ctx, resignation.body.requestId).status, 'pending');
+
+    // approving without deactivation is fine
+    const withoutDeactivation = await respond(ctx, 'supervisor', { id: resignation.body.requestId, status: 'approved', financial: { deactivateEmployee: false } });
+    assert.equal(withoutDeactivation.status, 200, JSON.stringify(withoutDeactivation.body));
+    assert.equal(ctx.DB.one<{ is_active: number }>(`SELECT is_active FROM employees WHERE id = 'emp_1'`)!.is_active, 1);
+
+    // once the remaining installments are cancelled (or already in an approved payroll), deactivation goes through
+    const installments = adjustments(ctx, advance.body.requestId);
+    ctx.DB.raw.prepare(`UPDATE payroll_adjustments SET payroll_run_id = 'run_x' WHERE id = ?`).run(installments[0].id);
+    ctx.DB.raw.prepare(`UPDATE payroll_adjustments SET status = 'cancelled' WHERE id IN (?, ?)`).run(installments[1].id, installments[2].id);
+    const again = await create(ctx, 'employee', { requestType: 'استقالة', resignationDate: '2026-12-31', resignationReason: 'سفر' });
+    const deactivated = await respond(ctx, 'supervisor', { id: again.body.requestId, status: 'approved', financial: { deactivateEmployee: true } });
+    assert.equal(deactivated.status, 200, JSON.stringify(deactivated.body));
+    assert.equal(ctx.DB.one<{ is_active: number }>(`SELECT is_active FROM employees WHERE id = 'emp_1'`)!.is_active, 0);
+  });
+
+  test(`[${variant}] whoever filed a request, or is its subject, cannot decide it unless they are the manager`, async () => {
+    const ctx = await setup(variant);
+    // The supervisor (محمد أحمد) files an advance for a record spelled differently, via the employee picker.
+    addEmployee(ctx, 'emp_sup', 'محمد أحمد الزهراني', '1003', 5000);
+    const filed = await create(ctx, 'supervisor', { requestType: 'سلفة', advanceAmount: 3000, employeeId: 'emp_sup' });
+    assert.equal(filed.status, 201, JSON.stringify(filed.body));
+    const id = filed.body.requestId;
+    const approve = await respond(ctx, 'supervisor', { id, status: 'approved', financial: { startPeriod: '2026-11' } });
+    assert.equal(approve.status, 403);
+    const reject = await respond(ctx, 'supervisor', { id, status: 'rejected', adminResponse: 'لا' });
+    assert.equal(reject.status, 403);
+    assert.equal(ctx.DB.query('SELECT * FROM payroll_adjustments').length, 0);
+    assert.equal(requestRow(ctx, id).status, 'pending');
+    const byManager = await respond(ctx, 'admin', { id, status: 'approved', financial: { startPeriod: '2026-11', createVoucher: false } });
+    assert.equal(byManager.status, 200, JSON.stringify(byManager.body));
+
+    // a request about the supervisor's own record, filed by someone else, is also the manager's
+    addEmployee(ctx, 'emp_self', 'محمد أحمد', '1004', 4000);
+    const aboutMe = await create(ctx, 'admin', { requestType: 'صرف متأخرات', branchId: 'branch_1010', employeeId: 'emp_self', duesAmount: 100 });
+    assert.equal(aboutMe.status, 201, JSON.stringify(aboutMe.body));
+    const selfDecision = await respond(ctx, 'supervisor', { id: aboutMe.body.requestId, status: 'approved', financial: { startPeriod: '2026-11' } });
+    assert.equal(selfDecision.status, 403);
+
+    // ... and so is linking someone else's unlinked request to the approver's own record
+    const token = await addUser(ctx, 'u_x', 'xemp', 'سعيد', 'role_employee', 'branch_1010');
+    const unlinked = await call(createRequest, ctx.env, { token, body: { requestType: 'صرف متأخرات', duesAmount: 50 } });
+    const selfLink = await respond(ctx, 'supervisor', { id: unlinked.body.requestId, status: 'approved', financial: { employeeId: 'emp_self', startPeriod: '2026-11' } });
+    assert.equal(selfLink.status, 403);
+    assert.equal(adjustments(ctx, unlinked.body.requestId).length, 0);
+  });
+
+  test(`[${variant}] e-mail variables are HTML-escaped and '$' replacement patterns are neutralized`, async () => {
+    const ctx = await setup(variant);
+    ctx.DB.raw.exec(`CREATE TABLE email_settings (setting_key TEXT PRIMARY KEY, setting_value TEXT);
+                     INSERT INTO email_settings (setting_key, setting_value) VALUES ('global_enable', 'true');`);
+    const sent: Array<{ subject: string; html: string; text: string }> = [];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: unknown, init?: { body?: unknown }) => {
+      if (String(input).includes('api.resend.com')) {
+        sent.push(JSON.parse(String(init?.body)));
+        return new Response(JSON.stringify({ id: 'msg_1' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      return realFetch(input as any, init as any);
+    }) as unknown as typeof fetch;
+    try {
+      const created = await create(ctx, 'supervisor', {
+        requestType: 'سلفة',
+        employeeName: '<b>عامل</b>',
+        advanceAmount: 100,
+        reason: `<img src=x onerror=alert(1)> $& $' $1 $$`,
+      });
+      assert.equal(created.status, 201, JSON.stringify(created.body));
+      assert.equal(sent.length, 1, 'request-created e-mail sent');
+      const createdMail = sent[0];
+      assert.ok(!createdMail.html.includes('<img') && !createdMail.html.includes('<b>'), 'no injected markup');
+      assert.ok(createdMail.html.includes('&lt;img src=x onerror=alert(1)&gt;'));
+      assert.ok(createdMail.html.includes('&lt;b&gt;عامل&lt;/b&gt;'));
+      assert.ok(createdMail.html.includes('&#36;&amp; &#36;&#39; &#36;1 &#36;&#36;'), 'every $ is an entity');
+      assert.ok(!createdMail.html.includes('{{'), '$& must not re-insert the placeholder');
+      assert.equal(createdMail.html.split('مراجعة الطلب الآن').length, 2, "$' must not duplicate the template tail");
+
+      const rejected = await respond(ctx, 'admin', { id: created.body.requestId, status: 'rejected', adminResponse: `<script>alert(1)</script> $' $&` });
+      assert.equal(rejected.status, 200, JSON.stringify(rejected.body));
+      assert.equal(sent.length, 2, 'request-responded e-mail sent');
+      const respondedMail = sent[1];
+      assert.ok(!respondedMail.html.includes('<script>alert'), 'no injected script');
+      assert.ok(respondedMail.html.includes('&lt;script&gt;alert(1)&lt;/script&gt; &#36;&#39; &#36;&amp;'));
+      assert.ok(respondedMail.html.includes('&lt;b&gt;عامل&lt;/b&gt;'));
+      assert.ok(!respondedMail.html.includes('{{'));
+    } finally {
+      globalThis.fetch = realFetch;
+    }
   });
 }
 
