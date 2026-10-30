@@ -1,123 +1,170 @@
 import type { APIRoute } from 'astro';
-import { requireAuthWithPermissions, requirePermission, validateBranchAccess, logAudit, getClientIP } from '@/lib/permissions';
-import { generateId } from '@/lib/db';
+import { logAudit } from '@/lib/permissions';
+import { clientIp, fail, getBranchName, newId, ok, readJsonObject, resolveBranchId } from '@/lib/finance/http';
+import { computeBranchPayroll, getOpenRun } from '@/lib/finance/payroll-data';
+import { periodLabelAr } from '@/lib/finance/catalog';
+import { formatMoney } from '@/lib/finance/money';
+import { notifyByPermission } from '@/lib/finance/notify';
+import {
+  isUniqueViolation,
+  itemInsertStatement,
+  loadRun,
+  payrollAuth,
+  readPeriodInput,
+  runHeaderValues,
+  serializeRun,
+  statusMessage,
+} from '@/lib/finance/payroll-runs';
 
-export const POST: APIRoute = async ({ request, locals }) => {
-  // Check authentication with permissions
-  const authResult = await requireAuthWithPermissions(
-    locals.runtime.env.SESSIONS,
-    locals.runtime.env.DB,
-    request
-  );
+// POST /api/payroll/save {branchId, period}
+// Recomputes the sheet on the server and creates the period's draft run, or
+// refreshes the existing draft. Approved/paid runs are never touched.
+export const POST: APIRoute = async context => {
+  const auth = await payrollAuth(context);
+  if (auth instanceof Response) return auth;
+  const { session, db, actor } = auth;
 
-  if (authResult instanceof Response) {
-    return authResult;
-  }
-
-  // Check permission to generate payroll
-  const permError = requirePermission(authResult, 'canGeneratePayroll');
-  if (permError) {
-    return permError;
-  }
+  const body = await readJsonObject(context.request);
+  if (!body) return fail('بيانات الطلب غير صالحة', 400);
+  const branchId = resolveBranchId(session, body.branchId);
+  if (branchId instanceof Response) return branchId;
+  const period = readPeriodInput(body.period, body.month, body.year);
+  if (!period) return fail('الفترة غير صحيحة — اختر الشهر والسنة', 400);
 
   try {
-    const {
-      branchId,
-      month,
-      year,
-      payrollData,
-      totals
-    } = await request.json();
+    const existing = await getOpenRun(db, branchId, period);
+    if (existing && existing.status !== 'draft') {
+      return fail(statusMessage(existing.status), 409, { run: serializeRun(existing) });
+    }
 
-    // Validation
-    if (!branchId || !month || !year || !payrollData || !Array.isArray(payrollData)) {
-      return new Response(
-        JSON.stringify({ error: 'البيانات المطلوبة ناقصة' }),
-        {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
+    const computation = await computeBranchPayroll(db, branchId, period);
+    if (computation.employeeCount === 0) {
+      return fail('لا يوجد موظفون نشطون في هذا الفرع — لا يمكن حفظ مسير رواتب فارغ', 422);
+    }
+
+    const branchName = await getBranchName(db, branchId);
+    const header = runHeaderValues(computation);
+    const itemStatements = (runId: string) =>
+      computation.items.map((item, index) => itemInsertStatement(db, runId, item, index + 1));
+
+    let runId: string;
+    let created: boolean;
+    if (existing) {
+      runId = existing.id;
+      created = false;
+      const results = await db.batch([
+        db
+          .prepare(
+            `UPDATE payroll_runs
+             SET branch_name = ?, employee_count = ?, total_earnings = ?, total_deductions = ?, total_net = ?,
+                 totals_json = ?, active_columns_json = ?, fingerprint = ?, updated_at = datetime('now')
+             WHERE id = ? AND status = 'draft'`,
+          )
+          .bind(
+            branchName,
+            header.employeeCount,
+            header.totalEarnings,
+            header.totalDeductions,
+            header.totalNet,
+            header.totalsJson,
+            header.activeColumnsJson,
+            header.fingerprint,
+            runId,
+          ),
+        db
+          .prepare(`DELETE FROM payroll_run_items WHERE run_id = ? AND EXISTS (SELECT 1 FROM payroll_runs WHERE id = ? AND status = 'draft')`)
+          .bind(runId, runId),
+        ...itemStatements(runId),
+      ]);
+      if (!results[0]?.meta?.changes) {
+        return fail('تغيرت حالة مسير الرواتب أثناء الحفظ — أعد تحميل الصفحة', 409);
+      }
+    } else {
+      runId = newId('run');
+      created = true;
+      try {
+        await db.batch([
+          db
+            .prepare(
+              `INSERT INTO payroll_runs
+                 (id, branch_id, branch_name, period, status, employee_count, total_earnings, total_deductions, total_net,
+                  totals_json, active_columns_json, fingerprint, created_by, created_by_name)
+               VALUES (?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            )
+            .bind(
+              runId,
+              branchId,
+              branchName,
+              period,
+              header.employeeCount,
+              header.totalEarnings,
+              header.totalDeductions,
+              header.totalNet,
+              header.totalsJson,
+              header.activeColumnsJson,
+              header.fingerprint,
+              actor.id,
+              actor.displayName,
+            ),
+          ...itemStatements(runId),
+        ]);
+      } catch (error) {
+        if (isUniqueViolation(error)) {
+          return fail('يوجد مسير رواتب مفتوح لهذه الفترة بالفعل — أعد تحميل الصفحة', 409);
         }
-      );
+        throw error;
+      }
     }
 
-    // Validate branch access
-    const branchError = validateBranchAccess(authResult, branchId);
-    if (branchError) {
-      return branchError;
-    }
+    const run = await loadRun(db, runId);
+    if (!run) return fail('تعذر قراءة مسير الرواتب بعد الحفظ', 500);
 
-    // Check if payroll already exists for this month/year
-    const existingPayroll = await locals.runtime.env.DB.prepare(`
-      SELECT id FROM payroll_records
-      WHERE branch_id = ? AND month = ? AND year = ?
-    `).bind(branchId, month, parseInt(year)).first();
-
-    if (existingPayroll) {
-      return new Response(
-        JSON.stringify({ error: 'سجل الرواتب لهذا الشهر موجود بالفعل' }),
-        {
-          status: 409,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
-    }
-
-    // Save payroll record
-    const payrollId = generateId();
-    const { username } = authResult.permissions;
-    const employeesJson = JSON.stringify(payrollData);
-
-    await locals.runtime.env.DB.prepare(`
-      INSERT INTO payroll_records (
-        id,
-        branch_id,
-        month,
-        year,
-        employees,
-        total_net_salary,
-        generated_by
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).bind(
-      payrollId,
-      branchId,
-      month,
-      parseInt(year),
-      employeesJson,
-      totals?.totalNetSalary || 0,
-      username || 'admin'
-    ).run();
-
-    // Log audit
     await logAudit(
-      locals.runtime.env.DB,
-      authResult,
-      'create',
-      'payroll_record',
-      payrollId,
-      { branchId, month, year, totalNetSalary: totals?.totalNetSalary, employeeCount: payrollData.length },
-      getClientIP(request),
-      request.headers.get('User-Agent') || undefined
+      db,
+      session,
+      created ? 'create' : 'update',
+      'payroll_run',
+      runId,
+      {
+        operation: created ? 'create_draft' : 'refresh_draft',
+        branchId,
+        period,
+        employeeCount: header.employeeCount,
+        totalNet: header.totalNet,
+        fingerprint: header.fingerprint,
+      },
+      clientIp(context.request),
+      context.request.headers.get('User-Agent') || undefined,
     );
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        payrollId,
-        message: 'تم حفظ سجل الرواتب بنجاح'
-      }),
+    if (created) {
+      await notifyByPermission(
+        db,
+        branchId,
+        'can_manage_settings',
+        {
+          type: 'payroll_draft',
+          severity: 'info',
+          title: 'مسير رواتب بانتظار الاعتماد',
+          message: `${branchName} — ${periodLabelAr(period)}: ${header.employeeCount} موظف، الصافي ${formatMoney(header.totalNet)}. أعدّه ${actor.displayName}.`,
+          link: `/payroll?branchId=${encodeURIComponent(branchId)}&period=${period}`,
+          relatedEntity: `payroll_run:${runId}`,
+        },
+        { excludeUserId: actor.id },
+      );
+    }
+
+    return ok(
       {
-        status: 201,
-        headers: { 'Content-Type': 'application/json' }
-      }
+        created,
+        run: serializeRun(run),
+        warnings: computation.items.flatMap(item => item.warnings.map(w => `${item.employeeName}: ${w}`)),
+        message: created ? 'تم حفظ مسير الرواتب كمسودة' : 'تم تحديث المسودة بآخر البيانات',
+      },
+      created ? 201 : 200,
     );
   } catch (error) {
-    console.error('Save payroll error:', error);
-    return new Response(
-      JSON.stringify({ error: 'حدث خطأ أثناء حفظ سجل الرواتب' }),
-      {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    );
+    console.error('Payroll save failed:', error);
+    return fail('حدث خطأ أثناء حفظ مسير الرواتب', 500);
   }
 };
