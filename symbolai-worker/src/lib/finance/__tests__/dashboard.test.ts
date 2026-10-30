@@ -57,3 +57,39 @@ for (const variant of ['008', 'legacy'] as const) {
     assert.deepEqual(adminOne.body.notifications, []);
   });
 }
+
+test('dashboard never echoes a non-date revenue value and hides figures from employees', async () => {
+  const { env, DB, data } = await setup('008');
+  const today = todayIso();
+  DB.raw.prepare(`INSERT INTO revenues (id, branch_id, date, cash, network, budget, total) VALUES (?, ?, ?, 0, 0, 0, ?)`)
+    .run('evil', 'branch_1010', `${today}<img src=x onerror=alert(1)>`, 10);
+  DB.raw.prepare(`INSERT INTO revenues (id, branch_id, date, cash, network, budget, total) VALUES (?, ?, ?, 0, 0, 0, ?)`)
+    .run('ok', 'branch_1010', today, 20);
+
+  const admin = await call(stats, env, { token: data.users.admin.token, query: { branchId: 'branch_1010' } });
+  const titles = admin.body.recentActivities.map((a: any) => a.title);
+  assert.ok(titles.every((t: string) => !t.includes('<')), JSON.stringify(titles));
+  assert.ok(titles.includes(`إيراد بتاريخ ${today}`));
+
+  const employee = await call(stats, env, { token: data.users.employee.token });
+  assert.equal(employee.status, 200);
+  assert.equal(employee.body.stats.totalRevenue, 0);
+  assert.equal(employee.body.stats.employeeCount, 0);
+  assert.deepEqual(employee.body.recentActivities, []);
+  assert.ok(employee.body.chartData.every((d: any) => d.revenue === 0));
+});
+
+test('7-day chart includes last month while monthly totals do not', async () => {
+  const { env, DB, data } = await setup('008');
+  const today = todayIso();
+  const sixAgo = new Date(`${today}T00:00:00Z`);
+  sixAgo.setUTCDate(sixAgo.getUTCDate() - 6);
+  const sixAgoIso = sixAgo.toISOString().slice(0, 10);
+  DB.raw.prepare(`INSERT INTO revenues (id, branch_id, date, cash, network, budget, total) VALUES (?, ?, ?, 0, 0, 0, ?)`)
+    .run('old', 'branch_1010', sixAgoIso, 5000);
+  const res = await call(stats, env, { token: data.users.supervisor.token });
+  assert.equal(res.body.chartData[0].date, sixAgoIso);
+  assert.equal(res.body.chartData[0].revenue, 5000);
+  const sameMonth = sixAgoIso.slice(0, 7) === today.slice(0, 7);
+  assert.equal(res.body.stats.totalRevenue, sameMonth ? 5000 : 0);
+});

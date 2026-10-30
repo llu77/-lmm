@@ -320,12 +320,15 @@ if (!cookieHeader?.includes('session=')) {
         return;
       }
 
+      // Titles come from stored data (revenue dates, expense titles): escape them.
+      const esc = (value: unknown) =>
+        String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]!);
       container.innerHTML = activities.slice(0, 5).map(activity => `
         <div class="flex items-center">
           <div class="ml-4 space-y-1 flex-1">
-            <p class="text-sm font-medium leading-none">${activity.title}</p>
+            <p class="text-sm font-medium leading-none">${esc(activity.title)}</p>
             <p class="text-sm text-muted-foreground">
-              ${formatCurrency(activity.amount)}
+              ${esc(formatCurrency(Number(activity.amount) || 0))}
             </p>
           </div>
           <div class="${activity.type === 'revenue' ? 'text-green-600' : 'text-red-600'} font-medium">

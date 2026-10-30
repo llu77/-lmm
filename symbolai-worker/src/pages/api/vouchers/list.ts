@@ -3,7 +3,7 @@ import { financeAuth, ok, fail, isIsoDate, resolveBranchId, canApproveFinance } 
 import { getOrganizationProfile } from '@/lib/finance/documents';
 import { fromMinor } from '@/lib/finance/money';
 import type { VoucherType } from '@/lib/finance/catalog';
-import { VOUCHER_VIEW_FLAGS, canCreateVoucherType, isVoucherType, mapVoucherRow, voucherActions } from './get';
+import { VOUCHER_VIEW_FLAGS, canCreateVoucherType, canSeePayVouchers, isVoucherType, mapVoucherRow, voucherActions } from './get';
 
 const STATUSES = new Set(['pending', 'approved', 'cancelled']);
 const SOURCES = new Set(['manual', 'payroll', 'request']);
@@ -41,6 +41,9 @@ export const GET: APIRoute = async context => {
 
   const base: string[] = ['branch_id = ?'];
   const baseParams: unknown[] = [branchId];
+  // Salary and advance vouchers carry per-employee pay: hidden from users
+  // without payroll access (e.g. partners), totals included.
+  if (!canSeePayVouchers(session)) base.push(`source_type = 'manual'`);
 
   const from = (params.get('from') ?? '').trim();
   const to = (params.get('to') ?? '').trim();

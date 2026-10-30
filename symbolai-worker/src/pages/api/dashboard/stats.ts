@@ -1,11 +1,13 @@
 import type { APIRoute } from 'astro';
 import { canAccessBranch } from '@/lib/permissions';
-import { financeAuth, fail } from '@/lib/finance/http';
+import { financeAuth, fail, isIsoDate } from '@/lib/finance/http';
 import { todayIso } from '@/lib/finance/catalog';
 
 // Dashboard KPIs for the selected branch (or every branch for users who can
 // see all branches and picked none). Previously hardcoded to a non-existent
 // 'BR001' branch and queried notification columns missing from the live schema.
+// Financial figures need canViewReports (or all-branch access); other users
+// only get their notifications.
 export const GET: APIRoute = async context => {
   const auth = await financeAuth(context);
   if (auth instanceof Response) return auth;
@@ -23,37 +25,52 @@ export const GET: APIRoute = async context => {
   } else {
     return fail('لا يوجد فرع محدد للمستخدم', 403);
   }
+  const canSeeFigures = session.permissions.canViewReports || session.permissions.canViewAllBranches;
 
   try {
     const today = todayIso();
-    const startDate = `${today.slice(0, 8)}01`;
+    const monthStart = `${today.slice(0, 8)}01`;
     const [y, m] = today.split('-').map(Number);
-    const endDate = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+    const monthEnd = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+    // The 7-day chart may reach into last month; fetch from whichever is earlier.
+    const chartStartDate = new Date(`${today}T00:00:00Z`);
+    chartStartDate.setUTCDate(chartStartDate.getUTCDate() - 6);
+    const chartStart = chartStartDate.toISOString().slice(0, 10);
+    const fetchFrom = chartStart < monthStart ? chartStart : monthStart;
 
     const branchFilter = branchIds ? `AND branch_id IN (${branchIds.map(() => '?').join(', ')})` : '';
     const branchParams = branchIds ?? [];
+    const none = { results: [] as Record<string, any>[] };
 
     const [revenues, expenses, employees, notifications] = await Promise.all([
-      db.prepare(`SELECT * FROM revenues WHERE date >= ? AND date <= ? ${branchFilter} ORDER BY date DESC`)
-        .bind(startDate, endDate, ...branchParams).all<Record<string, any>>(),
-      db.prepare(`SELECT * FROM expenses WHERE date >= ? AND date <= ? ${branchFilter} ORDER BY date DESC`)
-        .bind(startDate, endDate, ...branchParams).all<Record<string, any>>()
-        .catch(() => ({ results: [] as Record<string, any>[] })),
-      db.prepare(`SELECT id FROM employees WHERE is_active = 1 ${branchFilter}`)
-        .bind(...branchParams).all(),
+      canSeeFigures
+        ? db.prepare(`SELECT * FROM revenues WHERE date >= ? AND date <= ? ${branchFilter} ORDER BY date DESC`)
+          .bind(fetchFrom, monthEnd, ...branchParams).all<Record<string, any>>()
+        : none,
+      canSeeFigures
+        ? db.prepare(`SELECT * FROM expenses WHERE date >= ? AND date <= ? ${branchFilter} ORDER BY date DESC`)
+          .bind(fetchFrom, monthEnd, ...branchParams).all<Record<string, any>>()
+          .catch(() => none)
+        : none,
+      canSeeFigures
+        ? db.prepare(`SELECT id FROM employees WHERE is_active = 1 ${branchFilter}`).bind(...branchParams).all()
+        : none,
       db.prepare(`SELECT id, type, severity, title, message, link, created_at FROM user_notifications
                   WHERE user_id = ? AND is_read = 0 ORDER BY created_at DESC LIMIT 10`)
         .bind(session.userId).all(),
     ]);
 
+    const inMonth = (row: Record<string, any>) => typeof row.date === 'string' && row.date >= monthStart;
     const revenueRows = revenues.results ?? [];
     const expenseRows = expenses.results ?? [];
+    const monthRevenues = revenueRows.filter(inMonth);
+    const monthExpenses = expenseRows.filter(inMonth);
     const sum = (rows: Record<string, any>[], field: string) =>
       Math.round(rows.reduce((acc, r) => acc + (Number(r[field]) || 0) * 100, 0)) / 100;
 
-    const totalRevenue = sum(revenueRows, 'total');
-    const totalExpenses = sum(expenseRows, 'amount');
-    const mismatchedCount = revenueRows.filter(r => r.is_matched === 0).length;
+    const totalRevenue = sum(monthRevenues, 'total');
+    const totalExpenses = sum(monthExpenses, 'amount');
+    const mismatchedCount = monthRevenues.filter(r => r.is_matched === 0).length;
 
     const chartData = [];
     const dayFormat = new Intl.DateTimeFormat('ar-SA-u-ca-gregory-nu-latn', { day: 'numeric', month: 'short', timeZone: 'UTC' });
@@ -72,6 +89,9 @@ export const GET: APIRoute = async context => {
       });
     }
 
+    // Titles are plain text; never echo a stored value that is not a date.
+    const revenueTitle = (r: Record<string, any>) => (isIsoDate(r.date) ? `إيراد بتاريخ ${r.date}` : 'إيراد');
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -84,8 +104,8 @@ export const GET: APIRoute = async context => {
         },
         chartData,
         recentActivities: [
-          ...revenueRows.slice(0, 3).map(r => ({ type: 'revenue', title: `إيراد بتاريخ ${r.date}`, amount: r.total, date: r.created_at })),
-          ...expenseRows.slice(0, 3).map(e => ({ type: 'expense', title: e.title, amount: e.amount, date: e.created_at })),
+          ...monthRevenues.slice(0, 3).map(r => ({ type: 'revenue', title: revenueTitle(r), amount: r.total, date: r.created_at })),
+          ...monthExpenses.slice(0, 3).map(e => ({ type: 'expense', title: String(e.title ?? 'مصروف'), amount: e.amount, date: e.created_at })),
         ],
         notifications: notifications.results ?? [],
       }),

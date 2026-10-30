@@ -259,6 +259,14 @@ export async function loadScopedVoucher(
 }
 
 /** Staff read access to the vouchers screens (branch scoping still applies per voucher). */
+/**
+ * Payroll and request (advance) vouchers expose per-employee pay, so only
+ * payroll staff and the manager may see them — never partners.
+ */
+export function canSeePayVouchers(session: EnhancedSession): boolean {
+  return session.permissions.canGeneratePayroll === true || canApproveFinance(session);
+}
+
 export function hasVoucherViewPermission(session: EnhancedSession): boolean {
   return VOUCHER_VIEW_FLAGS.some(flag => session.permissions[flag] === true) || canApproveFinance(session);
 }
@@ -311,10 +319,14 @@ export async function loadReadableVoucher(
   if (!id) return fail('معرّف السند مطلوب', 400);
   const staff = hasVoucherViewPermission(session);
   const row = await loadVoucherRow(db, id);
-  if (row && staff && canAccessBranch(session, String(row.branch_id ?? ''))) return { row, ownerAccess: false };
+  const payVoucher = row !== null && row.source_type !== 'manual';
+  if (row && staff && canAccessBranch(session, String(row.branch_id ?? '')) && (!payVoucher || canSeePayVouchers(session))) {
+    return { row, ownerAccess: false };
+  }
   if (row && (await isOwnRequestVoucher(db, session.userId, row))) return { row, ownerAccess: true };
   if (!staff) return fail('صلاحيات غير كافية لعرض هذا السند', 403);
   if (!row) return fail('السند غير موجود', 404);
+  if (payVoucher && !canSeePayVouchers(session)) return fail('سندات الرواتب والسلف متاحة لمسؤولي الرواتب فقط', 403);
   return fail('لا يمكنك الوصول إلى سندات هذا الفرع', 403);
 }
 
@@ -526,9 +538,11 @@ export function buildVoucherPrintModel(
   const creatorSig = v.createdBy ? signatures.get(v.createdBy) : undefined;
   const approved = v.status === 'approved';
   const approverSig = approved && v.approvedBy ? signatures.get(v.approvedBy) : undefined;
-  const creatorName = creatorSig?.signerName || (v.createdBy ? names.get(v.createdBy) : null) || v.createdByName;
+  // Print the account's real name: the self-chosen signerName must not let a
+  // user present a signature under someone else's identity.
+  const creatorName = (v.createdBy ? names.get(v.createdBy) : null) || v.createdByName || creatorSig?.signerName || null;
   const approverName = approved
-    ? approverSig?.signerName || (v.approvedBy ? names.get(v.approvedBy) : null) || v.approvedByName
+    ? (v.approvedBy ? names.get(v.approvedBy) : null) || v.approvedByName || approverSig?.signerName || null
     : null;
   const createdDate = v.createdAt ? formatRiyadhDateTime(v.createdAt).slice(0, 10) : null;
   const approvedDate = approved && v.approvedAt ? formatRiyadhDateTime(v.approvedAt).slice(0, 10) : null;

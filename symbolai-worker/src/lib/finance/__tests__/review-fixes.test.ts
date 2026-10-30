@@ -131,3 +131,39 @@ test('approving payroll does not lock entries of employees missing from the shee
     { employee_id: 'emp_2', payroll_run_id: null },
   ]);
 });
+
+test('partners see manual vouchers only: salary and advance vouchers stay hidden', async () => {
+  const { env, DB, data } = await setup('008');
+  await seedAdvanceVoucher(DB); // request-sourced voucher vch_victim
+  const db = DB as any;
+  await db.batch([
+    ...voucherInsertStatements(db, {
+      id: 'vch_salary', branchId: 'branch_1010', branchName: 'فرع لبن', type: 'payment', date: '2026-10-29',
+      partyType: 'employee', partyName: 'أحمد علي', employeeId: 'emp_1', amount: 3500, currency: 'SAR',
+      purpose: 'راتب شهر أكتوبر 2026', paymentMethod: 'bank_transfer', status: 'approved', sourceType: 'payroll',
+      sourceId: 'run1:emp_1', createdBy: 'u_admin', createdByName: 'المدير العام', approvedBy: 'u_admin', approvedByName: 'المدير العام',
+    }),
+    ...voucherInsertStatements(db, {
+      id: 'vch_supplier', branchId: 'branch_1010', branchName: 'فرع لبن', type: 'payment', date: '2026-10-29',
+      partyType: 'supplier', partyName: 'مورد', amount: 250, currency: 'SAR', purpose: 'مشتريات',
+      paymentMethod: 'cash', status: 'approved', sourceType: 'manual', createdBy: 'u_sup', createdByName: 'محمد أحمد',
+      approvedBy: 'u_admin', approvedByName: 'المدير العام',
+    }),
+  ]);
+  const { GET: listVouchers } = await import('../../../pages/api/vouchers/list');
+
+  const partner = data.users.partner;
+  const list = await call(listVouchers, env, { token: partner.token, query: { branchId: 'branch_1010', type: 'payment' } });
+  assert.equal(list.status, 200);
+  assert.deepEqual(list.body.vouchers.map((v: any) => v.id), ['vch_supplier']);
+  assert.equal(list.body.summary.payment.totalApproved, 250);
+  for (const id of ['vch_salary', 'vch_victim']) {
+    const res = await call(getVoucher, env, { token: partner.token, query: { id } });
+    assert.equal(res.status, 403, id);
+  }
+  assert.equal((await call(getVoucher, env, { token: partner.token, query: { id: 'vch_supplier' } })).status, 200);
+
+  // Payroll staff still see everything.
+  const sup = await call(listVouchers, env, { token: data.users.supervisor.token, query: { branchId: 'branch_1010', type: 'payment' } });
+  assert.equal(sup.body.vouchers.length, 3);
+});
