@@ -157,9 +157,9 @@ if (!cookieHeader?.includes('session=')) {
 
     // Format currency in Arabic
     function formatCurrency(amount: number): string {
-      return new Intl.NumberFormat('ar-EG', {
+      return new Intl.NumberFormat('ar-SA-u-nu-latn', {
         style: 'currency',
-        currency: 'EGP',
+        currency: 'SAR',
         minimumFractionDigits: 2
       }).format(amount);
     }
