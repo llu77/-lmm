@@ -17,6 +17,8 @@ export interface FinanceContextPayload {
   permissions: {
     canViewAllBranches: boolean;
     canViewReports: boolean;
+    canAddRevenue: boolean;
+    canAddExpense: boolean;
     canManageEmployees: boolean;
     canManageRequests: boolean;
     canApproveRequests: boolean;

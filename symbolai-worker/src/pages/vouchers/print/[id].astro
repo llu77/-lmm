@@ -1,0 +1,488 @@
+---
+// Printable receipt (سند قبض) / payment (سند صرف) voucher, A4 portrait.
+// ?copies=2 → original + copy on one page (half A4 each, with a cut line);
+// vouchers with line items get one full page per copy instead so nothing overflows.
+import PrintShell from '@/components/print/PrintShell.astro';
+import DocHeader from '@/components/print/DocHeader.astro';
+import SignatureBlock from '@/components/print/SignatureBlock.astro';
+import { financeAuth } from '@/lib/finance/http';
+import { getOrganizationProfile, getUserSignatures, type OrganizationProfile } from '@/lib/finance/documents';
+import {
+  buildVoucherPrintModel,
+  formatRiyadhDateTime,
+  loadReadableVoucher,
+  loadUserDisplayNames,
+  mapVoucherRow,
+  type VoucherDto,
+  type VoucherPrintModel,
+} from '@/pages/api/vouchers/get';
+
+async function errorText(response: Response, fallback: string): Promise<string> {
+  try {
+    const data = (await response.json()) as { error?: unknown };
+    return typeof data.error === 'string' && data.error ? data.error : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+let errorMessage: string | null = null;
+let voucher: VoucherDto | null = null;
+let model: VoucherPrintModel | null = null;
+let org: OrganizationProfile | null = null;
+// Read-only access as the beneficiary of a request voucher (e.g. an employee's سلفة).
+let ownerAccess = false;
+
+// Finance staff (branch-scoped) or the employee/requester of a request-generated
+// voucher; loadReadableVoucher applies both rules.
+const auth = await financeAuth({ request: Astro.request, locals: Astro.locals });
+if (auth instanceof Response) {
+  if (auth.status === 401) return Astro.redirect('/auth/login');
+  Astro.response.status = auth.status;
+  errorMessage = await errorText(auth, 'ليست لديك صلاحية عرض السندات');
+} else {
+  const id = String(Astro.params.id ?? '').trim().slice(0, 100);
+  try {
+    const found = await loadReadableVoucher(auth.db, auth.session, id);
+    if (found instanceof Response) {
+      Astro.response.status = found.status;
+      errorMessage = await errorText(found, 'تعذر عرض السند');
+    } else {
+      ownerAccess = found.ownerAccess;
+      voucher = mapVoucherRow(found.row);
+      org = await getOrganizationProfile(auth.db);
+      const people = [voucher.createdBy, voucher.approvedBy];
+      const [signatures, names] = await Promise.all([
+        getUserSignatures(auth.db, people),
+        loadUserDisplayNames(auth.db, people),
+      ]);
+      model = buildVoucherPrintModel(voucher, org, signatures, names);
+    }
+  } catch (error) {
+    console.error('Voucher print failed:', error);
+    Astro.response.status = 500;
+    errorMessage = 'تعذر تحميل السند — حاول مرة أخرى';
+  }
+}
+
+const twoCopies = Astro.url.searchParams.get('copies') === '2';
+const halfLayout = twoCopies && (voucher?.items.length ?? 0) === 0;
+const copies = twoCopies
+  ? [
+      { ar: 'النسخة الأصلية', en: 'Original' },
+      { ar: 'نسخة', en: 'Copy' },
+    ]
+  : [null];
+// One sheet holding both halves, or one sheet per copy.
+const sheets = halfLayout ? [copies] : copies.map(copy => [copy]);
+const printedAt = formatRiyadhDateTime(new Date());
+const backHref = !voucher
+  ? '/vouchers'
+  : ownerAccess
+    ? '/my-requests'
+    : `/vouchers?type=${voucher.type}&branchId=${encodeURIComponent(voucher.branchId)}`;
+const declaration =
+  voucher?.type === 'payment'
+    ? { ar: 'أقرّ أنا الموقّع أدناه بأنني استلمت المبلغ المذكور أعلاه كاملاً وللغرض الموضّح.', en: 'I, the undersigned, acknowledge receipt of the above amount in full for the stated purpose.' }
+    : { ar: 'استلمنا المبلغ المذكور أعلاه وفق البيانات الموضّحة في هذا السند.', en: 'The above amount has been received as detailed in this voucher.' };
+const contactLine = org
+  ? [org.address, org.phone ? `هاتف: ${org.phone}` : '', org.email].filter(Boolean).join('  •  ')
+  : '';
+const statusText = { pending: 'بانتظار الاعتماد', approved: 'معتمد', cancelled: 'ملغي' } as const;
+---
+
+{errorMessage || !model || !voucher || !org ? (
+  <html lang="ar" dir="rtl">
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <meta name="robots" content="noindex" />
+      <title>تعذر عرض السند</title>
+    </head>
+    <body class="error-page">
+      <main class="error-card">
+        <div class="error-icon" aria-hidden="true">!</div>
+        <h1>تعذر عرض السند</h1>
+        <p>{errorMessage ?? 'حدث خطأ غير متوقع'}</p>
+        <a href="/dashboard">العودة إلى لوحة التحكم</a>
+      </main>
+    </body>
+  </html>
+) : (
+  <PrintShell title={`${model.titleAr} ${model.number}`} orientation="portrait" backHref={backHref} watermark={null}>
+    <Fragment slot="toolbar">
+      {twoCopies
+        ? <a class="secondary" href="?">نسخة واحدة</a>
+        : <a class="secondary" href="?copies=2">نسختان (أصل + نسخة)</a>}
+    </Fragment>
+
+    {sheets.map(sheetCopies => (
+      <section class="sheet portrait">
+        {sheetCopies.map((copy, index) => (
+          <Fragment>
+            {index > 0 && (
+              <div class="cut-line" aria-hidden="true">
+                <span>✂ قص هنا</span>
+              </div>
+            )}
+            <article class:list={['voucher', halfLayout ? 'half' : 'full', `tone-${model.statusTone}`]}>
+              {model.watermark && (
+                <div class="watermark" aria-hidden="true"><span>{model.watermark}</span></div>
+              )}
+              <div class="v-body">
+                <DocHeader
+                  org={org}
+                  titleAr={model.titleAr}
+                  titleEn={model.titleEn}
+                  branchName={voucher.branchName}
+                />
+
+                <div class="meta">
+                  <div class="box number-box">
+                    <div class="box-head">
+                      <span>رقم السند</span>
+                      <span class="en">Voucher No.</span>
+                    </div>
+                    <div class="box-value">
+                      <div class="number num">{model.number}</div>
+                      {copy && (
+                        <div class="copy-tag">
+                          <span>{copy.ar}</span>
+                          <span class="en">{copy.en}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div class="box amount-box">
+                    <div class="box-head">
+                      <span>المبلغ</span>
+                      <span class="en">{voucher.type === 'receipt' ? 'Amount Received' : 'Amount Paid'}</span>
+                    </div>
+                    <div class="box-value amount">
+                      <span class="num">{model.amountText}</span>
+                      <span class="currency en">{model.currency}</span>
+                    </div>
+                  </div>
+
+                  <div class="box date-box">
+                    <div class="box-head">
+                      <span>التاريخ</span>
+                      <span class="en">Date</span>
+                    </div>
+                    <div class="box-value date">
+                      <div class="greg">{model.dateGregorian}</div>
+                      {model.dateHijri && <div class="hijri">{model.dateHijri}</div>}
+                    </div>
+                  </div>
+                </div>
+
+                <table class="rows">
+                  <tbody>
+                    {model.rows.map(row => (
+                      <tr class:list={[`kind-${row.kind ?? 'plain'}`]}>
+                        <th scope="row" class="lbl-ar">{row.ar}</th>
+                        <td class="val">
+                          <div class:list={['val-main', { num: row.numeric }]}>{row.value}</div>
+                          {row.sub && <div class="val-sub en">{row.sub}</div>}
+                        </td>
+                        <th scope="row" class="lbl-en en">{row.en}</th>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                {model.items.length > 0 && (
+                  <div class="items-block">
+                    <table class="items">
+                      <thead>
+                        <tr>
+                          <th class="c-idx">#</th>
+                          <th class="c-desc">الوصف<span class="en">DESCRIPTION</span></th>
+                          <th class="c-qty">الكمية<span class="en">QTY</span></th>
+                          <th class="c-price">سعر الوحدة<span class="en">UNIT PRICE</span></th>
+                          <th class="c-total">الإجمالي<span class="en">TOTAL</span></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {model.items.map((item, i) => (
+                          <tr>
+                            <td class="c-idx num">{i + 1}</td>
+                            <td class="c-desc">{item.description}</td>
+                            <td class="c-qty num">{item.quantity}</td>
+                            <td class="c-price num">{item.unitPrice}</td>
+                            <td class="c-total num">{item.total}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <div class="totals">
+                      {model.totals.map(t => (
+                        <div class:list={['t-row', { strong: t.strong }]}>
+                          <span class="t-ar">{t.ar}</span>
+                          <span class="t-en en">{t.en}</span>
+                          <span class="t-val num">{t.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {model.notes && (
+                  <div class="notes">
+                    <div class="notes-head">
+                      <span>ملاحظات</span>
+                      <span class="en">Notes</span>
+                    </div>
+                    <div class="notes-text">{model.notes}</div>
+                  </div>
+                )}
+
+                <div class="sig-wrap">
+                  <p class="declaration">
+                    <span>{declaration.ar}</span>
+                    <span class="en">{declaration.en}</span>
+                  </p>
+                  <SignatureBlock slots={model.slots} stampImage={org.stampImage} companyName={org.companyNameAr} />
+                </div>
+
+                <footer class="v-footer">
+                  {contactLine && <div class="f-line">{contactLine}</div>}
+                  {org.documentFooter && <div class="f-line f-doc">{org.documentFooter}</div>}
+                  <div class="f-meta">
+                    <span class:list={['status-chip', `chip-${model.statusTone}`]}>{statusText[model.statusTone]}</span>
+                    <span class="status-line">{model.statusLine}</span>
+                    {model.sourceLine && <span class="source-line">• {model.sourceLine}</span>}
+                    <span class="printed">طُبع في <span class="num">{printedAt}</span></span>
+                  </div>
+                </footer>
+              </div>
+            </article>
+          </Fragment>
+        ))}
+      </section>
+    ))}
+    <script is:inline>
+      // Two-copy layout: if a voucher is taller than its half page (long names,
+      // notes, many payment rows), shrink it to fit instead of clipping it.
+      (function () {
+        function apply(body, z) {
+          body.style.zoom = z === 1 ? '' : String(z);
+          body.style.height = z === 1 ? '' : (132 / z).toFixed(2) + 'mm';
+        }
+        function fits(body) {
+          return body.scrollHeight <= body.clientHeight + 1;
+        }
+        function fit() {
+          document.querySelectorAll('.voucher.half .v-body').forEach(function (body) {
+            apply(body, 1);
+            if (fits(body)) return;
+            var z = Math.max(0.7, Math.floor((body.clientHeight / body.scrollHeight) * 100) / 100);
+            apply(body, z);
+            while (z > 0.7 && !fits(body)) { z = Math.round((z - 0.01) * 100) / 100; apply(body, z); }
+            while (z < 0.99) {
+              var next = Math.round((z + 0.01) * 100) / 100;
+              apply(body, next);
+              if (!fits(body)) { apply(body, z); break; }
+              z = next;
+            }
+          });
+        }
+        fit();
+        window.addEventListener('load', fit);
+        window.addEventListener('beforeprint', fit);
+      })();
+    </script>
+  </PrintShell>
+)}
+
+<style>
+  /* ---------- error page ---------- */
+  .error-page {
+    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    background: #f3f4f6; font-family: 'Segoe UI', Tahoma, 'Noto Naskh Arabic', Arial, sans-serif; color: #1f2937;
+  }
+  .error-card {
+    background: #fff; border-radius: 14px; padding: 32px 36px; max-width: 420px; text-align: center;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .08);
+  }
+  .error-icon {
+    width: 48px; height: 48px; margin: 0 auto 10px; border-radius: 50%; background: #fee2e2; color: #b91c1c;
+    display: flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 800;
+  }
+  .error-card h1 { font-size: 20px; margin: 0 0 8px; }
+  .error-card p { margin: 0 0 18px; color: #4b5563; }
+  .error-card a {
+    display: inline-block; background: #1e2a4a; color: #fff; text-decoration: none; border-radius: 8px; padding: 8px 18px;
+  }
+
+  /* ---------- voucher ---------- */
+  .voucher { position: relative; break-inside: avoid; }
+  .voucher.full { min-height: 268mm; }
+  .voucher.half { height: 132mm; overflow: hidden; line-height: 1.35; }
+  .v-body { position: relative; z-index: 1; display: flex; flex-direction: column; }
+  .voucher.full .v-body { min-height: 268mm; }
+  .voucher.half .v-body { height: 132mm; }
+  .half .watermark span { font-size: 40px; border-width: 4px; }
+
+  .cut-line {
+    position: relative; height: 6mm; display: flex; align-items: center; justify-content: center;
+    border-top: 1.5px dashed #9ca3af; margin-top: 3mm;
+  }
+  .cut-line span {
+    position: absolute; top: -9px; background: #fff; padding: 0 10px; font-size: 10px; color: var(--muted);
+  }
+
+  /* meta strip */
+  .meta {
+    display: grid; grid-template-columns: 1fr 1.3fr 1fr; gap: 10px; align-items: stretch; margin: 2px 0 10px;
+  }
+  .box { border: 1.5px solid var(--navy); border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; }
+  .box-head {
+    display: flex; justify-content: space-between; align-items: center; gap: 6px;
+    padding: 3px 10px; font-size: 11px; font-weight: 700; color: var(--navy); background: var(--panel);
+    border-bottom: 1px solid var(--soft-line);
+  }
+  .box-head .en { font-weight: 600; color: var(--muted); font-size: 10px; letter-spacing: .3px; }
+  .box-value { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 6px 8px; text-align: center; }
+  .number-box { border-color: var(--accent); }
+  .number-box .box-head { background: #fdecec; color: var(--accent); border-bottom-color: #f5c2c2; }
+  .number { font-size: 20px; font-weight: 800; color: var(--accent); letter-spacing: 0; white-space: nowrap; }
+  .copy-tag {
+    display: inline-flex; gap: 6px; align-items: center; margin-top: 2px; font-size: 10px; font-weight: 700;
+    color: var(--accent); border: 1px solid #f5c2c2; border-radius: 999px; padding: 0 8px; background: #fff;
+  }
+  .copy-tag .en { font-weight: 600; font-size: 9px; letter-spacing: .4px; text-transform: uppercase; }
+  .amount-box .box-head { background: var(--navy); color: #fff; border-bottom: 0; }
+  .amount-box .box-head .en { color: #c7d2fe; }
+  .amount-box .box-value { background: var(--accent-soft); flex-direction: row; gap: 6px; align-items: baseline; direction: ltr; }
+  .amount { font-size: 24px; font-weight: 800; color: var(--navy); }
+  .amount .currency { font-size: 13px; font-weight: 700; color: var(--navy); }
+  .date .greg { font-size: 14px; font-weight: 700; color: var(--navy); }
+  .date .hijri { font-size: 11px; color: var(--muted); }
+
+  /* bilingual rows */
+  .rows { width: 100%; border-collapse: collapse; border: 1.5px solid var(--navy); table-layout: fixed; }
+  .rows th, .rows td { border: 1px solid #aeb6c6; padding: 5px 9px; vertical-align: middle; }
+  .rows .lbl-ar {
+    width: 23%; text-align: right; background: var(--panel); color: var(--navy); font-weight: 700; font-size: 12px;
+  }
+  .rows .lbl-en {
+    width: 19%; text-align: left; background: var(--panel); color: #4b5563; font-weight: 600; font-size: 11px;
+  }
+  .rows .val { text-align: center; }
+  .val-main { font-weight: 700; font-size: 13px; color: #111827; overflow-wrap: anywhere; }
+  .val-sub { font-size: 10.5px; color: var(--muted); margin-top: 1px; }
+  .kind-party .val-main { font-size: 14px; color: var(--navy); }
+  .kind-amount .val-main { font-size: 14px; color: var(--navy); }
+  .kind-words .val-main { font-weight: 600; font-size: 12.5px; }
+
+  /* items */
+  .items-block { margin-top: 10px; }
+  .items { width: 100%; border-collapse: collapse; border: 1.5px solid var(--navy); }
+  .items th {
+    background: var(--navy); color: #fff; font-size: 11.5px; font-weight: 700; padding: 4px 6px; text-align: center;
+    border: 1px solid var(--navy);
+  }
+  .items th .en { display: block; font-size: 9.5px; font-weight: 600; color: #c7d2fe; letter-spacing: .4px; }
+  .items td { border: 1px solid #c9cfda; padding: 4px 6px; text-align: center; font-size: 12px; }
+  .items tbody tr:nth-child(even) td { background: #f8fafc; }
+  .items .c-idx { width: 6%; }
+  .items .c-desc { text-align: right; }
+  .items th.c-desc { text-align: center; }
+  .items .c-qty { width: 11%; }
+  .items .c-price, .items .c-total { width: 17%; }
+  .totals { width: 46%; margin-inline-start: auto; margin-top: 6px; border: 1.5px solid var(--navy); border-radius: 6px; overflow: hidden; }
+  .t-row {
+    display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center;
+    padding: 4px 10px; border-bottom: 1px solid var(--soft-line); font-size: 12px;
+  }
+  .t-row:last-child { border-bottom: 0; }
+  .t-ar { font-weight: 700; color: var(--navy); }
+  .t-en { color: var(--muted); font-size: 10.5px; }
+  .t-val { font-weight: 700; }
+  .t-row.strong { background: var(--navy); color: #fff; font-size: 13.5px; }
+  .t-row.strong .t-ar, .t-row.strong .t-en { color: #fff; }
+
+  /* notes */
+  .notes {
+    margin-top: 10px; border: 1px solid var(--soft-line); border-inline-start: 4px solid var(--accent);
+    border-radius: 6px; padding: 6px 10px; background: #fcfcfd;
+  }
+  .notes-head { display: flex; gap: 8px; font-size: 11px; font-weight: 700; color: var(--navy); }
+  .notes-head .en { color: var(--muted); font-weight: 600; }
+  .notes-text { white-space: pre-line; font-size: 12px; overflow-wrap: anywhere; }
+
+  .sig-wrap { margin-top: auto; padding-top: 6px; }
+  .full .sig-wrap { padding-top: 14px; }
+  .declaration {
+    margin: 0 0 4px; display: flex; flex-direction: column; align-items: center; gap: 1px;
+    font-size: 11.5px; color: #374151; text-align: center;
+  }
+  .declaration .en { font-size: 10px; color: var(--muted); }
+  .half .declaration { display: none; }
+
+  /* footer */
+  .v-footer { margin-top: 8px; padding-top: 5px; border-top: 1px solid var(--soft-line); font-size: 10.5px; color: var(--muted); }
+  .f-line { text-align: center; }
+  .f-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 3px; }
+  .printed { margin-inline-start: auto; }
+  .status-chip { font-weight: 700; border-radius: 999px; padding: 0 8px; border: 1px solid currentColor; font-size: 10px; }
+  .chip-pending { color: #b45309; background: #fffbeb; }
+  .chip-approved { color: var(--ok); background: #f0fdf4; }
+  .chip-cancelled { color: var(--accent); background: #fef2f2; }
+
+  /* ---------- compact (two copies on one page) ---------- */
+  .half :global(.doc-header) { padding-bottom: 3px; gap: 8px; }
+  .half :global(.org-name) { font-size: 13.5px; }
+  .half :global(.org-meta) { display: inline-block; font-size: 9.5px; line-height: 1.3; margin-inline-end: 10px; }
+  .half :global(.logo) { max-height: 42px; max-width: 70px; }
+  .half :global(.doc-title) {
+    margin: 3px 0 5px; display: flex; justify-content: center; align-items: baseline; gap: 12px;
+  }
+  .half :global(.title-ar) { font-size: 18px; letter-spacing: 4px; line-height: 1.2; }
+  .half :global(.title-en) { font-size: 12px; }
+  .half .meta { gap: 7px; margin: 0 0 5px; }
+  .half .box-head { padding: 1px 8px; font-size: 10px; }
+  .half .box-head .en { font-size: 9px; }
+  .half .box-value { padding: 3px 6px; }
+  .half .number { font-size: 15px; }
+  .half .amount { font-size: 18px; }
+  .half .amount .currency { font-size: 11px; }
+  .half .date .greg { font-size: 12px; }
+  .half .date .hijri { font-size: 9.5px; }
+  .half .rows th, .half .rows td { padding: 1.5px 7px; }
+  .half .rows .lbl-ar { font-size: 10.5px; }
+  .half .rows .lbl-en { font-size: 9.5px; }
+  .half .val-main { font-size: 11.5px; }
+  .half .kind-party .val-main, .half .kind-amount .val-main { font-size: 12px; }
+  .half .kind-words .val-main { font-size: 11px; }
+  .half .val-sub { font-size: 9px; }
+  .half .kind-plain .val-sub { display: none; }
+  .half .copy-tag { font-size: 8.5px; margin-top: 1px; }
+  .half .notes { margin-top: 4px; padding: 2px 8px; display: flex; gap: 10px; align-items: baseline; }
+  .half .notes-head { flex-shrink: 0; }
+  .half .notes-text { font-size: 10.5px; max-height: 2.7em; overflow: hidden; }
+  .half .f-doc { display: none; }
+  .half :global(.signatures) { margin-top: 2px; gap: 10px; }
+  .half :global(.sig-title) { font-size: 10.5px; padding-bottom: 1px; }
+  .half :global(.sig-title .en) { font-size: 9px; }
+  .half :global(.sig-area) { height: 50px; margin: 3px 0 2px; }
+  .half :global(.sig-img) { max-height: 44px; }
+  .half :global(.sig-line) { height: 30px; }
+  .half :global(.stamp-img) { width: 50px; height: 50px; top: 0; }
+  .half :global(.seal) { width: 48px; height: 48px; top: 1px; border-width: 2px; }
+  .half :global(.seal-inner) { width: 39px; height: 39px; }
+  .half :global(.seal-company) { font-size: 5.5px; max-width: 40px; }
+  .half :global(.seal-word) { font-size: 9px; }
+  .half :global(.seal-word.en) { font-size: 5.5px; }
+  .half :global(.sig-name) { font-size: 10.5px; }
+  .half :global(.sig-date) { font-size: 9px; }
+  .half .v-footer { margin-top: 3px; padding-top: 2px; font-size: 9px; }
+  .half .f-meta { margin-top: 1px; }
+  .half .status-chip { font-size: 8.5px; }
+
+  @media print {
+    .voucher.full, .voucher.full .v-body { min-height: 268mm; }
+  }
+</style>

@@ -45,6 +45,8 @@ export const GET: APIRoute = async context => {
       permissions: {
         canViewAllBranches: p.canViewAllBranches,
         canViewReports: p.canViewReports,
+        canAddRevenue: p.canAddRevenue,
+        canAddExpense: p.canAddExpense,
         canManageEmployees: p.canManageEmployees,
         canManageRequests: p.canManageRequests,
         canApproveRequests: p.canApproveRequests,
