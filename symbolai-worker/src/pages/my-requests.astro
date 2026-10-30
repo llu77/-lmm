@@ -10,326 +10,690 @@ if (!cookieHeader?.includes('session=')) {
 
 <MainLayout title="طلباتي - SymbolAI">
   <div class="space-y-6">
-    <div class="flex items-center justify-between">
+    <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
       <div>
         <h1 class="text-3xl font-bold">طلباتي</h1>
-        <p class="text-muted-foreground mt-2">قدم طلباتك وتابع حالتها</p>
+        <p class="text-muted-foreground mt-2">قدّم طلباتك (سلفة، إجازة، صرف متأخرات، استئذان، استقالة) وتابع حالتها وأثرها على راتبك</p>
       </div>
       <button
         id="new-request-btn"
-        class="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors font-medium"
+        type="button"
+        disabled
+        class="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors font-medium disabled:opacity-50"
       >
         + طلب جديد
       </button>
     </div>
 
-    <!-- My Requests Table -->
-    <div class="rounded-lg border bg-card p-6">
-      <div class="flex items-center justify-between mb-4">
-        <h3 class="text-xl font-semibold">سجل طلباتي</h3>
-        <select id="status-filter" class="rounded-md border px-3 py-2 text-sm">
-          <option value="all">جميع الحالات</option>
-          <option value="pending">معلق</option>
-          <option value="approved">موافق عليه</option>
-          <option value="rejected">مرفوض</option>
-        </select>
-      </div>
+    <div id="page-error" class="hidden rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert"></div>
 
-      <div class="overflow-x-auto">
-        <table class="w-full">
-          <thead>
-            <tr class="border-b">
-              <th class="text-right p-3 font-medium">نوع الطلب</th>
-              <th class="text-right p-3 font-medium">تاريخ التقديم</th>
-              <th class="text-right p-3 font-medium">الحالة</th>
-              <th class="text-right p-3 font-medium">تاريخ الرد</th>
-              <th class="text-right p-3 font-medium">الرد</th>
-            </tr>
-          </thead>
-          <tbody id="requests-table-body">
-            <tr>
-              <td colspan="5" class="text-center p-8 text-muted-foreground">
-                جاري التحميل...
-              </td>
-            </tr>
-          </tbody>
-        </table>
+    <div class="grid gap-4 grid-cols-2 md:grid-cols-4">
+      <div class="rounded-lg border bg-card p-4">
+        <h3 class="text-sm font-medium text-muted-foreground">قيد المراجعة</h3>
+        <p class="text-2xl font-bold mt-2 text-yellow-600" id="stat-pending">—</p>
+      </div>
+      <div class="rounded-lg border bg-card p-4">
+        <h3 class="text-sm font-medium text-muted-foreground">موافق عليها</h3>
+        <p class="text-2xl font-bold mt-2 text-green-600" id="stat-approved">—</p>
+      </div>
+      <div class="rounded-lg border bg-card p-4">
+        <h3 class="text-sm font-medium text-muted-foreground">مرفوضة</h3>
+        <p class="text-2xl font-bold mt-2 text-red-600" id="stat-rejected">—</p>
+      </div>
+      <div class="rounded-lg border bg-card p-4">
+        <h3 class="text-sm font-medium text-muted-foreground">مسحوبة</h3>
+        <p class="text-2xl font-bold mt-2 text-gray-600" id="stat-cancelled">—</p>
+      </div>
+    </div>
+
+    <div class="rounded-lg border bg-card p-6">
+      <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4">
+        <h3 class="text-xl font-semibold">سجل طلباتي</h3>
+        <div class="flex items-center gap-2">
+          <label for="status-filter" class="text-sm text-muted-foreground">الحالة</label>
+          <select id="status-filter" class="rounded-md border px-3 py-2 text-sm">
+            <option value="all">جميع الحالات</option>
+            <option value="pending">قيد المراجعة</option>
+            <option value="approved">موافق عليها</option>
+            <option value="rejected">مرفوضة</option>
+            <option value="cancelled">مسحوبة</option>
+          </select>
+        </div>
+      </div>
+      <div id="requests-list" class="space-y-3" aria-live="polite">
+        <p class="text-center p-8 text-muted-foreground">جاري التحميل...</p>
       </div>
     </div>
   </div>
 
-  <!-- New Request Dialog -->
-  <div id="request-dialog" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
-    <div class="bg-white rounded-lg p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
-      <h2 class="text-2xl font-bold mb-4">طلب جديد</h2>
+  <!-- New request dialog -->
+  <div id="request-dialog" class="hidden fixed inset-0 bg-black/50 z-50 flex items-start md:items-center justify-center overflow-y-auto p-4" role="dialog" aria-modal="true" aria-labelledby="request-dialog-title">
+    <div class="bg-white rounded-lg p-6 w-full max-w-2xl my-8">
+      <div class="flex items-center justify-between mb-4">
+        <h2 id="request-dialog-title" class="text-2xl font-bold">طلب جديد</h2>
+        <button type="button" id="close-dialog-btn" class="text-2xl leading-none px-2 text-gray-500 hover:text-gray-800" aria-label="إغلاق">×</button>
+      </div>
 
-      <form id="request-form" class="space-y-4">
-        <div class="grid gap-4 md:grid-cols-2">
+      <form id="request-form" class="space-y-4" novalidate>
+        <!-- Branch (all-branch users) -->
+        <div id="branch-row" class="hidden">
+          <label for="branch-select" class="block text-sm font-medium mb-2">الفرع *</label>
+          <select id="branch-select" class="w-full rounded-md border px-3 py-2"></select>
+        </div>
+
+        <!-- Employee picker (supervisors) -->
+        <div id="picker-row" class="hidden">
+          <label for="employee-select" class="block text-sm font-medium mb-2">الموظف صاحب الطلب *</label>
+          <select id="employee-select" class="w-full rounded-md border px-3 py-2">
+            <option value="">جاري تحميل الموظفين...</option>
+          </select>
+          <p class="text-xs text-muted-foreground mt-1">يُربط الطلب بسجل الموظف ليُرحَّل أثره المالي إلى مسير الرواتب عند الاعتماد.</p>
+        </div>
+
+        <!-- Self-service identity (employees) -->
+        <div id="self-row" class="hidden grid gap-4 md:grid-cols-2">
           <div>
-            <label class="block text-sm font-medium mb-2">اسم الموظف *</label>
-            <input type="text" id="employee-name" required class="w-full rounded-md border px-3 py-2" />
+            <label for="employee-name" class="block text-sm font-medium mb-2">اسم الموظف</label>
+            <input type="text" id="employee-name" maxlength="150" class="w-full rounded-md border px-3 py-2 read-only:bg-gray-50" />
           </div>
           <div>
-            <label class="block text-sm font-medium mb-2">الرقم القومي</label>
-            <input type="text" id="national-id" class="w-full rounded-md border px-3 py-2" />
+            <label for="national-id" class="block text-sm font-medium mb-2">رقم الهوية / الإقامة (اختياري)</label>
+            <input type="text" id="national-id" maxlength="30" inputmode="numeric" class="w-full rounded-md border px-3 py-2" />
           </div>
+          <p id="self-link-hint" class="md:col-span-2 text-xs text-muted-foreground"></p>
         </div>
 
         <div>
-          <label class="block text-sm font-medium mb-2">نوع الطلب *</label>
-          <select id="request-type" required class="w-full rounded-md border px-3 py-2">
+          <label for="request-type" class="block text-sm font-medium mb-2">نوع الطلب *</label>
+          <select id="request-type" class="w-full rounded-md border px-3 py-2">
             <option value="">اختر نوع الطلب</option>
-            <option value="سلفة">سلفة</option>
-            <option value="إجازة">إجازة</option>
-            <option value="صرف متأخرات">صرف متأخرات</option>
-            <option value="استئذان">استئذان</option>
-            <option value="مخالفة">مخالفة</option>
-            <option value="استقالة">استقالة</option>
           </select>
         </div>
 
-        <!-- Dynamic Fields Container -->
-        <div id="dynamic-fields" class="space-y-4"></div>
+        <!-- سلفة -->
+        <div data-section="سلفة" class="hidden space-y-4">
+          <div class="grid gap-4 md:grid-cols-2">
+            <div>
+              <label for="advance-amount" class="block text-sm font-medium mb-2">مبلغ السلفة (ر.س) *</label>
+              <input type="number" id="advance-amount" min="0.01" step="0.01" inputmode="decimal" class="w-full rounded-md border px-3 py-2" />
+            </div>
+            <div>
+              <label for="advance-installments" class="block text-sm font-medium mb-2">عدد الأقساط المقترح</label>
+              <select id="advance-installments" class="w-full rounded-md border px-3 py-2"></select>
+            </div>
+          </div>
+          <p id="advance-preview" class="text-sm text-muted-foreground"></p>
+        </div>
 
-        <div class="flex gap-3 justify-end pt-4">
-          <button
-            type="button"
-            id="cancel-btn"
-            class="px-4 py-2 border rounded-md hover:bg-gray-50"
-          >
-            إلغاء
-          </button>
-          <button
-            type="submit"
-            id="submit-btn"
-            class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-          >
-            تقديم الطلب
-          </button>
+        <!-- إجازة -->
+        <div data-section="إجازة" class="hidden space-y-4">
+          <div class="grid gap-4 md:grid-cols-3">
+            <div>
+              <label for="leave-type" class="block text-sm font-medium mb-2">نوع الإجازة *</label>
+              <select id="leave-type" class="w-full rounded-md border px-3 py-2">
+                <option value="annual">سنوية</option>
+                <option value="sick">مرضية</option>
+                <option value="emergency">اضطرارية</option>
+                <option value="unpaid">بدون راتب</option>
+              </select>
+            </div>
+            <div>
+              <label for="leave-start" class="block text-sm font-medium mb-2">من تاريخ *</label>
+              <input type="date" id="leave-start" class="w-full rounded-md border px-3 py-2" />
+            </div>
+            <div>
+              <label for="leave-end" class="block text-sm font-medium mb-2">إلى تاريخ *</label>
+              <input type="date" id="leave-end" class="w-full rounded-md border px-3 py-2" />
+            </div>
+          </div>
+          <p id="leave-days" class="text-sm font-medium text-blue-700"></p>
+        </div>
+
+        <!-- صرف متأخرات -->
+        <div data-section="صرف متأخرات" class="hidden">
+          <label for="dues-amount" class="block text-sm font-medium mb-2">المبلغ المطلوب (ر.س) *</label>
+          <input type="number" id="dues-amount" min="0.01" step="0.01" inputmode="decimal" class="w-full rounded-md border px-3 py-2" />
+        </div>
+
+        <!-- استئذان -->
+        <div data-section="استئذان" class="hidden grid gap-4 md:grid-cols-3">
+          <div>
+            <label for="permission-date" class="block text-sm font-medium mb-2">التاريخ *</label>
+            <input type="date" id="permission-date" class="w-full rounded-md border px-3 py-2" />
+          </div>
+          <div>
+            <label for="permission-time" class="block text-sm font-medium mb-2">من الساعة</label>
+            <input type="time" id="permission-time" class="w-full rounded-md border px-3 py-2" />
+          </div>
+          <div>
+            <label for="permission-hours" class="block text-sm font-medium mb-2">المدة (ساعات) *</label>
+            <input type="number" id="permission-hours" min="0.5" max="8" step="0.5" class="w-full rounded-md border px-3 py-2" />
+          </div>
+        </div>
+
+        <!-- مخالفة (supervisors only) -->
+        <div data-section="مخالفة" class="hidden space-y-4">
+          <div>
+            <label for="violation-date" class="block text-sm font-medium mb-2">تاريخ المخالفة *</label>
+            <input type="date" id="violation-date" class="w-full rounded-md border px-3 py-2" />
+          </div>
+          <div>
+            <label for="violation-description" class="block text-sm font-medium mb-2">وصف المخالفة *</label>
+            <textarea id="violation-description" rows="3" maxlength="1000" class="w-full rounded-md border px-3 py-2"></textarea>
+          </div>
+          <p class="text-xs text-muted-foreground">يُحدَّد مبلغ الجزاء (إن وجد) عند اعتماد المخالفة، ويُخصم من راتب الشهر المختار.</p>
+        </div>
+
+        <!-- استقالة -->
+        <div data-section="استقالة" class="hidden space-y-4">
+          <div>
+            <label for="resignation-date" class="block text-sm font-medium mb-2">تاريخ آخر يوم عمل *</label>
+            <input type="date" id="resignation-date" class="w-full rounded-md border px-3 py-2" />
+          </div>
+          <div>
+            <label for="resignation-reason" class="block text-sm font-medium mb-2">سبب الاستقالة *</label>
+            <textarea id="resignation-reason" rows="3" maxlength="1000" class="w-full rounded-md border px-3 py-2"></textarea>
+          </div>
+        </div>
+
+        <div id="reason-row" class="hidden">
+          <label for="reason" id="reason-label" class="block text-sm font-medium mb-2">السبب</label>
+          <textarea id="reason" rows="3" maxlength="1000" class="w-full rounded-md border px-3 py-2"></textarea>
+        </div>
+
+        <p id="form-error" class="hidden rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-800" role="alert"></p>
+
+        <div class="flex gap-3 justify-end pt-2">
+          <button type="button" id="cancel-btn" class="px-4 py-2 border rounded-md hover:bg-gray-50">إلغاء</button>
+          <button type="submit" id="submit-btn" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50">تقديم الطلب</button>
         </div>
       </form>
     </div>
   </div>
 
   <script>
-    interface Request {
-      id: string;
-      request_type: string;
-      request_date: string;
-      status: string;
-      response_date?: string;
-      admin_response?: string;
+    import {
+      api,
+      byId,
+      escapeHtml,
+      fillBranchSelect,
+      formatDate,
+      loadFinanceContext,
+      money,
+      toast,
+      withBusy,
+      type FinanceContextPayload,
+    } from '@/lib/finance/client';
+    import { ADJUSTMENT_CATEGORIES, PAYMENT_METHODS, periodLabelAr, todayIso, type AdjustmentCategory } from '@/lib/finance/catalog';
+    import { splitInstallments } from '@/lib/finance/money';
+
+    // ---- types ---------------------------------------------------------------
+    interface FinancialAdjustment {
+      id: string; period: string; category: AdjustmentCategory; kind: 'earning' | 'deduction'; amount: number;
+      installmentNo: number | null; installmentCount: number | null; status?: string;
     }
-
-    // Dynamic field definitions
-    const REQUEST_FIELDS: { [key: string]: any[] } = {
-      'سلفة': [
-        { name: 'advanceAmount', label: 'المبلغ المطلوب (ج.م)', type: 'number', required: true },
-        { name: 'reason', label: 'السبب', type: 'textarea', required: false }
-      ],
-      'إجازة': [
-        { name: 'vacationStart', label: 'من تاريخ', type: 'date', required: true },
-        { name: 'vacationEnd', label: 'إلى تاريخ', type: 'date', required: true },
-        { name: 'reason', label: 'السبب', type: 'text', required: false }
-      ],
-      'صرف متأخرات': [
-        { name: 'duesAmount', label: 'المبلغ (ج.م)', type: 'number', required: true },
-        { name: 'reason', label: 'التفاصيل', type: 'textarea', required: true }
-      ],
-      'استئذان': [
-        { name: 'permissionDate', label: 'التاريخ', type: 'date', required: true },
-        { name: 'permissionTime', label: 'الوقت', type: 'time', required: true },
-        { name: 'reason', label: 'السبب', type: 'text', required: true }
-      ],
-      'مخالفة': [
-        { name: 'violationDate', label: 'تاريخ المخالفة', type: 'date', required: true },
-        { name: 'violationDescription', label: 'وصف المخالفة', type: 'textarea', required: true }
-      ],
-      'استقالة': [
-        { name: 'resignationDate', label: 'تاريخ الاستقالة', type: 'date', required: true },
-        { name: 'resignationReason', label: 'سبب الاستقالة', type: 'textarea', required: true }
-      ]
-    };
-
-    function formatDate(dateStr: string): string {
-      if (!dateStr) return '-';
-      return new Date(dateStr).toLocaleDateString('ar-EG');
+    interface Financial {
+      employeeName: string | null;
+      adjustments: FinancialAdjustment[];
+      voucher: { id: string; amount: number; paymentMethod: string; status: string; number?: string | null } | null;
+      deactivatedEmployee: boolean;
+      unpaidDays: number | null;
     }
-
-    function getStatusBadge(status: string): string {
-      const badges: { [key: string]: string } = {
-        'pending': '<span class="px-3 py-1 rounded text-sm bg-yellow-100 text-yellow-800">⏳ معلق</span>',
-        'approved': '<span class="px-3 py-1 rounded text-sm bg-green-100 text-green-800">✓ موافق عليه</span>',
-        'rejected': '<span class="px-3 py-1 rounded text-sm bg-red-100 text-red-800">✗ مرفوض</span>'
+    interface RequestItem {
+      id: string; branchId: string; employeeName: string; nationalId: string | null; requestType: string;
+      requestDate: string | null; status: string; advanceAmount: number | null; vacationDate: string | null;
+      duesAmount: number | null; permissionDate: string | null; violationDate: string | null;
+      violationDescription: string | null; resignationDate: string | null; resignationReason: string | null;
+      adminResponse: string | null; respondedAt: string | null; createdAt: string | null;
+      userId: string | null; requesterName: string | null;
+      meta: {
+        employeeId: string | null; reason: string | null; leaveType: string | null; leaveStart: string | null;
+        leaveEnd: string | null; leaveDays: number | null; permissionHours: number | null;
+        requestedInstallments: number | null; financial: Financial | null; respondedByName: string | null;
       };
-      return badges[status] || status;
+    }
+    interface PickerEmployee { id: string; name: string; nationalId: string | null }
+
+    const REQUEST_TYPES = ['سلفة', 'إجازة', 'صرف متأخرات', 'استئذان', 'مخالفة', 'استقالة'];
+    const LEAVE_TYPES: Record<string, string> = { annual: 'سنوية', sick: 'مرضية', unpaid: 'بدون راتب', emergency: 'اضطرارية' };
+    const STATUS: Record<string, { label: string; cls: string }> = {
+      pending: { label: 'قيد المراجعة', cls: 'bg-yellow-100 text-yellow-800' },
+      approved: { label: 'موافق عليه', cls: 'bg-green-100 text-green-800' },
+      rejected: { label: 'مرفوض', cls: 'bg-red-100 text-red-800' },
+      cancelled: { label: 'مسحوب', cls: 'bg-gray-100 text-gray-700' },
+    };
+    const VOUCHER_STATUS: Record<string, string> = { pending: 'بانتظار اعتماد المدير', approved: 'معتمد', cancelled: 'ملغى', missing: 'غير موجود' };
+
+    // ---- elements ------------------------------------------------------------
+    const newBtn = byId<HTMLButtonElement>('new-request-btn');
+    const pageError = byId('page-error');
+    const list = byId('requests-list');
+    const statusFilter = byId<HTMLSelectElement>('status-filter');
+    const dialog = byId('request-dialog');
+    const form = byId<HTMLFormElement>('request-form');
+    const typeSelect = byId<HTMLSelectElement>('request-type');
+    const branchSelect = byId<HTMLSelectElement>('branch-select');
+    const employeeSelect = byId<HTMLSelectElement>('employee-select');
+    const formError = byId('form-error');
+    const submitBtn = byId<HTMLButtonElement>('submit-btn');
+
+    let ctx: FinanceContextPayload | null = null;
+    let isPicker = false; // supervisors file on behalf of employees
+    let canFileViolation = false;
+    let requests: RequestItem[] = [];
+
+    function showPageError(message: string) {
+      pageError.textContent = message;
+      pageError.classList.remove('hidden');
+    }
+
+    // ---- rendering -------------------------------------------------------------
+    function statusBadge(status: string): string {
+      const s = STATUS[status] ?? { label: status, cls: 'bg-gray-100 text-gray-700' };
+      return `<span class="inline-block px-3 py-1 rounded text-xs font-medium ${s.cls}">${escapeHtml(s.label)}</span>`;
+    }
+
+    function splitDateTime(value: string | null): { date: string | null; time: string | null } {
+      if (!value) return { date: null, time: null };
+      const [date, time] = value.split(' ');
+      return { date: date || null, time: time || null };
+    }
+
+    function summary(r: RequestItem): string {
+      switch (r.requestType) {
+        case 'سلفة': {
+          const n = r.meta.requestedInstallments ?? 1;
+          return `${money(r.advanceAmount)}${n > 1 ? ` — على ${n} أقساط` : ''}`;
+        }
+        case 'إجازة':
+          if (r.meta.leaveStart && r.meta.leaveEnd) {
+            const type = LEAVE_TYPES[r.meta.leaveType ?? ''] ?? '';
+            return `إجازة ${type} من ${formatDate(r.meta.leaveStart)} إلى ${formatDate(r.meta.leaveEnd)} (${r.meta.leaveDays ?? '—'} يوم)`;
+          }
+          return r.vacationDate ?? '—';
+        case 'صرف متأخرات':
+          return money(r.duesAmount);
+        case 'استئذان': {
+          const { date, time } = splitDateTime(r.permissionDate);
+          return `${formatDate(date)}${time ? ` الساعة ${time}` : ''}${r.meta.permissionHours ? ` — ${r.meta.permissionHours} ساعة` : ''}`;
+        }
+        case 'مخالفة':
+          return `${formatDate(r.violationDate)} — ${r.violationDescription ?? ''}`;
+        case 'استقالة':
+          return `آخر يوم عمل: ${formatDate(r.resignationDate)}`;
+        default:
+          return '';
+      }
+    }
+
+    function financialHtml(f: Financial | null): string {
+      if (!f) return '';
+      const items: string[] = [];
+      for (const a of f.adjustments) {
+        const info = ADJUSTMENT_CATEGORIES[a.category];
+        const verb = a.kind === 'deduction'
+          ? `تُخصم ${money(a.amount)} من راتب ${periodLabelAr(a.period)}`
+          : `تُضاف ${money(a.amount)} إلى راتب ${periodLabelAr(a.period)}`;
+        const installment = a.installmentCount && a.installmentCount > 1 ? ` (قسط ${a.installmentNo} من ${a.installmentCount})` : '';
+        const state = a.status === 'cancelled'
+          ? ' <span class="text-red-600">(أُلغيت هذه الحركة)</span>'
+          : a.status === 'missing' ? ' <span class="text-gray-500">(غير موجودة)</span>' : '';
+        items.push(`<li>${escapeHtml(verb + installment)} <span class="text-muted-foreground">— ${escapeHtml(info?.labelAr ?? a.category)}</span>${state}</li>`);
+      }
+      if (f.deactivatedEmployee) items.push('<li>تم إيقاف سجل الموظف بعد اعتماد الاستقالة</li>');
+      if (f.voucher) {
+        const v = f.voucher;
+        const method = PAYMENT_METHODS[v.paymentMethod as keyof typeof PAYMENT_METHODS]?.ar ?? v.paymentMethod;
+        const printable = v.status !== 'cancelled' && v.status !== 'missing';
+        items.push(
+          `<li>سند صرف ${v.number ? `<span class="font-mono">${escapeHtml(v.number)}</span> ` : ''}بمبلغ ${escapeHtml(money(v.amount))} (${escapeHtml(method)}) — ${escapeHtml(VOUCHER_STATUS[v.status] ?? v.status)}` +
+            (printable ? ` — <a class="text-blue-600 hover:underline" target="_blank" rel="noopener" href="/vouchers/print/${encodeURIComponent(v.id)}">طباعة سند الصرف</a>` : '') +
+            '</li>',
+        );
+      }
+      if (items.length === 0) return '';
+      return `<div class="mt-3 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm">
+        <div class="font-medium text-blue-900 mb-1">الأثر على الراتب</div>
+        <ul class="list-disc pr-5 space-y-1 text-blue-900">${items.join('')}</ul>
+      </div>`;
+    }
+
+    function renderStats() {
+      const count = (s: string) => requests.filter(r => r.status === s).length;
+      byId('stat-pending').textContent = String(count('pending'));
+      byId('stat-approved').textContent = String(count('approved'));
+      byId('stat-rejected').textContent = String(count('rejected'));
+      byId('stat-cancelled').textContent = String(count('cancelled'));
+    }
+
+    function renderList() {
+      const filter = statusFilter.value;
+      const rows = filter === 'all' ? requests : requests.filter(r => r.status === filter);
+      if (rows.length === 0) {
+        list.innerHTML = `<p class="text-center p-8 text-muted-foreground">${requests.length === 0 ? 'لم تقدّم أي طلبات بعد' : 'لا توجد طلبات بهذه الحالة'}</p>`;
+        return;
+      }
+      list.innerHTML = rows.map(r => {
+        const reason = r.meta.reason && r.requestType !== 'استقالة' ? r.meta.reason : r.requestType === 'استقالة' ? r.resignationReason : null;
+        const response = r.adminResponse
+          ? `<div class="mt-2 text-sm"><span class="font-medium">رد الإدارة:</span> ${escapeHtml(r.adminResponse)}
+               <span class="text-muted-foreground">${r.meta.respondedByName ? `— ${escapeHtml(r.meta.respondedByName)}` : ''}${r.respondedAt ? ` — ${escapeHtml(formatDate(r.respondedAt, true))}` : ''}</span></div>`
+          : '';
+        const mine = r.userId === ctx?.user.id;
+        const actions = r.status === 'pending' && mine
+          ? `<button type="button" data-withdraw="${escapeHtml(r.id)}" class="text-sm text-red-600 hover:text-red-800 font-medium disabled:opacity-50">سحب الطلب</button>`
+          : '';
+        return `<article class="rounded-lg border p-4">
+          <div class="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <div class="flex flex-wrap items-center gap-2">
+                <h4 class="font-semibold">${escapeHtml(r.requestType)}</h4>
+                ${statusBadge(r.status)}
+              </div>
+              <p class="text-sm mt-1">${escapeHtml(summary(r))}</p>
+              <p class="text-xs text-muted-foreground mt-1">الموظف: ${escapeHtml(r.employeeName)} — تاريخ التقديم: ${escapeHtml(formatDate(r.requestDate))}${mine ? '' : ` — سجّله: ${escapeHtml(r.requesterName ?? 'الإدارة')}`}</p>
+            </div>
+            <div>${actions}</div>
+          </div>
+          ${reason ? `<p class="mt-2 text-sm text-gray-700"><span class="font-medium">${r.requestType === 'صرف متأخرات' ? 'التفاصيل' : 'السبب'}:</span> ${escapeHtml(reason)}</p>` : ''}
+          ${response}
+          ${financialHtml(r.meta.financial)}
+        </article>`;
+      }).join('');
     }
 
     async function loadRequests() {
-      const statusFilter = (document.getElementById('status-filter') as HTMLSelectElement).value;
-
       try {
-        const response = await fetch(`/api/requests/my?status=${statusFilter}`);
-        const data = await response.json();
-
-        if (data.success) {
-          renderRequests(data.requests);
-        } else {
-          alert(data.error || 'حدث خطأ');
-        }
+        const data = await api<{ requests: RequestItem[] }>('/api/requests/my');
+        requests = data.requests;
+        renderStats();
+        renderList();
       } catch (error) {
-        alert('حدث خطأ في الاتصال');
+        list.innerHTML = `<p class="text-center p-8 text-red-700">${escapeHtml((error as Error).message)} — <button type="button" id="retry-load" class="underline">إعادة المحاولة</button></p>`;
+        document.getElementById('retry-load')?.addEventListener('click', () => {
+          list.innerHTML = '<p class="text-center p-8 text-muted-foreground">جاري التحميل...</p>';
+          void loadRequests();
+        });
       }
     }
 
-    function renderRequests(requests: Request[]) {
-      const tbody = document.getElementById('requests-table-body')!;
+    // ---- withdraw ----------------------------------------------------------------
+    list.addEventListener('click', async event => {
+      const button = (event.target as HTMLElement).closest<HTMLButtonElement>('button[data-withdraw]');
+      if (!button) return;
+      const id = button.dataset.withdraw!;
+      if (!confirm('هل تريد سحب هذا الطلب؟ لا يمكن التراجع عن ذلك.')) return;
+      try {
+        await withBusy(button, 'جاري السحب...', () => api('/api/requests/cancel', { body: { id } }));
+        toast('تم سحب الطلب', 'success');
+        await loadRequests();
+      } catch (error) {
+        toast((error as Error).message, 'error');
+      }
+    });
+    statusFilter.addEventListener('change', renderList);
 
-      if (requests.length === 0) {
-        tbody.innerHTML = `
-          <tr>
-            <td colspan="5" class="text-center p-8 text-muted-foreground">
-              لم تقدم أي طلبات بعد
-            </td>
-          </tr>
-        `;
+    // ---- form --------------------------------------------------------------------
+    const sections = Array.from(document.querySelectorAll<HTMLElement>('[data-section]'));
+
+    function setSection(type: string) {
+      for (const section of sections) {
+        const active = section.dataset.section === type;
+        section.classList.toggle('hidden', !active);
+        section.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>('input, select, textarea').forEach(el => {
+          el.disabled = !active;
+        });
+      }
+      const reasonRow = byId('reason-row');
+      const showReason = type !== '' && type !== 'مخالفة' && type !== 'استقالة';
+      reasonRow.classList.toggle('hidden', !showReason);
+      byId('reason-label').textContent = type === 'صرف متأخرات' ? 'تفاصيل المتأخرات *' : 'السبب (اختياري)';
+      updateAdvancePreview();
+      updateLeaveDays();
+    }
+
+    function fillInstallments() {
+      const select = byId<HTMLSelectElement>('advance-installments');
+      select.innerHTML = Array.from({ length: 12 }, (_, i) => i + 1)
+        .map(n => `<option value="${n}">${n === 1 ? 'دفعة واحدة' : `${n} أقساط شهرية`}</option>`)
+        .join('');
+    }
+
+    function updateAdvancePreview() {
+      const amount = Number(byId<HTMLInputElement>('advance-amount').value);
+      const count = Number(byId<HTMLSelectElement>('advance-installments').value) || 1;
+      const preview = byId('advance-preview');
+      if (!(amount > 0)) {
+        preview.textContent = 'تُخصم السلفة من راتبك تلقائياً بعد اعتمادها، ويحدد المشرف شهر بداية الخصم.';
         return;
       }
-
-      tbody.innerHTML = requests.map(req => `
-        <tr class="border-b hover:bg-gray-50">
-          <td class="p-3 font-medium">${req.request_type}</td>
-          <td class="p-3">${formatDate(req.request_date)}</td>
-          <td class="p-3">${getStatusBadge(req.status)}</td>
-          <td class="p-3">${formatDate(req.response_date)}</td>
-          <td class="p-3">
-            ${req.admin_response
-              ? `<span class="text-sm">${req.admin_response}</span>`
-              : '<span class="text-muted-foreground text-sm">-</span>'
-            }
-          </td>
-        </tr>
-      `).join('');
+      const parts = splitInstallments(amount, count);
+      preview.textContent = count === 1
+        ? `يُخصم ${money(amount)} من راتب شهر واحد بعد الاعتماد.`
+        : `القسط الشهري التقريبي: ${money(parts[0])}${parts[parts.length - 1] !== parts[0] ? ` (الأخير ${money(parts[parts.length - 1])})` : ''} على ${count} أشهر.`;
     }
 
-    // Dialog controls
-    const dialog = document.getElementById('request-dialog')!;
-    const form = document.getElementById('request-form') as HTMLFormElement;
-    const newRequestBtn = document.getElementById('new-request-btn')!;
-    const cancelBtn = document.getElementById('cancel-btn')!;
-    const requestTypeSelect = document.getElementById('request-type') as HTMLSelectElement;
-    const dynamicFieldsContainer = document.getElementById('dynamic-fields')!;
-
-    newRequestBtn.addEventListener('click', () => {
-      form.reset();
-      dynamicFieldsContainer.innerHTML = '';
-      dialog.classList.remove('hidden');
-    });
-
-    cancelBtn.addEventListener('click', () => {
-      dialog.classList.add('hidden');
-    });
-
-    // Render dynamic fields based on request type
-    requestTypeSelect.addEventListener('change', () => {
-      const type = requestTypeSelect.value;
-      dynamicFieldsContainer.innerHTML = '';
-
-      if (!type || !REQUEST_FIELDS[type]) return;
-
-      const fields = REQUEST_FIELDS[type];
-      fields.forEach(field => {
-        const div = document.createElement('div');
-
-        if (field.type === 'textarea') {
-          div.innerHTML = `
-            <label class="block text-sm font-medium mb-2">
-              ${field.label} ${field.required ? '*' : ''}
-            </label>
-            <textarea
-              id="${field.name}"
-              ${field.required ? 'required' : ''}
-              rows="3"
-              class="w-full rounded-md border px-3 py-2"
-            ></textarea>
-          `;
-        } else {
-          div.innerHTML = `
-            <label class="block text-sm font-medium mb-2">
-              ${field.label} ${field.required ? '*' : ''}
-            </label>
-            <input
-              type="${field.type}"
-              id="${field.name}"
-              ${field.required ? 'required' : ''}
-              ${field.type === 'number' ? 'step="0.01" min="0"' : ''}
-              class="w-full rounded-md border px-3 py-2"
-            />
-          `;
-        }
-
-        dynamicFieldsContainer.appendChild(div);
-      });
-    });
-
-    // Submit form
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-
-      const submitBtn = document.getElementById('submit-btn') as HTMLButtonElement;
-      submitBtn.disabled = true;
-      submitBtn.textContent = 'جاري التقديم...';
-
-      const type = requestTypeSelect.value;
-      const employeeName = (document.getElementById('employee-name') as HTMLInputElement).value;
-      const nationalId = (document.getElementById('national-id') as HTMLInputElement).value;
-
-      // Collect dynamic field values
-      const requestData: any = {
-        branchId: 'BR001',
-        employeeName,
-        nationalId,
-        requestType: type
-      };
-
-      if (REQUEST_FIELDS[type]) {
-        REQUEST_FIELDS[type].forEach(field => {
-          const element = document.getElementById(field.name) as HTMLInputElement;
-          if (element && element.value) {
-            requestData[field.name] = element.value;
-          }
-        });
+    function updateLeaveDays() {
+      const start = byId<HTMLInputElement>('leave-start').value;
+      const end = byId<HTMLInputElement>('leave-end').value;
+      const out = byId('leave-days');
+      if (!start || !end) {
+        out.textContent = '';
+        return;
       }
+      const days = Math.round((Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86_400_000) + 1;
+      if (!(days > 0)) {
+        out.textContent = 'تاريخ النهاية قبل تاريخ البداية';
+        out.className = 'text-sm font-medium text-red-700';
+        return;
+      }
+      const unpaid = byId<HTMLSelectElement>('leave-type').value === 'unpaid';
+      out.className = 'text-sm font-medium text-blue-700';
+      out.textContent = `مدة الإجازة: ${days} ${days === 1 ? 'يوم' : days === 2 ? 'يومان' : days <= 10 ? 'أيام' : 'يوماً'}${unpaid ? ' — تُخصم من الراتب بعد الاعتماد' : ''}`;
+    }
 
+    ['advance-amount', 'advance-installments'].forEach(id => byId(id).addEventListener('input', updateAdvancePreview));
+    byId('advance-installments').addEventListener('change', updateAdvancePreview);
+    ['leave-start', 'leave-end', 'leave-type'].forEach(id => byId(id).addEventListener('change', updateLeaveDays));
+    typeSelect.addEventListener('change', () => setSection(typeSelect.value));
+
+    async function loadPicker() {
+      if (!ctx) return;
+      const branchId = branchSelect.value;
+      if (!branchId) {
+        employeeSelect.innerHTML = '<option value="">اختر الفرع أولاً</option>';
+        return;
+      }
+      employeeSelect.disabled = true;
+      employeeSelect.innerHTML = '<option value="">جاري تحميل الموظفين...</option>';
       try {
-        const response = await fetch('/api/requests/create', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(requestData)
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-          alert('تم تقديم الطلب بنجاح! سيتم مراجعته من قبل الإدارة.');
-          dialog.classList.add('hidden');
-          form.reset();
-          loadRequests();
-        } else {
-          alert(data.error || 'حدث خطأ');
-        }
+        const data = await api<{ employees: PickerEmployee[] }>(`/api/requests/employees?branchId=${encodeURIComponent(branchId)}`);
+        employeeSelect.innerHTML = '<option value="">— اختر الموظف —</option>' +
+          data.employees.map(e => `<option value="${escapeHtml(e.id)}">${escapeHtml(e.name)}${e.nationalId ? ` — ${escapeHtml(e.nationalId)}` : ''}</option>`).join('');
+        if (data.employees.length === 0) employeeSelect.innerHTML = '<option value="">لا يوجد موظفون نشطون في هذا الفرع</option>';
       } catch (error) {
-        alert('حدث خطأ في الاتصال');
+        employeeSelect.innerHTML = `<option value="">${escapeHtml((error as Error).message)}</option>`;
       } finally {
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'تقديم الطلب';
+        employeeSelect.disabled = false;
+      }
+    }
+
+    async function loadSelfHint() {
+      const hint = byId('self-link-hint');
+      try {
+        const data = await api<{ employees: PickerEmployee[] }>('/api/requests/employees');
+        const me = data.employees[0];
+        hint.textContent = me
+          ? `سيُربط الطلب بسجلك الوظيفي (${me.name}) ليظهر أثره في مسير الرواتب بعد الاعتماد.`
+          : 'لم يُعثر على سجل موظف مطابق لاسم حسابك — أدخل رقم الهوية ليتم الربط، أو سيحدده المشرف عند الاعتماد.';
+        hint.className = `md:col-span-2 text-xs ${me ? 'text-green-700' : 'text-amber-700'}`;
+      } catch {
+        hint.textContent = '';
+      }
+    }
+
+    function openDialog() {
+      if (!ctx) return;
+      form.reset();
+      formError.classList.add('hidden');
+      fillInstallments();
+      const nameInput = byId<HTMLInputElement>('employee-name');
+      nameInput.value = ctx.user.displayName;
+      nameInput.readOnly = ctx.user.displayName !== ctx.user.username;
+      typeSelect.value = '';
+      setSection('');
+      dialog.classList.remove('hidden');
+      typeSelect.focus();
+    }
+
+    function closeDialog() {
+      dialog.classList.add('hidden');
+    }
+
+    function fail(message: string): never {
+      throw new Error(message);
+    }
+
+    function value(id: string): string {
+      return (byId<HTMLInputElement>(id).value ?? '').trim();
+    }
+
+    function buildBody(): Record<string, unknown> {
+      if (!ctx) fail('لم يتم تحميل بيانات المستخدم');
+      const type = typeSelect.value;
+      if (!type) fail('اختر نوع الطلب');
+      const body: Record<string, unknown> = { requestType: type };
+      if (ctx.permissions.canViewAllBranches || isPicker) {
+        if (!branchSelect.value) fail('اختر الفرع');
+        body.branchId = branchSelect.value;
+      }
+      if (isPicker) {
+        if (!employeeSelect.value) fail('اختر الموظف صاحب الطلب');
+        body.employeeId = employeeSelect.value;
+      } else {
+        body.employeeName = value('employee-name');
+        if (value('national-id')) body.nationalId = value('national-id');
+      }
+      const reason = value('reason');
+      switch (type) {
+        case 'سلفة':
+          if (!(Number(value('advance-amount')) > 0)) fail('أدخل مبلغ السلفة');
+          body.advanceAmount = value('advance-amount');
+          body.installments = Number(byId<HTMLSelectElement>('advance-installments').value) || 1;
+          break;
+        case 'إجازة':
+          if (!value('leave-start') || !value('leave-end')) fail('حدد تاريخ بداية ونهاية الإجازة');
+          if (value('leave-end') < value('leave-start')) fail('تاريخ النهاية قبل تاريخ البداية');
+          body.leaveType = byId<HTMLSelectElement>('leave-type').value;
+          body.leaveStart = value('leave-start');
+          body.leaveEnd = value('leave-end');
+          break;
+        case 'صرف متأخرات':
+          if (!(Number(value('dues-amount')) > 0)) fail('أدخل مبلغ المتأخرات');
+          if (!reason) fail('اكتب تفاصيل المتأخرات');
+          body.duesAmount = value('dues-amount');
+          break;
+        case 'استئذان': {
+          if (!value('permission-date')) fail('حدد تاريخ الاستئذان');
+          const hours = Number(value('permission-hours'));
+          if (!(hours > 0 && hours <= 8)) fail('مدة الاستئذان بين نصف ساعة و 8 ساعات');
+          body.permissionDate = value('permission-date');
+          if (value('permission-time')) body.permissionTime = value('permission-time');
+          body.permissionHours = hours;
+          break;
+        }
+        case 'مخالفة':
+          if (!value('violation-date') || !value('violation-description')) fail('أدخل تاريخ المخالفة ووصفها');
+          body.violationDate = value('violation-date');
+          body.violationDescription = value('violation-description');
+          break;
+        case 'استقالة':
+          if (!value('resignation-date') || !value('resignation-reason')) fail('أدخل تاريخ الاستقالة وسببها');
+          body.resignationDate = value('resignation-date');
+          body.resignationReason = value('resignation-reason');
+          break;
+      }
+      if (reason && type !== 'مخالفة' && type !== 'استقالة') body.reason = reason;
+      return body;
+    }
+
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      formError.classList.add('hidden');
+      let body: Record<string, unknown>;
+      try {
+        body = buildBody();
+      } catch (error) {
+        formError.textContent = (error as Error).message;
+        formError.classList.remove('hidden');
+        return;
+      }
+      try {
+        const result = await withBusy(submitBtn, 'جاري التقديم...', () =>
+          api<{ message?: string }>('/api/requests/create', { body }),
+        );
+        toast(result.message ?? 'تم تقديم الطلب بنجاح', 'success');
+        closeDialog();
+        statusFilter.value = 'all';
+        await loadRequests();
+      } catch (error) {
+        formError.textContent = (error as Error).message;
+        formError.classList.remove('hidden');
       }
     });
 
-    // Status filter
-    document.getElementById('status-filter')?.addEventListener('change', loadRequests);
+    newBtn.addEventListener('click', openDialog);
+    byId('cancel-btn').addEventListener('click', closeDialog);
+    byId('close-dialog-btn').addEventListener('click', closeDialog);
+    dialog.addEventListener('click', event => {
+      if (event.target === dialog) closeDialog();
+    });
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && !dialog.classList.contains('hidden')) closeDialog();
+    });
+    branchSelect.addEventListener('change', () => void loadPicker());
 
-    // Initial load
-    loadRequests();
+    // ---- init ----------------------------------------------------------------------
+    async function init() {
+      try {
+        ctx = await loadFinanceContext();
+      } catch (error) {
+        showPageError(`تعذر تحميل بيانات المستخدم: ${(error as Error).message}`);
+        list.innerHTML = '<p class="text-center p-8 text-muted-foreground">—</p>';
+        return;
+      }
+      const p = ctx.permissions;
+      isPicker = p.canManageRequests || p.canManageEmployees;
+      canFileViolation = p.canManageRequests || p.canApproveRequests;
+
+      typeSelect.innerHTML = '<option value="">اختر نوع الطلب</option>' +
+        REQUEST_TYPES.filter(t => t !== 'مخالفة' || canFileViolation)
+          .map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`)
+          .join('');
+
+      fillBranchSelect(branchSelect, ctx);
+      byId('branch-row').classList.toggle('hidden', !(p.canViewAllBranches && ctx.branches.length > 0));
+      byId('picker-row').classList.toggle('hidden', !isPicker);
+      byId('self-row').classList.toggle('hidden', isPicker);
+
+      // Default dates for convenience.
+      const today = todayIso();
+      for (const id of ['leave-start', 'leave-end', 'permission-date', 'violation-date', 'resignation-date']) {
+        byId<HTMLInputElement>(id).defaultValue = today;
+      }
+
+      if (p.canSubmitRequests) {
+        newBtn.disabled = false;
+        if (isPicker) void loadPicker();
+        else void loadSelfHint();
+      } else {
+        newBtn.classList.add('hidden');
+      }
+
+      await loadRequests();
+      if (p.canSubmitRequests && new URLSearchParams(window.location.search).get('new') === '1') openDialog();
+    }
+
+    void init();
   </script>
 </MainLayout>
