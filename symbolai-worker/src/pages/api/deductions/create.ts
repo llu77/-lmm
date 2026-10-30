@@ -1,135 +1,85 @@
+// POST /api/deductions/create {employeeId, amount, month, year, deductionType, reason}
+// Backward-compatible wrapper over the payroll adjustments ledger. The free-text
+// deduction type of the old page is mapped to a ledger category:
+// غياب → absence, تأخير → late, مخالفة / جزاء → violation, anything else → other_deduction.
+// New code should call /api/adjustments/create directly.
+
 import type { APIRoute } from 'astro';
-import { requireAuthWithPermissions, requirePermission, logAudit, getClientIP } from '@/lib/permissions';
-import { generateId } from '@/lib/db';
+import { ADJUSTMENT_CATEGORIES, isAdjustmentCategory, type AdjustmentCategory } from '@/lib/finance/catalog';
+import { fail, financeAuth, ok, readJsonObject, str } from '@/lib/finance/http';
+import { createAdjustment, MAX_DESCRIPTION_LENGTH } from '../adjustments/create';
+import { resolveLegacyTarget } from '../advances/create';
 
-export const POST: APIRoute = async ({ request, locals }) => {
-  // Check authentication with permissions
-  const authResult = await requireAuthWithPermissions(
-    locals.runtime.env.SESSIONS,
-    locals.runtime.env.DB,
-    request
-  );
+export function mapDeductionType(value: unknown): AdjustmentCategory {
+  const type = str(value, 100);
+  if (isAdjustmentCategory(type) && ADJUSTMENT_CATEGORIES[type].kind === 'deduction' && type !== 'advance') return type;
+  if (type.includes('غياب')) return 'absence';
+  if (type.includes('تأخير') || type.includes('تأخر')) return 'late';
+  if (type.includes('مخالفة') || type.includes('جزاء')) return 'violation';
+  if (type.includes('بدون راتب')) return 'unpaid_leave';
+  return 'other_deduction';
+}
 
-  if (authResult instanceof Response) {
-    return authResult;
-  }
+export const POST: APIRoute = async context => {
+  const auth = await financeAuth(context, ['canGeneratePayroll', 'canManageEmployees']);
+  if (auth instanceof Response) return auth;
 
-  // Check permission to manage employees (needed for deductions)
-  const permError = requirePermission(authResult, 'canManageEmployees');
-  if (permError) {
-    return permError;
-  }
+  const body = await readJsonObject(context.request);
+  if (!body) return fail('بيانات الطلب غير صالحة', 400);
 
   try {
-    const {
-      employeeId,
-      amount,
-      month,
-      year,
-      deductionType,
-      reason
-    } = await request.json();
+    const target = await resolveLegacyTarget(auth, body);
+    if (target instanceof Response) return target;
 
-    // Validation
-    if (!employeeId || amount === undefined || !month || !year) {
-      return new Response(
-        JSON.stringify({ error: 'البيانات المطلوبة ناقصة' }),
-        {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
+    const deductionType = str(body.deductionType, 100);
+    const category = mapDeductionType(deductionType);
+    const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
+    // Keep a free-text type (تأمينات، ضرائب، ...) visible when it maps to "other".
+    let description = reason;
+    if (category === 'other_deduction' && deductionType && deductionType !== 'أخرى' && deductionType !== 'other_deduction') {
+      description = reason ? `${deductionType}: ${reason}` : deductionType;
+    }
+    if (description.length > MAX_DESCRIPTION_LENGTH) {
+      return fail(`السبب طويل جداً (${MAX_DESCRIPTION_LENGTH} حرف كحد أقصى)`, 400);
     }
 
-    // Validate amount is positive
-    const parsedAmount = parseFloat(amount);
-    if (parsedAmount <= 0) {
-      return new Response(
-        JSON.stringify({ error: 'المبلغ يجب أن يكون أكبر من صفر' }),
-        {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
-    }
-
-    // Get employee name
-    const employeeResult = await locals.runtime.env.DB.prepare(
-      `SELECT employee_name FROM employees WHERE id = ?`
-    ).bind(employeeId).first();
-
-    if (!employeeResult) {
-      return new Response(
-        JSON.stringify({ error: 'الموظف غير موجود' }),
-        {
-          status: 404,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
-    }
-
-    // Create deduction record
-    const deductionId = generateId();
-    const { username } = authResult.permissions;
-
-    // Combine deductionType with reason if both exist
-    const fullReason = deductionType
-      ? `${deductionType}${reason ? ': ' + reason : ''}`
-      : reason || '';
-
-    await locals.runtime.env.DB.prepare(`
-      INSERT INTO deductions (
-        id, employee_id, employee_name, amount, month, year, reason, recorded_by
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(
-      deductionId,
-      employeeId,
-      employeeResult.employee_name,
-      parsedAmount,
-      month,
-      parseInt(year),
-      fullReason,
-      username || 'admin'
-    ).run();
-
-    // Log audit
-    await logAudit(
-      locals.runtime.env.DB,
-      authResult,
-      'create',
-      'deduction',
-      deductionId,
-      { employeeId, amount: parsedAmount, month, year, deductionType },
-      getClientIP(request),
-      request.headers.get('User-Agent') || undefined
-    );
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        deduction: {
-          id: deductionId,
-          employeeId,
-          employeeName: employeeResult.employee_name,
-          amount: parsedAmount,
-          month,
-          year: parseInt(year),
-          reason: fullReason
-        }
-      }),
+    const result = await createAdjustment(
+      auth,
+      context.request,
       {
-        status: 201,
-        headers: { 'Content-Type': 'application/json' }
-      }
+        branchId: target.employee.branchId,
+        employeeId: target.employee.id,
+        period: target.period,
+        category,
+        amount: body.amount,
+        description,
+      },
+      'deductions/create',
+    );
+    if (!result.ok) return result.response;
+
+    const { adjustment, warnings } = result;
+    return ok(
+      {
+        deduction: {
+          id: adjustment.id,
+          employeeId: adjustment.employeeId,
+          employeeName: adjustment.employeeName,
+          amount: adjustment.amount,
+          month: target.month,
+          year: target.year,
+          period: adjustment.period,
+          deductionType: deductionType || adjustment.categoryLabel,
+          category: adjustment.category,
+          reason: adjustment.description,
+        },
+        adjustment,
+        warnings,
+      },
+      201,
     );
   } catch (error) {
     console.error('Create deduction error:', error);
-    return new Response(
-      JSON.stringify({ error: 'حدث خطأ أثناء إضافة الخصم' }),
-      {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    );
+    return fail('حدث خطأ أثناء إضافة الخصم', 500);
   }
 };

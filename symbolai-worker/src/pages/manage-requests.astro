@@ -10,41 +10,57 @@ if (!cookieHeader?.includes('session=')) {
 
 <MainLayout title="إدارة الطلبات - SymbolAI">
   <div class="space-y-6">
-    <div>
-      <h1 class="text-3xl font-bold">إدارة طلبات الموظفين</h1>
-      <p class="text-muted-foreground mt-2">مراجعة والرد على طلبات الموظفين</p>
+    <div class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+      <div>
+        <h1 class="text-3xl font-bold">إدارة طلبات الموظفين</h1>
+        <p class="text-muted-foreground mt-2">مراجعة الطلبات واعتمادها — السلف والجزاءات والإجازات بدون راتب والمتأخرات تُرحَّل تلقائياً إلى مسير الرواتب</p>
+      </div>
+      <div class="flex flex-wrap items-end gap-3">
+        <div>
+          <label for="branch-select" class="block text-sm font-medium mb-1">الفرع</label>
+          <select id="branch-select" class="rounded-md border px-3 py-2 min-w-[10rem]"></select>
+        </div>
+        <a id="file-request-link" href="/my-requests?new=1" class="hidden px-4 py-2 rounded-md border hover:bg-gray-50 text-sm font-medium">+ تسجيل طلب / مخالفة لموظف</a>
+      </div>
     </div>
 
-    <!-- Stats Cards -->
-    <div class="grid gap-4 md:grid-cols-3">
-      <div class="rounded-lg border bg-card p-4">
-        <h3 class="text-sm font-medium text-muted-foreground">معلقة</h3>
-        <p class="text-2xl font-bold mt-2 text-yellow-600" id="pending-count">0</p>
-      </div>
-      <div class="rounded-lg border bg-card p-4">
-        <h3 class="text-sm font-medium text-muted-foreground">موافق عليها</h3>
-        <p class="text-2xl font-bold mt-2 text-green-600" id="approved-count">0</p>
-      </div>
-      <div class="rounded-lg border bg-card p-4">
-        <h3 class="text-sm font-medium text-muted-foreground">مرفوضة</h3>
-        <p class="text-2xl font-bold mt-2 text-red-600" id="rejected-count">0</p>
-      </div>
+    <div id="page-error" class="hidden rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert"></div>
+
+    <!-- Stats (whole branch, unfiltered) -->
+    <div class="grid gap-4 grid-cols-2 md:grid-cols-4">
+      <button type="button" data-stat-filter="pending" class="text-right rounded-lg border bg-card p-4 hover:border-yellow-400">
+        <span class="block text-sm font-medium text-muted-foreground">بانتظار المراجعة</span>
+        <span class="block text-2xl font-bold mt-2 text-yellow-600" id="stat-pending">—</span>
+      </button>
+      <button type="button" data-stat-filter="approved" class="text-right rounded-lg border bg-card p-4 hover:border-green-400">
+        <span class="block text-sm font-medium text-muted-foreground">موافق عليها</span>
+        <span class="block text-2xl font-bold mt-2 text-green-600" id="stat-approved">—</span>
+      </button>
+      <button type="button" data-stat-filter="rejected" class="text-right rounded-lg border bg-card p-4 hover:border-red-400">
+        <span class="block text-sm font-medium text-muted-foreground">مرفوضة</span>
+        <span class="block text-2xl font-bold mt-2 text-red-600" id="stat-rejected">—</span>
+      </button>
+      <button type="button" data-stat-filter="all" class="text-right rounded-lg border bg-card p-4 hover:border-blue-400">
+        <span class="block text-sm font-medium text-muted-foreground">إجمالي الطلبات</span>
+        <span class="block text-2xl font-bold mt-2" id="stat-total">—</span>
+      </button>
     </div>
 
     <!-- Filters -->
     <div class="rounded-lg border bg-card p-4">
       <div class="grid gap-4 md:grid-cols-3">
         <div>
-          <label class="block text-sm font-medium mb-2">الحالة</label>
+          <label for="status-filter" class="block text-sm font-medium mb-2">الحالة</label>
           <select id="status-filter" class="w-full rounded-md border px-3 py-2">
             <option value="all">جميع الحالات</option>
-            <option value="pending">معلقة</option>
+            <option value="pending" selected>بانتظار المراجعة</option>
             <option value="approved">موافق عليها</option>
             <option value="rejected">مرفوضة</option>
+            <option value="cancelled">مسحوبة</option>
           </select>
         </div>
         <div>
-          <label class="block text-sm font-medium mb-2">نوع الطلب</label>
+          <label for="type-filter" class="block text-sm font-medium mb-2">نوع الطلب</label>
           <select id="type-filter" class="w-full rounded-md border px-3 py-2">
             <option value="all">جميع الأنواع</option>
             <option value="سلفة">سلفة</option>
@@ -55,336 +71,865 @@ if (!cookieHeader?.includes('session=')) {
             <option value="استقالة">استقالة</option>
           </select>
         </div>
-        <div class="flex items-end">
-          <button
-            id="apply-filter-btn"
-            class="w-full bg-gray-600 text-white py-2 px-4 rounded-md hover:bg-gray-700 transition-colors"
-          >
-            تطبيق الفلتر
-          </button>
+        <div>
+          <label for="search-input" class="block text-sm font-medium mb-2">بحث باسم الموظف</label>
+          <input id="search-input" type="search" placeholder="اكتب اسم الموظف..." class="w-full rounded-md border px-3 py-2" />
         </div>
       </div>
     </div>
 
-    <!-- Requests Table -->
+    <!-- Requests table -->
     <div class="rounded-lg border bg-card p-6">
-      <h3 class="text-xl font-semibold mb-4">جميع الطلبات</h3>
+      <h3 class="text-xl font-semibold mb-4" id="table-title">الطلبات</h3>
       <div class="overflow-x-auto">
-        <table class="w-full">
+        <table class="w-full text-sm">
           <thead>
             <tr class="border-b">
-              <th class="text-right p-3 font-medium">اسم الموظف</th>
+              <th class="text-right p-3 font-medium">الموظف</th>
               <th class="text-right p-3 font-medium">نوع الطلب</th>
-              <th class="text-right p-3 font-medium">تاريخ التقديم</th>
+              <th class="text-right p-3 font-medium">التفاصيل</th>
+              <th class="text-right p-3 font-medium whitespace-nowrap">تاريخ التقديم</th>
+              <th class="text-right p-3 font-medium">مقدّم الطلب</th>
               <th class="text-right p-3 font-medium">الحالة</th>
-              <th class="text-right p-3 font-medium">إجراءات</th>
+              <th class="text-right p-3 font-medium">إجراء</th>
             </tr>
           </thead>
-          <tbody id="requests-table-body">
-            <tr>
-              <td colspan="5" class="text-center p-8 text-muted-foreground">
-                جاري التحميل...
-              </td>
-            </tr>
+          <tbody id="requests-body">
+            <tr><td colspan="7" class="text-center p-8 text-muted-foreground">جاري التحميل...</td></tr>
           </tbody>
         </table>
       </div>
     </div>
   </div>
 
-  <!-- Response Dialog -->
-  <div id="response-dialog" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
-    <div class="bg-white rounded-lg p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
-      <h2 class="text-2xl font-bold mb-4">الرد على الطلب</h2>
-
-      <div id="request-details" class="rounded-lg bg-gray-50 p-4 mb-4 space-y-2"></div>
-
-      <form id="response-form" class="space-y-4">
-        <input type="hidden" id="request-id" />
-
+  <!-- Review dialog -->
+  <div id="review-dialog" class="hidden fixed inset-0 bg-black/50 z-50 flex items-start justify-center overflow-y-auto p-4" role="dialog" aria-modal="true" aria-labelledby="review-title">
+    <div class="bg-white rounded-lg p-6 w-full max-w-3xl my-8">
+      <div class="flex items-start justify-between gap-4 mb-4">
         <div>
-          <label class="block text-sm font-medium mb-2">القرار *</label>
-          <div class="space-y-2">
-            <label class="flex items-center gap-2">
-              <input type="radio" name="decision" value="approved" required class="rounded" />
-              <span>موافقة</span>
+          <h2 id="review-title" class="text-2xl font-bold">تفاصيل الطلب</h2>
+          <p id="review-subtitle" class="text-sm text-muted-foreground mt-1"></p>
+        </div>
+        <button type="button" id="review-close" class="text-2xl leading-none px-2 text-gray-500 hover:text-gray-800" aria-label="إغلاق">×</button>
+      </div>
+
+      <dl id="review-details" class="grid gap-x-6 gap-y-2 md:grid-cols-2 rounded-lg bg-gray-50 p-4 text-sm"></dl>
+      <div id="review-outcome" class="mt-4"></div>
+
+      <form id="decision-form" class="hidden mt-6 space-y-5" novalidate>
+        <fieldset>
+          <legend class="block text-sm font-medium mb-2">القرار *</legend>
+          <div class="grid grid-cols-2 gap-3">
+            <label class="flex items-center gap-2 rounded-md border p-3 cursor-pointer has-[:checked]:border-green-500 has-[:checked]:bg-green-50">
+              <input type="radio" name="decision" value="approved" />
+              <span class="font-medium">اعتماد الطلب</span>
             </label>
-            <label class="flex items-center gap-2">
-              <input type="radio" name="decision" value="rejected" required class="rounded" />
-              <span>رفض</span>
+            <label class="flex items-center gap-2 rounded-md border p-3 cursor-pointer has-[:checked]:border-red-500 has-[:checked]:bg-red-50">
+              <input type="radio" name="decision" value="rejected" />
+              <span class="font-medium">رفض الطلب</span>
             </label>
           </div>
+        </fieldset>
+
+        <!-- Approval / payroll posting panel -->
+        <div id="approval-panel" class="hidden space-y-4 rounded-lg border border-blue-200 bg-blue-50/40 p-4">
+          <h3 class="font-semibold text-blue-900">الترحيل إلى مسير الرواتب</h3>
+
+          <div id="fin-employee-row">
+            <label for="fin-employee" class="block text-sm font-medium mb-1">سجل الموظف المرتبط</label>
+            <select id="fin-employee" class="w-full rounded-md border px-3 py-2 bg-white"></select>
+            <p id="fin-employee-warning" class="hidden mt-2 rounded-md border border-amber-300 bg-amber-50 p-2 text-sm font-medium text-amber-800" role="alert">الطلب غير مرتبط بسجل موظف — اختر الموظف بعناية</p>
+            <p id="fin-employee-info" class="text-xs text-muted-foreground mt-1"></p>
+          </div>
+
+          <!-- سلفة -->
+          <div data-fin="سلفة" class="hidden space-y-3">
+            <div class="grid gap-3 md:grid-cols-2">
+              <div>
+                <label for="fin-advance-amount" class="block text-sm font-medium mb-1">مبلغ السلفة المعتمد (ر.س) *</label>
+                <input id="fin-advance-amount" type="number" min="0.01" step="0.01" class="w-full rounded-md border px-3 py-2 bg-white" />
+              </div>
+              <div>
+                <label for="fin-installments" class="block text-sm font-medium mb-1">عدد الأقساط</label>
+                <select id="fin-installments" class="w-full rounded-md border px-3 py-2 bg-white"></select>
+              </div>
+            </div>
+            <div class="rounded-md border bg-white p-3 space-y-3">
+              <label class="flex items-center gap-2 text-sm font-medium">
+                <input id="fin-voucher" type="checkbox" checked />
+                إصدار سند صرف للسلفة
+              </label>
+              <div id="fin-voucher-fields" class="grid gap-3 md:grid-cols-2">
+                <div>
+                  <label for="fin-payment-method" class="block text-sm mb-1">طريقة الصرف</label>
+                  <select id="fin-payment-method" class="w-full rounded-md border px-3 py-2">
+                    <option value="cash">نقداً</option>
+                    <option value="bank_transfer">حوالة بنكية</option>
+                    <option value="card">شبكة / مدى</option>
+                    <option value="cheque">شيك</option>
+                  </select>
+                </div>
+                <div id="fin-bank-row" class="hidden">
+                  <label for="fin-bank-name" class="block text-sm mb-1">البنك</label>
+                  <input id="fin-bank-name" type="text" maxlength="100" class="w-full rounded-md border px-3 py-2" />
+                </div>
+                <div id="fin-cheque-row" class="hidden">
+                  <label for="fin-cheque-number" class="block text-sm mb-1">رقم الشيك *</label>
+                  <input id="fin-cheque-number" type="text" maxlength="50" class="w-full rounded-md border px-3 py-2" />
+                </div>
+              </div>
+              <p id="fin-voucher-note" class="text-xs text-muted-foreground"></p>
+            </div>
+          </div>
+
+          <!-- إجازة -->
+          <div data-fin="إجازة" class="hidden space-y-3">
+            <p id="fin-leave-info" class="text-sm"></p>
+            <div class="grid gap-3 md:grid-cols-2">
+              <div>
+                <label for="fin-unpaid-days" class="block text-sm font-medium mb-1">أيام بدون راتب (تُخصم)</label>
+                <input id="fin-unpaid-days" type="number" min="0" step="0.5" class="w-full rounded-md border px-3 py-2 bg-white" />
+              </div>
+              <div>
+                <label for="fin-leave-amount" class="block text-sm font-medium mb-1">مبلغ مختلف (اختياري)</label>
+                <input id="fin-leave-amount" type="number" min="0" step="0.01" placeholder="يُحسب تلقائياً" class="w-full rounded-md border px-3 py-2 bg-white" />
+              </div>
+            </div>
+            <p id="fin-leave-calc" class="text-xs text-muted-foreground"></p>
+            <p class="text-xs text-muted-foreground">يُقسَّم الخصم على أشهر الإجازة: كل شهر في مسيره، بحد أقصى 30 يوماً وبما لا يتجاوز الراتب الثابت للشهر. إذا كانت أيام الخصم أقل من مدة الإجازة تُحتسب من آخر الإجازة، والمبلغ المختلف يُوزَّع على الأشهر حسب الأيام.</p>
+          </div>
+
+          <!-- صرف متأخرات -->
+          <div data-fin="صرف متأخرات" class="hidden">
+            <label for="fin-dues-amount" class="block text-sm font-medium mb-1">المبلغ المعتمد (يُضاف إلى الراتب) *</label>
+            <input id="fin-dues-amount" type="number" min="0.01" step="0.01" class="w-full rounded-md border px-3 py-2 bg-white" />
+          </div>
+
+          <!-- مخالفة -->
+          <div data-fin="مخالفة" class="hidden">
+            <label for="fin-penalty" class="block text-sm font-medium mb-1">مبلغ الجزاء (ر.س)</label>
+            <input id="fin-penalty" type="number" min="0" step="0.01" placeholder="0 = إنذار فقط بدون خصم" class="w-full rounded-md border px-3 py-2 bg-white" />
+          </div>
+
+          <!-- استئذان -->
+          <div data-fin="استئذان" class="hidden">
+            <label for="fin-late-amount" class="block text-sm font-medium mb-1">خصم الاستئذان (اختياري)</label>
+            <input id="fin-late-amount" type="number" min="0" step="0.01" placeholder="اتركه فارغاً لاستئذان مدفوع" class="w-full rounded-md border px-3 py-2 bg-white" />
+            <p id="fin-late-hint" class="text-xs text-muted-foreground mt-1"></p>
+          </div>
+
+          <!-- استقالة -->
+          <div data-fin="استقالة" class="hidden">
+            <label class="flex items-center gap-2 text-sm font-medium">
+              <input id="fin-deactivate" type="checkbox" />
+              إيقاف سجل الموظف (لن يظهر في مسيرات الرواتب القادمة)
+            </label>
+            <p class="text-xs text-muted-foreground mt-1">فعّل هذا الخيار بعد صرف آخر راتب ومستحقات نهاية الخدمة.</p>
+          </div>
+
+          <div id="fin-period-row" class="hidden">
+            <label class="block text-sm font-medium mb-1" id="fin-period-label">شهر الترحيل</label>
+            <div class="flex gap-2">
+              <select id="fin-month" class="rounded-md border px-3 py-2 bg-white" aria-label="الشهر"></select>
+              <select id="fin-year" class="rounded-md border px-3 py-2 bg-white" aria-label="السنة"></select>
+            </div>
+          </div>
+
+          <div id="fin-preview" class="rounded-md border bg-white p-3 text-sm"></div>
         </div>
 
         <div>
-          <label class="block text-sm font-medium mb-2">الرد *</label>
-          <textarea
-            id="admin-response"
-            required
-            rows="4"
-            placeholder="اكتب ردك على الطلب..."
-            class="w-full rounded-md border px-3 py-2"
-          ></textarea>
+          <label for="admin-response" id="response-label" class="block text-sm font-medium mb-2">ملاحظات للموظف (اختياري)</label>
+          <textarea id="admin-response" rows="3" maxlength="500" class="w-full rounded-md border px-3 py-2"></textarea>
+          <p class="text-xs text-muted-foreground mt-1">يصل الرد للموظف كإشعار داخل النظام وبالبريد الإلكتروني.</p>
         </div>
 
-        <div class="rounded-lg bg-blue-50 border border-blue-200 p-3">
-          <p class="text-sm text-blue-800">💡 سيتم إرسال إيميل تلقائياً للموظف بالرد</p>
-        </div>
+        <p id="decision-error" class="hidden rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-800" role="alert"></p>
 
-        <div class="flex gap-3 justify-end pt-4">
-          <button
-            type="button"
-            id="cancel-response-btn"
-            class="px-4 py-2 border rounded-md hover:bg-gray-50"
-          >
-            إلغاء
-          </button>
-          <button
-            type="submit"
-            id="submit-response-btn"
-            class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-          >
-            إرسال الرد
-          </button>
+        <div class="flex gap-3 justify-end">
+          <button type="button" id="decision-cancel" class="px-4 py-2 border rounded-md hover:bg-gray-50">إغلاق</button>
+          <button type="submit" id="decision-submit" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50">حفظ القرار</button>
         </div>
       </form>
+
+      <div id="review-footer" class="flex justify-end mt-6">
+        <button type="button" id="review-close-2" class="px-4 py-2 border rounded-md hover:bg-gray-50">إغلاق</button>
+      </div>
     </div>
   </div>
 
   <script>
-    interface Request {
-      id: string;
-      employee_name: string;
-      request_type: string;
-      request_date: string;
-      status: string;
-      advance_amount?: number;
-      vacation_date?: string;
-      dues_amount?: number;
-      permission_date?: string;
-      violation_date?: string;
-      violation_description?: string;
-      resignation_date?: string;
-      resignation_reason?: string;
-      admin_response?: string;
+    import {
+      api,
+      ApiError,
+      byId,
+      escapeHtml,
+      fillBranchSelect,
+      fillPeriodSelects,
+      formatDate,
+      loadFinanceContext,
+      money,
+      readPeriod,
+      toast,
+      withBusy,
+      type FinanceContextPayload,
+    } from '@/lib/finance/client';
+    import { ADJUSTMENT_CATEGORIES, PAYMENT_METHODS, addMonths, periodLabelAr, toPeriod, type AdjustmentCategory } from '@/lib/finance/catalog';
+    import { splitInstallments } from '@/lib/finance/money';
+    import { planUnpaidLeave } from '@/pages/api/requests/_leave';
+
+    // ---- types -------------------------------------------------------------------
+    interface FinancialAdjustment {
+      id: string; period: string; category: AdjustmentCategory; kind: 'earning' | 'deduction'; amount: number;
+      installmentNo: number | null; installmentCount: number | null; status?: string;
     }
-
-    let allRequests: Request[] = [];
-    let currentRequest: Request | null = null;
-
-    function formatDate(dateStr: string): string {
-      if (!dateStr) return '-';
-      return new Date(dateStr).toLocaleDateString('ar-EG');
+    interface Financial {
+      employeeId: string | null; employeeName: string | null; adjustments: FinancialAdjustment[];
+      voucher: { id: string; amount: number; paymentMethod: string; status: string; number?: string | null } | null;
+      deactivatedEmployee: boolean; unpaidDays: number | null; dailyRate: number | null; postedByName: string;
     }
-
-    function formatCurrency(amount: number): string {
-      return new Intl.NumberFormat('ar-EG').format(amount) + ' ج.م';
-    }
-
-    function getStatusBadge(status: string): string {
-      const badges: { [key: string]: string } = {
-        'pending': '<span class="px-3 py-1 rounded text-sm bg-yellow-100 text-yellow-800">⏳ معلقة</span>',
-        'approved': '<span class="px-3 py-1 rounded text-sm bg-green-100 text-green-800">✓ موافق عليها</span>',
-        'rejected': '<span class="px-3 py-1 rounded text-sm bg-red-100 text-red-800">✗ مرفوضة</span>'
+    interface RequestItem {
+      id: string; branchId: string; employeeName: string; nationalId: string | null; requestType: string;
+      requestDate: string | null; status: string; advanceAmount: number | null; vacationDate: string | null;
+      duesAmount: number | null; permissionDate: string | null; violationDate: string | null;
+      violationDescription: string | null; resignationDate: string | null; resignationReason: string | null;
+      adminResponse: string | null; respondedAt: string | null; userId: string | null; requesterName: string | null;
+      createdAt: string | null;
+      meta: {
+        employeeId: string | null; reason: string | null; leaveType: string | null; leaveStart: string | null;
+        leaveEnd: string | null; leaveDays: number | null; permissionHours: number | null;
+        requestedInstallments: number | null; financial: Financial | null; respondedByName: string | null;
       };
-      return badges[status] || status;
+    }
+    interface Employee { id: string; name: string; nationalId: string | null; dailyRate: number; fixedSalary: number }
+    interface ListResponse {
+      requests: RequestItem[];
+      stats: { total: number; pending: number; approved: number; rejected: number; cancelled: number };
+      defaultPeriod: string;
+      branchName: string;
+    }
+    interface Plan { lines: string[]; needsEmployee: boolean; financial: Record<string, unknown>; error: string | null }
+
+    const LEAVE_TYPES: Record<string, string> = { annual: 'سنوية', sick: 'مرضية', unpaid: 'بدون راتب', emergency: 'اضطرارية' };
+    const STATUS: Record<string, { label: string; cls: string }> = {
+      pending: { label: 'بانتظار المراجعة', cls: 'bg-yellow-100 text-yellow-800' },
+      approved: { label: 'موافق عليه', cls: 'bg-green-100 text-green-800' },
+      rejected: { label: 'مرفوض', cls: 'bg-red-100 text-red-800' },
+      cancelled: { label: 'مسحوب', cls: 'bg-gray-100 text-gray-700' },
+    };
+    const VOUCHER_STATUS: Record<string, string> = { pending: 'بانتظار اعتماد المدير', approved: 'معتمد', cancelled: 'ملغى', missing: 'غير موجود' };
+
+    // ---- elements ------------------------------------------------------------------
+    const branchSelect = byId<HTMLSelectElement>('branch-select');
+    const statusFilter = byId<HTMLSelectElement>('status-filter');
+    const typeFilter = byId<HTMLSelectElement>('type-filter');
+    const searchInput = byId<HTMLInputElement>('search-input');
+    const tbody = byId('requests-body');
+    const pageError = byId('page-error');
+    const dialog = byId('review-dialog');
+    const decisionForm = byId<HTMLFormElement>('decision-form');
+    const approvalPanel = byId('approval-panel');
+    const finEmployee = byId<HTMLSelectElement>('fin-employee');
+    const finMonth = byId<HTMLSelectElement>('fin-month');
+    const finYear = byId<HTMLSelectElement>('fin-year');
+    const responseInput = byId<HTMLTextAreaElement>('admin-response');
+    const decisionError = byId('decision-error');
+    const submitBtn = byId<HTMLButtonElement>('decision-submit');
+
+    let ctx: FinanceContextPayload | null = null;
+    let requests: RequestItem[] = [];
+    let employees: Employee[] = [];
+    let defaultPeriod = '';
+    let current: RequestItem | null = null;
+    let loadToken = 0;
+
+    // ---- helpers ---------------------------------------------------------------------
+    function statusBadge(status: string): string {
+      const s = STATUS[status] ?? { label: status, cls: 'bg-gray-100 text-gray-700' };
+      return `<span class="inline-block whitespace-nowrap px-3 py-1 rounded text-xs font-medium ${s.cls}">${escapeHtml(s.label)}</span>`;
+    }
+
+    function splitDateTime(value: string | null): { date: string | null; time: string | null } {
+      if (!value) return { date: null, time: null };
+      const [date, time] = value.split(' ');
+      return { date: date || null, time: time || null };
+    }
+
+    function summary(r: RequestItem): string {
+      switch (r.requestType) {
+        case 'سلفة': {
+          const n = r.meta.requestedInstallments ?? 1;
+          return `${money(r.advanceAmount)}${n > 1 ? ` — ${n} أقساط` : ''}`;
+        }
+        case 'إجازة':
+          if (r.meta.leaveStart && r.meta.leaveEnd) {
+            return `${LEAVE_TYPES[r.meta.leaveType ?? ''] ?? ''} — ${r.meta.leaveDays ?? '—'} يوم من ${formatDate(r.meta.leaveStart)}`;
+          }
+          return r.vacationDate ?? '—';
+        case 'صرف متأخرات':
+          return money(r.duesAmount);
+        case 'استئذان': {
+          const { date, time } = splitDateTime(r.permissionDate);
+          return `${formatDate(date)}${time ? ` ${time}` : ''}${r.meta.permissionHours ? ` — ${r.meta.permissionHours} ساعة` : ''}`;
+        }
+        case 'مخالفة':
+          return `${formatDate(r.violationDate)} — ${(r.violationDescription ?? '').slice(0, 60)}`;
+        case 'استقالة':
+          return `آخر يوم: ${formatDate(r.resignationDate)}`;
+        default:
+          return '';
+      }
+    }
+
+    function financialHtml(f: Financial | null): string {
+      if (!f) return '';
+      const items: string[] = [];
+      for (const a of f.adjustments) {
+        const info = ADJUSTMENT_CATEGORIES[a.category];
+        const verb = a.kind === 'deduction'
+          ? `تُخصم ${money(a.amount)} من راتب ${periodLabelAr(a.period)}`
+          : `تُضاف ${money(a.amount)} إلى راتب ${periodLabelAr(a.period)}`;
+        const installment = a.installmentCount && a.installmentCount > 1 ? ` (قسط ${a.installmentNo} من ${a.installmentCount})` : '';
+        const state = a.status === 'cancelled'
+          ? ' <span class="text-red-600">(أُلغيت هذه الحركة)</span>'
+          : a.status === 'missing' ? ' <span class="text-gray-500">(غير موجودة)</span>' : '';
+        items.push(`<li>${escapeHtml(verb + installment)} <span class="text-muted-foreground">— ${escapeHtml(info?.labelAr ?? a.category)}</span>${state}</li>`);
+      }
+      if (f.deactivatedEmployee) items.push('<li>تم إيقاف سجل الموظف</li>');
+      if (f.voucher) {
+        const v = f.voucher;
+        const method = PAYMENT_METHODS[v.paymentMethod as keyof typeof PAYMENT_METHODS]?.ar ?? v.paymentMethod;
+        const printable = v.status !== 'cancelled' && v.status !== 'missing';
+        items.push(
+          `<li>سند صرف ${v.number ? `<span class="font-mono">${escapeHtml(v.number)}</span> ` : ''}بمبلغ ${escapeHtml(money(v.amount))} (${escapeHtml(method)}) — ${escapeHtml(VOUCHER_STATUS[v.status] ?? v.status)}` +
+            (printable ? ` — <a class="text-blue-600 hover:underline" target="_blank" rel="noopener" href="/vouchers/print/${encodeURIComponent(v.id)}">طباعة سند الصرف</a>` : '') +
+            '</li>',
+        );
+      }
+      if (items.length === 0) return '';
+      return `<div class="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm">
+        <div class="font-medium text-blue-900 mb-1">ما تم ترحيله إلى مسير الرواتب${f.employeeName ? ` — ${escapeHtml(f.employeeName)}` : ''}</div>
+        <ul class="list-disc pr-5 space-y-1 text-blue-900">${items.join('')}</ul>
+      </div>`;
+    }
+
+    function showPageError(message: string | null) {
+      pageError.textContent = message ?? '';
+      pageError.classList.toggle('hidden', !message);
+    }
+
+    function sameName(a: string | null | undefined, b: string | null | undefined): boolean {
+      const norm = (v: string | null | undefined) => (v ?? '').replace(/\s+/g, ' ').trim();
+      return norm(a) !== '' && norm(a) === norm(b);
+    }
+
+    /** Filed by the signed-in user, or about their own employee record (the server enforces the same rule). */
+    function isOwnRequest(r: RequestItem): boolean {
+      if (!ctx) return false;
+      if (r.userId && r.userId === ctx.user.id) return true;
+      if (sameName(r.employeeName, ctx.user.displayName)) return true;
+      const linked = r.meta.employeeId ? employees.find(e => e.id === r.meta.employeeId) : null;
+      return !!linked && sameName(linked.name, ctx.user.displayName);
+    }
+
+    /** Segregation of duties: only the manager decides a request its approver filed or is the subject of. */
+    function canDecideOn(r: RequestItem): boolean {
+      if (!ctx || r.status !== 'pending' || !ctx.permissions.canApproveRequests) return false;
+      return ctx.permissions.canApproveFinance || !isOwnRequest(r);
+    }
+
+    // ---- list ------------------------------------------------------------------------
+    function renderTable() {
+      const q = searchInput.value.trim();
+      const rows = q ? requests.filter(r => r.employeeName.includes(q) || (r.requesterName ?? '').includes(q)) : requests;
+      if (rows.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center p-8 text-muted-foreground">لا توجد طلبات مطابقة</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = rows.map(r => `
+        <tr class="border-b hover:bg-gray-50 align-top">
+          <td class="p-3 font-medium">${escapeHtml(r.employeeName)}${r.meta.employeeId ? '' : '<span class="block text-xs text-amber-700 font-normal">غير مرتبط بسجل موظف</span>'}</td>
+          <td class="p-3 whitespace-nowrap">${escapeHtml(r.requestType)}</td>
+          <td class="p-3">${escapeHtml(summary(r))}</td>
+          <td class="p-3 whitespace-nowrap">${escapeHtml(formatDate(r.requestDate))}</td>
+          <td class="p-3">${escapeHtml(r.requesterName ?? '—')}</td>
+          <td class="p-3">${statusBadge(r.status)}</td>
+          <td class="p-3 whitespace-nowrap">
+            <button type="button" data-review="${escapeHtml(r.id)}" class="text-blue-600 hover:text-blue-800 font-medium">
+              ${canDecideOn(r) ? 'مراجعة واعتماد' : 'عرض التفاصيل'}
+            </button>
+          </td>
+        </tr>`).join('');
     }
 
     async function loadRequests() {
-      const statusFilter = (document.getElementById('status-filter') as HTMLSelectElement).value;
-
+      const branchId = branchSelect.value;
+      if (!branchId) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center p-8 text-muted-foreground">اختر الفرع لعرض الطلبات</td></tr>';
+        return;
+      }
+      const token = ++loadToken;
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center p-8 text-muted-foreground">جاري التحميل...</td></tr>';
+      const params = new URLSearchParams({ branchId, status: statusFilter.value, type: typeFilter.value });
       try {
-        const response = await fetch(`/api/requests/all?status=${statusFilter}`);
-        const data = await response.json();
-
-        if (data.success) {
-          allRequests = data.requests;
-          updateStats(data.stats);
-          filterAndRenderRequests();
-        } else {
-          alert(data.error || 'حدث خطأ');
-        }
+        const data = await api<ListResponse>(`/api/requests/all?${params}`);
+        if (token !== loadToken) return;
+        requests = data.requests;
+        defaultPeriod = data.defaultPeriod;
+        byId('stat-pending').textContent = String(data.stats.pending);
+        byId('stat-approved').textContent = String(data.stats.approved);
+        byId('stat-rejected').textContent = String(data.stats.rejected);
+        byId('stat-total').textContent = String(data.stats.total);
+        byId('table-title').textContent = `الطلبات — ${data.branchName}`;
+        showPageError(null);
+        renderTable();
       } catch (error) {
-        alert('حدث خطأ في الاتصال');
+        if (token !== loadToken) return;
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center p-8 text-red-700">${escapeHtml((error as Error).message)}</td></tr>`;
       }
     }
 
-    function updateStats(stats: { pending: number; approved: number; rejected: number }) {
-      document.getElementById('pending-count')!.textContent = stats.pending.toString();
-      document.getElementById('approved-count')!.textContent = stats.approved.toString();
-      document.getElementById('rejected-count')!.textContent = stats.rejected.toString();
-    }
-
-    function filterAndRenderRequests() {
-      const typeFilter = (document.getElementById('type-filter') as HTMLSelectElement).value;
-
-      let filtered = allRequests;
-
-      if (typeFilter !== 'all') {
-        filtered = filtered.filter(r => r.request_type === typeFilter);
+    async function loadEmployees() {
+      const branchId = branchSelect.value;
+      employees = [];
+      if (!branchId) return;
+      try {
+        const data = await api<{ employees: Employee[] }>(`/api/requests/employees?branchId=${encodeURIComponent(branchId)}`);
+        employees = data.employees;
+      } catch (error) {
+        toast(`تعذر تحميل قائمة الموظفين: ${(error as Error).message}`, 'error');
       }
-
-      renderRequests(filtered);
     }
 
-    function renderRequests(requests: Request[]) {
-      const tbody = document.getElementById('requests-table-body')!;
+    tbody.addEventListener('click', event => {
+      const button = (event.target as HTMLElement).closest<HTMLButtonElement>('button[data-review]');
+      if (button) openReview(button.dataset.review!);
+    });
+    statusFilter.addEventListener('change', () => void loadRequests());
+    typeFilter.addEventListener('change', () => void loadRequests());
+    searchInput.addEventListener('input', renderTable);
+    document.querySelectorAll<HTMLButtonElement>('[data-stat-filter]').forEach(button => {
+      button.addEventListener('click', () => {
+        statusFilter.value = button.dataset.statFilter!;
+        typeFilter.value = 'all';
+        void loadRequests();
+      });
+    });
+    branchSelect.addEventListener('change', () => {
+      void loadEmployees();
+      void loadRequests();
+    });
 
-      if (requests.length === 0) {
-        tbody.innerHTML = `
-          <tr>
-            <td colspan="5" class="text-center p-8 text-muted-foreground">
-              لا توجد طلبات
-            </td>
-          </tr>
-        `;
+    // ---- review dialog -----------------------------------------------------------------
+    function detailRows(r: RequestItem): Array<[string, string]> {
+      const rows: Array<[string, string]> = [
+        ['رقم الطلب', r.id.replace(/^req_/, '').slice(-8).toUpperCase()],
+        ['الموظف', r.employeeName],
+        [r.meta.employeeId ? 'رقم الهوية' : 'رقم الهوية (كما أدخله مقدّم الطلب — غير متحقق)', r.nationalId ?? '—'],
+        ['نوع الطلب', r.requestType],
+        ['تاريخ التقديم', formatDate(r.requestDate)],
+        ['مقدّم الطلب', r.requesterName ?? '—'],
+      ];
+      switch (r.requestType) {
+        case 'سلفة':
+          rows.push(['المبلغ المطلوب', money(r.advanceAmount)], ['الأقساط المقترحة', String(r.meta.requestedInstallments ?? 1)]);
+          break;
+        case 'إجازة':
+          if (r.meta.leaveStart) {
+            rows.push(
+              ['نوع الإجازة', LEAVE_TYPES[r.meta.leaveType ?? ''] ?? '—'],
+              ['الفترة', `${formatDate(r.meta.leaveStart)} — ${formatDate(r.meta.leaveEnd)}`],
+              ['عدد الأيام', String(r.meta.leaveDays ?? '—')],
+            );
+          } else {
+            rows.push(['الفترة', r.vacationDate ?? '—']);
+          }
+          break;
+        case 'صرف متأخرات':
+          rows.push(['المبلغ المطلوب', money(r.duesAmount)]);
+          break;
+        case 'استئذان': {
+          const { date, time } = splitDateTime(r.permissionDate);
+          rows.push(['التاريخ', formatDate(date)], ['الوقت', time ?? '—'], ['المدة', r.meta.permissionHours ? `${r.meta.permissionHours} ساعة` : '—']);
+          break;
+        }
+        case 'مخالفة':
+          rows.push(['تاريخ المخالفة', formatDate(r.violationDate)], ['الوصف', r.violationDescription ?? '—']);
+          break;
+        case 'استقالة':
+          rows.push(['آخر يوم عمل', formatDate(r.resignationDate)], ['سبب الاستقالة', r.resignationReason ?? '—']);
+          break;
+      }
+      if (r.meta.reason && r.requestType !== 'استقالة') rows.push([r.requestType === 'صرف متأخرات' ? 'التفاصيل' : 'السبب', r.meta.reason]);
+      const linked = r.meta.employeeId ? employees.find(e => e.id === r.meta.employeeId) : null;
+      rows.push(['سجل الموظف', r.meta.employeeId ? linked ? `${linked.name} (مرتبط)` : 'مرتبط بسجل غير نشط أو من فرع آخر' : 'غير مرتبط']);
+      return rows;
+    }
+
+    function setControlsEnabled(enabled: boolean) {
+      decisionForm.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | HTMLButtonElement>('input, select, textarea, button').forEach(el => {
+        el.disabled = !enabled;
+      });
+    }
+
+    function openReview(id: string) {
+      const r = requests.find(x => x.id === id);
+      if (!r || !ctx) return;
+      current = r;
+
+      byId('review-title').textContent = `طلب ${r.requestType}`;
+      byId('review-subtitle').innerHTML = `${escapeHtml(r.employeeName)} — ${statusBadge(r.status)}`;
+      byId('review-details').innerHTML = detailRows(r)
+        .map(([k, v]) => `<div class="flex gap-2"><dt class="font-medium whitespace-nowrap">${escapeHtml(k)}:</dt><dd class="break-words">${escapeHtml(v)}</dd></div>`)
+        .join('');
+
+      const outcome: string[] = [];
+      if (r.status !== 'pending') {
+        outcome.push(`<div class="rounded-md border p-3 text-sm space-y-1">
+          <div><span class="font-medium">القرار:</span> ${statusBadge(r.status)}</div>
+          ${r.adminResponse ? `<div><span class="font-medium">الرد:</span> ${escapeHtml(r.adminResponse)}</div>` : ''}
+          ${r.meta.respondedByName ? `<div><span class="font-medium">بواسطة:</span> ${escapeHtml(r.meta.respondedByName)}</div>` : ''}
+          ${r.respondedAt ? `<div><span class="font-medium">التاريخ:</span> ${escapeHtml(formatDate(r.respondedAt, true))}</div>` : ''}
+        </div>`);
+        const fin = financialHtml(r.meta.financial);
+        if (fin) outcome.push(`<div class="mt-3">${fin}</div>`);
+      }
+      const canDecide = canDecideOn(r);
+      if (r.status === 'pending' && ctx.permissions.canApproveRequests && !canDecide) {
+        outcome.push(`<div class="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">${
+          r.userId === ctx.user.id ? 'قدّمت هذا الطلب بنفسك' : 'هذا الطلب يخصك'
+        } — يعتمده أو يرفضه المدير.</div>`);
+      }
+      byId('review-outcome').innerHTML = outcome.join('');
+
+      // Always start from a clean, enabled form (the old page left it disabled).
+      decisionForm.reset();
+      setControlsEnabled(true);
+      decisionError.classList.add('hidden');
+      approvalPanel.classList.add('hidden');
+      decisionForm.classList.toggle('hidden', !canDecide);
+      byId('review-footer').classList.toggle('hidden', canDecide);
+      if (canDecide) prepareApproval(r);
+      updateDecisionUi();
+
+      dialog.classList.remove('hidden');
+    }
+
+    function closeReview() {
+      dialog.classList.add('hidden');
+      current = null;
+    }
+
+    function prepareApproval(r: RequestItem) {
+      // employee selector
+      const options = ['<option value="">— بدون ربط —</option>']
+        .concat(employees.map(e => `<option value="${escapeHtml(e.id)}">${escapeHtml(e.name)}${e.nationalId ? ` — ${escapeHtml(e.nationalId)}` : ''}</option>`));
+      finEmployee.innerHTML = options.join('');
+      // Only a record the server linked is preselected. The name / national id
+      // on an unlinked request were typed by the requester and are unverified,
+      // so the approver must pick the employee explicitly.
+      const linked = !!r.meta.employeeId && employees.some(e => e.id === r.meta.employeeId);
+      finEmployee.value = linked ? r.meta.employeeId! : '';
+      byId('fin-employee-warning').classList.toggle('hidden', linked);
+
+      // type sections
+      document.querySelectorAll<HTMLElement>('[data-fin]').forEach(section => {
+        section.classList.toggle('hidden', section.dataset.fin !== r.requestType);
+      });
+
+      // defaults
+      const installments = byId<HTMLSelectElement>('fin-installments');
+      installments.innerHTML = Array.from({ length: 24 }, (_, i) => i + 1)
+        .map(n => `<option value="${n}">${n === 1 ? 'دفعة واحدة' : `${n} أقساط`}</option>`).join('');
+      installments.value = String(Math.min(Math.max(r.meta.requestedInstallments ?? 1, 1), 24));
+      byId<HTMLInputElement>('fin-advance-amount').value = r.advanceAmount ? String(r.advanceAmount) : '';
+      byId<HTMLInputElement>('fin-voucher').checked = true;
+      byId<HTMLSelectElement>('fin-payment-method').value = 'cash';
+      byId<HTMLInputElement>('fin-dues-amount').value = r.duesAmount ? String(r.duesAmount) : '';
+      byId<HTMLInputElement>('fin-penalty').value = '';
+      byId<HTMLInputElement>('fin-late-amount').value = '';
+      byId<HTMLInputElement>('fin-deactivate').checked = false;
+      byId<HTMLInputElement>('fin-leave-amount').value = '';
+      byId<HTMLInputElement>('fin-unpaid-days').value = r.meta.leaveType === 'unpaid' && r.meta.leaveDays ? String(r.meta.leaveDays) : '0';
+      if (r.meta.leaveDays) byId<HTMLInputElement>('fin-unpaid-days').max = String(r.meta.leaveDays);
+      byId('fin-leave-info').textContent = r.meta.leaveStart
+        ? `إجازة ${LEAVE_TYPES[r.meta.leaveType ?? ''] ?? ''} من ${formatDate(r.meta.leaveStart)} إلى ${formatDate(r.meta.leaveEnd)} — ${r.meta.leaveDays ?? '—'} يوم.`
+        : `الفترة: ${r.vacationDate ?? '—'}`;
+      byId('fin-late-hint').textContent = r.meta.permissionHours ? `مدة الاستئذان: ${r.meta.permissionHours} ساعة.` : '';
+
+      const leaveStart = r.meta.leaveStart;
+      const period = r.requestType === 'إجازة' && leaveStart
+        ? toPeriod(Number(leaveStart.slice(0, 4)), Number(leaveStart.slice(5, 7)))
+        : defaultPeriod;
+      fillPeriodSelects(finMonth, finYear, period || undefined);
+      byId('fin-period-label').textContent = r.requestType === 'سلفة'
+        ? 'شهر خصم القسط الأول'
+        : r.requestType === 'إجازة' && leaveStart
+          ? 'مسير الشهر الأول من الإجازة (اختر شهراً لاحقاً لتأجيل الخصم كاملاً)'
+          : 'شهر الترحيل في مسير الرواتب';
+      byId('fin-voucher-note').textContent = ctx?.permissions.canApproveFinance
+        ? 'يصدر السند معتمداً بتوقيعك وختم الشركة.'
+        : 'يصدر السند بانتظار اعتماد المدير، ثم يمكن طباعته بالختم.';
+    }
+
+    function selectedEmployee(): Employee | null {
+      return employees.find(e => e.id === finEmployee.value) ?? null;
+    }
+
+    function numberValue(id: string): number | null {
+      const raw = byId<HTMLInputElement>(id).value.trim();
+      if (raw === '') return null;
+      const n = Number(raw);
+      return Number.isFinite(n) ? n : NaN;
+    }
+
+    function buildPlan(): Plan {
+      const r = current!;
+      const plan: Plan = { lines: [], needsEmployee: false, financial: {}, error: null };
+      const employee = selectedEmployee();
+      const period = readPeriod(finMonth, finYear);
+      const fin = plan.financial;
+      if (employee) fin.employeeId = employee.id;
+
+      switch (r.requestType) {
+        case 'سلفة': {
+          const amount = numberValue('fin-advance-amount');
+          const count = Number(byId<HTMLSelectElement>('fin-installments').value) || 1;
+          if (amount === null || !(amount > 0)) {
+            plan.error = 'أدخل مبلغ السلفة المعتمد';
+            break;
+          }
+          plan.needsEmployee = true;
+          fin.amount = amount;
+          fin.installments = count;
+          fin.startPeriod = period;
+          splitInstallments(amount, count).forEach((part, i) => {
+            plan.lines.push(`تُخصم ${money(part)} من راتب ${periodLabelAr(addMonths(period, i))}${count > 1 ? ` (قسط ${i + 1} من ${count})` : ''}`);
+          });
+          const withVoucher = byId<HTMLInputElement>('fin-voucher').checked;
+          fin.createVoucher = withVoucher;
+          if (withVoucher) {
+            const method = byId<HTMLSelectElement>('fin-payment-method').value;
+            fin.paymentMethod = method;
+            if (method === 'cheque') {
+              const cheque = byId<HTMLInputElement>('fin-cheque-number').value.trim();
+              if (!cheque) plan.error = 'أدخل رقم الشيك';
+              fin.chequeNumber = cheque;
+            }
+            const bank = byId<HTMLInputElement>('fin-bank-name').value.trim();
+            if (bank && (method === 'bank_transfer' || method === 'cheque')) fin.bankName = bank;
+            const methodLabel = PAYMENT_METHODS[method as keyof typeof PAYMENT_METHODS]?.ar ?? method;
+            plan.lines.push(`يصدر سند صرف بمبلغ ${money(amount)} (${methodLabel})${ctx?.permissions.canApproveFinance ? ' معتمد' : ' بانتظار اعتماد المدير'}`);
+          }
+          break;
+        }
+        case 'إجازة': {
+          const days = numberValue('fin-unpaid-days') ?? 0;
+          const override = numberValue('fin-leave-amount');
+          const calc = byId('fin-leave-calc');
+          if (Number.isNaN(days) || days < 0 || Math.round(days * 2) !== days * 2) {
+            plan.error = 'عدد أيام الخصم غير صحيح (يُقبل نصف يوم)';
+            break;
+          }
+          if (current!.meta.leaveDays && days > current!.meta.leaveDays) {
+            plan.error = `أيام الخصم لا تتجاوز مدة الإجازة (${current!.meta.leaveDays} يوم)`;
+            break;
+          }
+          if (override !== null && (Number.isNaN(override) || override < 0)) {
+            plan.error = 'المبلغ غير صحيح';
+            break;
+          }
+          fin.unpaidDays = days;
+          fin.startPeriod = period;
+          calc.textContent = employee
+            ? `الأجر اليومي: ${money(employee.dailyRate)} (الراتب الثابت ${money(employee.fixedSalary)} ÷ 30)`
+            : 'اختر سجل الموظف لحساب الأجر اليومي.';
+          if (override) fin.amount = override;
+          if (days > 0 || override) {
+            plan.needsEmployee = true;
+            if (!employee && !override) {
+              plan.lines.push(`تُخصم إجازة بدون راتب ${days} يوم — اختر سجل الموظف لحساب المبلغ`);
+              break;
+            }
+            // Same plan the server posts (one entry per calendar month of the leave).
+            const entries = planUnpaidLeave({
+              leaveStart: r.meta.leaveStart,
+              leaveEnd: r.meta.leaveEnd,
+              unpaidDays: days,
+              dailyRate: employee?.dailyRate ?? 0,
+              fixedSalary: employee?.fixedSalary ?? 0,
+              explicitAmount: override || null,
+              postingStart: period,
+            });
+            if (entries.length === 0) {
+              plan.error = 'تعذر حساب مبلغ الخصم — لا يوجد راتب مسجل للموظف؛ أدخل المبلغ يدوياً';
+              break;
+            }
+            for (const e of entries) {
+              const range = e.start && e.end ? ` من ${formatDate(e.start)} إلى ${formatDate(e.end)}` : '';
+              plan.lines.push(
+                `تُخصم ${money(e.amount)} (إجازة بدون راتب ${e.days} يوم${range}${e.capped ? ' — الحد الأقصى للشهر' : ''}) من راتب ${periodLabelAr(e.period)}`,
+              );
+            }
+          }
+          break;
+        }
+        case 'صرف متأخرات': {
+          const amount = numberValue('fin-dues-amount');
+          if (amount === null || !(amount > 0)) {
+            plan.error = 'أدخل مبلغ المتأخرات المعتمد';
+            break;
+          }
+          plan.needsEmployee = true;
+          fin.amount = amount;
+          fin.startPeriod = period;
+          plan.lines.push(`تُضاف ${money(amount)} (صرف متأخرات) إلى راتب ${periodLabelAr(period)}`);
+          break;
+        }
+        case 'مخالفة':
+        case 'استئذان': {
+          const id = r.requestType === 'مخالفة' ? 'fin-penalty' : 'fin-late-amount';
+          const amount = numberValue(id);
+          if (amount !== null && (Number.isNaN(amount) || amount < 0)) {
+            plan.error = 'المبلغ غير صحيح';
+            break;
+          }
+          if (amount) {
+            plan.needsEmployee = true;
+            fin.amount = amount;
+            fin.startPeriod = period;
+            plan.lines.push(`تُخصم ${money(amount)} (${r.requestType === 'مخالفة' ? 'جزاء مخالفة' : 'خصم استئذان'}) من راتب ${periodLabelAr(period)}`);
+          }
+          break;
+        }
+        case 'استقالة': {
+          if (byId<HTMLInputElement>('fin-deactivate').checked) {
+            plan.needsEmployee = true;
+            fin.deactivateEmployee = true;
+            plan.lines.push('سيتم إيقاف سجل الموظف');
+          }
+          break;
+        }
+      }
+      if (!plan.error && plan.needsEmployee && !employee) plan.error = 'اختر سجل الموظف المرتبط حتى يُرحَّل الأثر المالي إلى مسير الرواتب';
+      return plan;
+    }
+
+    function updateDecisionUi() {
+      if (!current) return;
+      const decision = (decisionForm.querySelector('input[name="decision"]:checked') as HTMLInputElement | null)?.value ?? '';
+      const approving = decision === 'approved';
+      approvalPanel.classList.toggle('hidden', !approving);
+      byId('response-label').textContent = decision === 'rejected' ? 'سبب الرفض *' : 'ملاحظات للموظف (اختياري)';
+      submitBtn.textContent = decision === 'rejected' ? 'رفض الطلب' : decision === 'approved' ? 'اعتماد الطلب' : 'حفظ القرار';
+      submitBtn.className = `px-4 py-2 text-white rounded-md disabled:opacity-50 ${decision === 'rejected' ? 'bg-red-600 hover:bg-red-700' : decision === 'approved' ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'}`;
+      if (!approving) return;
+
+      const method = byId<HTMLSelectElement>('fin-payment-method').value;
+      const withVoucher = byId<HTMLInputElement>('fin-voucher').checked;
+      byId('fin-voucher-fields').classList.toggle('hidden', !withVoucher);
+      byId('fin-cheque-row').classList.toggle('hidden', method !== 'cheque');
+      byId('fin-bank-row').classList.toggle('hidden', method !== 'bank_transfer' && method !== 'cheque');
+
+      const employee = selectedEmployee();
+      byId('fin-employee-info').textContent = employee
+        ? `الراتب الثابت: ${money(employee.fixedSalary)} — الأجر اليومي: ${money(employee.dailyRate)}`
+        : 'الطلب غير مرتبط بسجل موظف — مطلوب لأي خصم أو إضافة على الراتب.';
+
+      const plan = buildPlan();
+      const type = current.requestType;
+      const showPeriod = type === 'سلفة' || type === 'صرف متأخرات' || type === 'إجازة'
+        || (type === 'مخالفة' && !!numberValue('fin-penalty'))
+        || (type === 'استئذان' && !!numberValue('fin-late-amount'));
+      byId('fin-period-row').classList.toggle('hidden', !showPeriod);
+
+      const preview = byId('fin-preview');
+      if (plan.error) {
+        preview.innerHTML = `<p class="text-red-700">${escapeHtml(plan.error)}</p>`;
+      } else if (plan.lines.length === 0) {
+        preview.innerHTML = '<p class="text-muted-foreground">لا يوجد أثر مالي — سيُعتمد الطلب فقط.</p>';
+      } else {
+        preview.innerHTML = `<div class="font-medium mb-1">سيتم عند الاعتماد:</div><ul class="list-disc pr-5 space-y-1">${plan.lines.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul>`;
+      }
+    }
+
+    decisionForm.addEventListener('change', updateDecisionUi);
+    decisionForm.addEventListener('input', event => {
+      if ((event.target as HTMLElement).tagName === 'INPUT') updateDecisionUi();
+    });
+
+    decisionForm.addEventListener('submit', async event => {
+      event.preventDefault();
+      if (!current) return;
+      decisionError.classList.add('hidden');
+      const decision = (decisionForm.querySelector('input[name="decision"]:checked') as HTMLInputElement | null)?.value;
+      const showError = (message: string) => {
+        decisionError.textContent = message;
+        decisionError.classList.remove('hidden');
+      };
+      if (decision !== 'approved' && decision !== 'rejected') return showError('اختر القرار: اعتماد أو رفض');
+      const adminResponse = responseInput.value.trim();
+      if (decision === 'rejected' && !adminResponse) return showError('اكتب سبب الرفض');
+
+      const body: Record<string, unknown> = { id: current.id, status: decision, adminResponse };
+      if (decision === 'approved') {
+        const plan = buildPlan();
+        if (plan.error) return showError(plan.error);
+        body.financial = plan.financial;
+        if (plan.lines.length && !confirm(`تأكيد الاعتماد والترحيل:\n\n${plan.lines.join('\n')}`)) return;
+      } else if (!confirm('تأكيد رفض الطلب؟')) {
         return;
       }
 
-      tbody.innerHTML = requests.map(req => `
-        <tr class="border-b hover:bg-gray-50">
-          <td class="p-3 font-medium">${req.employee_name}</td>
-          <td class="p-3">${req.request_type}</td>
-          <td class="p-3">${formatDate(req.request_date)}</td>
-          <td class="p-3">${getStatusBadge(req.status)}</td>
-          <td class="p-3">
-            <button
-              onclick="viewRequest('${req.id}')"
-              class="text-blue-600 hover:text-blue-800 text-sm font-medium"
-            >
-              ${req.status === 'pending' ? 'الرد على الطلب' : 'عرض التفاصيل'}
-            </button>
-          </td>
-        </tr>
-      `).join('');
-    }
-
-    function getRequestDetails(request: Request): string {
-      const details: string[] = [
-        `<div><span class="font-medium">اسم الموظف:</span> ${request.employee_name}</div>`,
-        `<div><span class="font-medium">نوع الطلب:</span> ${request.request_type}</div>`,
-        `<div><span class="font-medium">تاريخ التقديم:</span> ${formatDate(request.request_date)}</div>`
-      ];
-
-      // Add type-specific details
-      if (request.request_type === 'سلفة' && request.advance_amount) {
-        details.push(`<div><span class="font-medium">المبلغ:</span> ${formatCurrency(request.advance_amount)}</div>`);
-      }
-
-      if (request.request_type === 'إجازة' && request.vacation_date) {
-        details.push(`<div><span class="font-medium">الفترة:</span> ${request.vacation_date}</div>`);
-      }
-
-      if (request.request_type === 'صرف متأخرات' && request.dues_amount) {
-        details.push(`<div><span class="font-medium">المبلغ:</span> ${formatCurrency(request.dues_amount)}</div>`);
-      }
-
-      if (request.request_type === 'استئذان' && request.permission_date) {
-        details.push(`<div><span class="font-medium">التاريخ والوقت:</span> ${request.permission_date}</div>`);
-      }
-
-      if (request.request_type === 'مخالفة') {
-        if (request.violation_date) {
-          details.push(`<div><span class="font-medium">التاريخ:</span> ${formatDate(request.violation_date)}</div>`);
-        }
-        if (request.violation_description) {
-          details.push(`<div><span class="font-medium">الوصف:</span> ${request.violation_description}</div>`);
-        }
-      }
-
-      if (request.request_type === 'استقالة') {
-        if (request.resignation_date) {
-          details.push(`<div><span class="font-medium">تاريخ الاستقالة:</span> ${formatDate(request.resignation_date)}</div>`);
-        }
-        if (request.resignation_reason) {
-          details.push(`<div><span class="font-medium">السبب:</span> ${request.resignation_reason}</div>`);
-        }
-      }
-
-      // Add response if exists
-      if (request.admin_response) {
-        details.push(`<div class="mt-2 pt-2 border-t"><span class="font-medium">الرد السابق:</span> ${request.admin_response}</div>`);
-      }
-
-      return details.join('');
-    }
-
-    (window as any).viewRequest = (id: string) => {
-      const request = allRequests.find(r => r.id === id);
-      if (!request) return;
-
-      currentRequest = request;
-      document.getElementById('request-id')!.setAttribute('value', id);
-      document.getElementById('request-details')!.innerHTML = getRequestDetails(request);
-
-      // If already responded, disable form
-      if (request.status !== 'pending') {
-        (document.getElementById('response-form') as HTMLFormElement).querySelectorAll('input, textarea, button[type="submit"]').forEach(el => {
-          (el as HTMLInputElement).disabled = true;
-        });
-      }
-
-      document.getElementById('response-dialog')!.classList.remove('hidden');
-    };
-
-    // Dialog controls
-    const responseDialog = document.getElementById('response-dialog')!;
-    const responseForm = document.getElementById('response-form') as HTMLFormElement;
-    const cancelResponseBtn = document.getElementById('cancel-response-btn')!;
-
-    cancelResponseBtn.addEventListener('click', () => {
-      responseDialog.classList.add('hidden');
-      responseForm.reset();
-      currentRequest = null;
-    });
-
-    // Submit response
-    responseForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-
-      const submitBtn = document.getElementById('submit-response-btn') as HTMLButtonElement;
-      submitBtn.disabled = true;
-      submitBtn.textContent = 'جاري الإرسال...';
-
-      const requestId = (document.getElementById('request-id') as HTMLInputElement).value;
-      const decision = (document.querySelector('input[name="decision"]:checked') as HTMLInputElement)?.value;
-      const adminResponse = (document.getElementById('admin-response') as HTMLTextAreaElement).value;
-
       try {
-        const response = await fetch('/api/requests/respond', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: requestId,
-            status: decision,
-            adminResponse
-          })
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-          alert('تم إرسال الرد بنجاح!');
-          responseDialog.classList.add('hidden');
-          responseForm.reset();
-          currentRequest = null;
-          loadRequests();
-        } else {
-          alert(data.error || 'حدث خطأ');
-        }
+        const result = await withBusy(submitBtn, 'جاري الحفظ...', () =>
+          api<{ message: string; effects?: string[] }>('/api/requests/respond', { body }),
+        );
+        toast([result.message, ...(result.effects ?? [])].join(' — '), 'success');
+        closeReview();
+        await loadRequests();
       } catch (error) {
-        alert('حدث خطأ في الاتصال');
-      } finally {
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'إرسال الرد';
+        showError((error as Error).message);
+        // Someone else decided it, or the payroll month was closed meanwhile: refresh the list.
+        if (error instanceof ApiError && error.status === 409) await loadRequests();
       }
     });
 
-    // Filters
-    document.getElementById('status-filter')?.addEventListener('change', loadRequests);
-    document.getElementById('apply-filter-btn')?.addEventListener('click', filterAndRenderRequests);
+    byId('review-close').addEventListener('click', closeReview);
+    byId('review-close-2').addEventListener('click', closeReview);
+    byId('decision-cancel').addEventListener('click', closeReview);
+    dialog.addEventListener('click', event => {
+      if (event.target === dialog) closeReview();
+    });
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && !dialog.classList.contains('hidden')) closeReview();
+    });
 
-    // Initial load
-    loadRequests();
+    // ---- init ----------------------------------------------------------------------------
+    async function init() {
+      try {
+        ctx = await loadFinanceContext();
+      } catch (error) {
+        showPageError(`تعذر تحميل بيانات المستخدم: ${(error as Error).message}`);
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center p-8 text-muted-foreground">—</td></tr>';
+        return;
+      }
+      const p = ctx.permissions;
+      if (!p.canManageRequests && !p.canApproveRequests) {
+        showPageError('لا تملك صلاحية إدارة طلبات الموظفين.');
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center p-8"><a href="/my-requests" class="text-blue-600 hover:underline">الانتقال إلى طلباتي</a></td></tr>';
+        return;
+      }
+      if (p.canSubmitRequests) byId('file-request-link').classList.remove('hidden');
+      fillBranchSelect(branchSelect, ctx);
+      if (!branchSelect.value) {
+        showPageError('لا توجد فروع متاحة لحسابك.');
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center p-8 text-muted-foreground">—</td></tr>';
+        return;
+      }
+      await Promise.all([loadEmployees(), loadRequests()]);
+    }
+
+    void init();
   </script>
 </MainLayout>

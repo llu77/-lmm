@@ -1,0 +1,1521 @@
+---
+import MainLayout from '@/layouts/MainLayout.astro';
+
+// Check authentication - redirect to login if not authenticated
+const cookieHeader = Astro.request.headers.get('Cookie');
+if (!cookieHeader?.includes('session=')) {
+  return Astro.redirect('/auth/login');
+}
+
+const inputClass = 'w-full rounded-md border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-600';
+const signerTitles = ['المدير العام', 'المدير المالي', 'المحاسب', 'مشرف الفرع', 'أمين الصندوق', 'مدير الموارد البشرية'];
+---
+
+<MainLayout title="الإعدادات - SymbolAI">
+  <div class="space-y-6">
+    <div>
+      <h1 class="text-3xl font-bold">الإعدادات</h1>
+      <p class="mt-2 text-gray-600">بيانات المنشأة والختم والتواقيع التي تظهر على السندات ومسيرات الرواتب المطبوعة</p>
+    </div>
+
+    <div id="page-loading" class="rounded-lg border bg-card p-6 text-center text-gray-500" role="status">جاري تحميل الإعدادات…</div>
+    <div id="page-error" class="hidden rounded-lg border border-red-200 bg-red-50 p-6 text-center" role="alert">
+      <p id="page-error-text" class="text-red-700"></p>
+      <button id="page-retry" type="button" class="mt-3 rounded-md border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-100">إعادة المحاولة</button>
+    </div>
+
+    <!-- ================================================================== -->
+    <!-- 1. Organization profile                                             -->
+    <!-- ================================================================== -->
+    <section id="org-section" class="hidden rounded-lg border bg-card p-6" aria-labelledby="org-title">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 id="org-title" class="text-xl font-semibold">بيانات المنشأة</h2>
+          <p class="mt-1 text-sm text-gray-600">تظهر في ترويسة سندات القبض والصرف ومسيرات الرواتب.</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <span id="org-readonly-badge" class="hidden rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">للاطلاع فقط — التعديل للمدير</span>
+          <span id="org-dirty-badge" class="hidden rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800">تغييرات غير محفوظة</span>
+        </div>
+      </div>
+
+      <div class="mt-4 flex gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+        <svg class="mt-0.5 h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+        <div class="space-y-1">
+          <p class="font-semibold">متى يظهر الختم والتوقيع؟</p>
+          <p>يظهر <strong>ختم المنشأة</strong> و<strong>توقيع المدير</strong> على سندات القبض والصرف ومسيرات الرواتب المطبوعة <strong>فقط بعد اعتماد المدير</strong> للمستند. قبل الاعتماد تبقى خانة الاعتماد فارغة ولا يُطبع الختم.</p>
+          <p class="text-blue-800">إذا لم يُرفع ختم، يُطبع ختم نصي تلقائي يحمل اسم المنشأة بعد الاعتماد.</p>
+        </div>
+      </div>
+
+      <p id="org-status" class="hidden mt-4 text-sm"></p>
+
+      <form id="org-form" class="mt-6 space-y-6" novalidate>
+        <div class="grid gap-4 md:grid-cols-2">
+          <div>
+            <label for="org-name-ar" class="mb-1.5 block text-sm font-medium">اسم المنشأة (عربي)</label>
+            <input id="org-name-ar" name="companyNameAr" type="text" maxlength="150" class={inputClass} placeholder="مثال: مؤسسة الرمز التجارية" />
+          </div>
+          <div>
+            <label for="org-name-en" class="mb-1.5 block text-sm font-medium">اسم المنشأة (إنجليزي)</label>
+            <input id="org-name-en" name="companyNameEn" type="text" maxlength="150" dir="ltr" class={`${inputClass} text-left`} placeholder="Symbol Trading Est." />
+          </div>
+          <div>
+            <label for="org-cr" class="mb-1.5 block text-sm font-medium">رقم السجل التجاري</label>
+            <input id="org-cr" name="crNumber" type="text" inputmode="numeric" maxlength="20" dir="ltr" class={`${inputClass} text-left`} placeholder="1010xxxxxx" />
+          </div>
+          <div>
+            <label for="org-vat" class="mb-1.5 block text-sm font-medium">الرقم الضريبي (VAT)</label>
+            <input id="org-vat" name="vatNumber" type="text" inputmode="numeric" maxlength="15" dir="ltr" class={`${inputClass} text-left`} placeholder="3xxxxxxxxxxxxx3" aria-describedby="org-vat-hint" />
+            <p id="org-vat-hint" class="mt-1 text-xs text-gray-500">15 رقماً، يبدأ وينتهي بالرقم 3 للمنشآت السعودية.</p>
+          </div>
+          <div>
+            <label for="org-phone" class="mb-1.5 block text-sm font-medium">الهاتف</label>
+            <input id="org-phone" name="phone" type="tel" maxlength="100" dir="ltr" class={`${inputClass} text-left`} placeholder="+966 11 000 0000" />
+          </div>
+          <div>
+            <label for="org-email" class="mb-1.5 block text-sm font-medium">البريد الإلكتروني</label>
+            <input id="org-email" name="email" type="email" maxlength="300" dir="ltr" class={`${inputClass} text-left`} placeholder="info@example.com" />
+          </div>
+          <div class="md:col-span-2">
+            <label for="org-address" class="mb-1.5 block text-sm font-medium">العنوان</label>
+            <input id="org-address" name="address" type="text" maxlength="300" class={inputClass} placeholder="المملكة العربية السعودية - الرياض" />
+          </div>
+          <div>
+            <label for="org-currency" class="mb-1.5 block text-sm font-medium">العملة</label>
+            <select id="org-currency" name="currency" class={inputClass}>
+              <option value="SAR">ريال سعودي (ر.س) — SAR</option>
+              <option value="AED">درهم إماراتي (د.إ) — AED</option>
+              <option value="KWD">دينار كويتي (د.ك) — KWD</option>
+              <option value="EGP">جنيه مصري (ج.م) — EGP</option>
+              <option value="USD">دولار أمريكي ($) — USD</option>
+            </select>
+          </div>
+          <div>
+            <label for="org-vat-rate" class="mb-1.5 block text-sm font-medium">نسبة ضريبة القيمة المضافة (%)</label>
+            <input id="org-vat-rate" name="vatRate" type="number" min="0" max="100" step="0.01" dir="ltr" class={`${inputClass} text-left`} />
+          </div>
+          <div class="md:col-span-2">
+            <div class="mb-1.5 flex items-center justify-between">
+              <label for="org-footer" class="block text-sm font-medium">ملاحظة تذييل المستندات</label>
+              <span id="org-footer-count" class="text-xs text-gray-500" aria-live="polite">0/300</span>
+            </div>
+            <textarea id="org-footer" name="documentFooter" rows="2" maxlength="300" class={inputClass} placeholder="مثال: هذا السند صادر إلكترونياً ولا يعتد به إلا بعد الاعتماد والختم"></textarea>
+          </div>
+        </div>
+
+        <!-- Logo + stamp -->
+        <div class="grid gap-4 md:grid-cols-2">
+          <div class="rounded-lg border p-4">
+            <div class="flex items-center justify-between gap-2">
+              <h3 class="font-semibold">شعار المنشأة</h3>
+              <span id="logo-state" class="text-xs text-amber-700"></span>
+            </div>
+            <div class="checkerboard mt-3 flex h-40 items-center justify-center overflow-hidden rounded-md border">
+              <img id="logo-preview" alt="معاينة الشعار" class="hidden max-h-36 max-w-[90%] object-contain" />
+              <span id="logo-empty" class="text-sm text-gray-500">لا يوجد شعار</span>
+            </div>
+            <div class="org-edit mt-3 flex flex-wrap gap-2">
+              <button id="logo-pick" type="button" class="rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-gray-50">اختيار صورة</button>
+              <button id="logo-remove" type="button" class="rounded-md border border-red-200 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50">إزالة الشعار</button>
+              <input id="logo-file" type="file" accept="image/png,image/jpeg,image/webp" class="hidden" />
+            </div>
+            <p class="org-edit mt-2 text-xs text-gray-500">PNG أو JPG أو WebP. تُصغَّر الصورة تلقائياً إلى 500 بكسل كحد أقصى.</p>
+          </div>
+
+          <div class="rounded-lg border p-4">
+            <div class="flex items-center justify-between gap-2">
+              <h3 class="font-semibold">ختم المنشأة</h3>
+              <span id="stamp-state" class="text-xs text-amber-700"></span>
+            </div>
+            <div class="checkerboard mt-3 flex h-40 items-center justify-center overflow-hidden rounded-md border">
+              <img id="stamp-preview" alt="معاينة ختم المنشأة" class="hidden max-h-36 max-w-[90%] object-contain" />
+              <span id="stamp-empty" class="text-sm text-gray-500">لم يُرفع ختم — يُستخدم ختم نصي تلقائي</span>
+            </div>
+            <div class="org-edit mt-3 flex flex-wrap items-center gap-2">
+              <button id="stamp-pick" type="button" class="rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-gray-50">اختيار صورة الختم</button>
+              <button id="stamp-remove" type="button" class="rounded-md border border-red-200 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50">إزالة الختم</button>
+              <input id="stamp-file" type="file" accept="image/png,image/jpeg,image/webp" class="hidden" />
+            </div>
+            <label class="org-edit mt-3 flex items-center gap-2 text-sm">
+              <input id="stamp-remove-white" type="checkbox" class="h-4 w-4" checked />
+              <span>إزالة الخلفية البيضاء (يُنصح بها للختم المصوَّر أو الممسوح ضوئياً)</span>
+            </label>
+            <p class="org-edit mt-2 text-xs text-gray-500">صوّر الختم على ورقة بيضاء بإضاءة جيدة. يظهر الختم مائلاً قليلاً فوق خانة اعتماد المدير.</p>
+          </div>
+        </div>
+
+        <div id="org-actions" class="flex flex-wrap gap-3 border-t pt-4">
+          <button id="org-save" type="submit" class="rounded-md bg-primary px-6 py-2 font-medium text-white hover:bg-primary/90 disabled:opacity-60">حفظ بيانات المنشأة</button>
+          <button id="org-reset" type="button" class="rounded-md border px-4 py-2 font-medium hover:bg-gray-50 disabled:opacity-60">تراجع عن التغييرات</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- ================================================================== -->
+    <!-- 2. My signature                                                    -->
+    <!-- ================================================================== -->
+    <section id="my-signature-section" class="hidden rounded-lg border bg-card p-6" aria-labelledby="my-sig-title">
+      <h2 id="my-sig-title" class="text-xl font-semibold">توقيعي</h2>
+      <p class="mt-1 text-sm text-gray-600">يُطبع توقيعك على السندات ومسيرات الرواتب التي تُعدّها أو تعتمدها. ارسمه مباشرة أو ارفع صورة له.</p>
+      <p id="my-sig-status" class="hidden mt-4 text-sm"></p>
+      <div id="my-sig-body" class="mt-4 grid gap-4 md:grid-cols-[minmax(0,22rem)_1fr]">
+        <div class="checkerboard flex h-40 items-center justify-center overflow-hidden rounded-md border">
+          <img id="my-sig-img" alt="توقيعي المحفوظ" class="hidden max-h-36 max-w-[90%] object-contain" />
+          <span id="my-sig-empty" class="px-4 text-center text-sm text-gray-500">لم تُضف توقيعاً بعد</span>
+        </div>
+        <div class="space-y-3">
+          <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+            <dt class="text-gray-500">الاسم على المستندات</dt><dd id="my-sig-name" class="font-medium">—</dd>
+            <dt class="text-gray-500">الصفة</dt><dd id="my-sig-title-text" class="font-medium">—</dd>
+            <dt class="text-gray-500">آخر تحديث</dt><dd id="my-sig-updated" class="font-medium">—</dd>
+          </dl>
+          <div class="flex flex-wrap gap-2">
+            <button id="my-sig-edit" type="button" class="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90">إضافة توقيع</button>
+            <button id="my-sig-delete" type="button" class="hidden rounded-md border border-red-200 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-60">حذف التوقيع</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================== -->
+    <!-- 3. Users' signatures (manager)                                     -->
+    <!-- ================================================================== -->
+    <section id="users-sig-section" class="hidden rounded-lg border bg-card p-6" aria-labelledby="users-sig-title">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 id="users-sig-title" class="text-xl font-semibold">تواقيع المستخدمين</h2>
+          <p class="mt-1 text-sm text-gray-600">سجّل أو استبدل تواقيع المستخدمين الحاليين (المشرفين والمحاسبين وغيرهم) لتظهر على المستندات التي يعدّونها أو يستلمونها.</p>
+        </div>
+        <button id="users-sig-refresh" type="button" class="rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-gray-50 disabled:opacity-60">تحديث</button>
+      </div>
+
+      <div class="mt-4 flex flex-wrap items-end gap-3">
+        <div class="min-w-[12rem] flex-1">
+          <label for="users-sig-search" class="mb-1.5 block text-sm font-medium">بحث</label>
+          <input id="users-sig-search" type="search" class={inputClass} placeholder="الاسم أو اسم المستخدم أو الفرع" />
+        </div>
+        <div>
+          <label for="users-sig-filter" class="mb-1.5 block text-sm font-medium">الحالة</label>
+          <select id="users-sig-filter" class={inputClass}>
+            <option value="all">جميع المستخدمين</option>
+            <option value="missing">بدون توقيع</option>
+            <option value="present">لديهم توقيع</option>
+          </select>
+        </div>
+        <p id="users-sig-summary" class="pb-2 text-sm text-gray-600" aria-live="polite"></p>
+      </div>
+
+      <div class="mt-4 overflow-x-auto rounded-lg border">
+        <table class="w-full text-sm">
+          <thead class="border-b bg-gray-50">
+            <tr>
+              <th scope="col" class="px-4 py-3 text-right font-medium">المستخدم</th>
+              <th scope="col" class="px-4 py-3 text-right font-medium">الدور</th>
+              <th scope="col" class="px-4 py-3 text-right font-medium">الفرع</th>
+              <th scope="col" class="px-4 py-3 text-center font-medium">التوقيع</th>
+              <th scope="col" class="px-4 py-3 text-right font-medium">الصفة</th>
+              <th scope="col" class="px-4 py-3 text-right font-medium">آخر تحديث</th>
+              <th scope="col" class="px-4 py-3 text-right font-medium">الإجراءات</th>
+            </tr>
+          </thead>
+          <tbody id="users-sig-body">
+            <tr><td colspan="7" class="px-4 py-8 text-center text-gray-500">جاري التحميل…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <!-- ==================================================================== -->
+  <!-- Signature editor dialog (draw / upload)                               -->
+  <!-- ==================================================================== -->
+  <dialog id="sig-dialog" class="w-[min(44rem,calc(100vw-1.5rem))] max-h-[calc(100vh-1.5rem)] overflow-y-auto rounded-lg bg-white p-0 text-right shadow-2xl backdrop:bg-black/50" aria-labelledby="sig-dialog-title">
+    <div class="space-y-4 p-5 sm:p-6">
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <h2 id="sig-dialog-title" class="text-xl font-bold">توقيعي</h2>
+          <p id="sig-dialog-subtitle" class="mt-1 text-sm text-gray-600"></p>
+        </div>
+        <button id="sig-dialog-close" type="button" class="rounded-md p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-900" aria-label="إغلاق">
+          <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+        </button>
+      </div>
+
+      <div id="sig-current" class="hidden items-center gap-3 rounded-md border bg-gray-50 p-3">
+        <div class="checkerboard flex h-16 w-40 shrink-0 items-center justify-center overflow-hidden rounded border">
+          <img id="sig-current-img" alt="التوقيع الحالي" class="max-h-14 max-w-[95%] object-contain" />
+        </div>
+        <p class="text-xs text-gray-600">التوقيع الحالي. ارسم أو ارفع توقيعاً جديداً لاستبداله، أو عدّل الصفة فقط ثم احفظ.</p>
+      </div>
+
+      <div role="tablist" aria-label="طريقة إضافة التوقيع" class="inline-flex rounded-lg border bg-gray-50 p-1">
+        <button id="sig-tab-draw" type="button" role="tab" aria-selected="true" aria-controls="sig-panel-draw" class="sig-tab rounded-md px-4 py-1.5 text-sm font-medium">رسم التوقيع</button>
+        <button id="sig-tab-upload" type="button" role="tab" aria-selected="false" aria-controls="sig-panel-upload" tabindex="-1" class="sig-tab rounded-md px-4 py-1.5 text-sm font-medium">رفع صورة</button>
+      </div>
+
+      <div id="sig-panel-draw" role="tabpanel" aria-labelledby="sig-tab-draw" class="space-y-2">
+        <div class="relative rounded-lg border-2 border-dashed border-gray-300 bg-white">
+          <canvas id="sig-canvas" class="block h-52 w-full cursor-crosshair touch-none select-none rounded-lg" aria-label="مساحة رسم التوقيع — ارسم بالفأرة أو الإصبع أو القلم"></canvas>
+          <div class="pointer-events-none absolute inset-x-6 bottom-12 border-b border-gray-300" aria-hidden="true"></div>
+          <span id="sig-pad-hint" class="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-gray-400">ارسم توقيعك هنا</span>
+        </div>
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div class="flex items-center gap-2 text-sm">
+            <span class="text-gray-600">لون الحبر:</span>
+            <button type="button" data-ink="#1e3a8a" class="ink-btn h-7 w-7 rounded-full border-2 border-white bg-[#1e3a8a] ring-2 ring-gray-300" aria-label="أزرق" aria-pressed="true"></button>
+            <button type="button" data-ink="#111827" class="ink-btn h-7 w-7 rounded-full border-2 border-white bg-[#111827] ring-2 ring-gray-300" aria-label="أسود" aria-pressed="false"></button>
+          </div>
+          <div class="flex gap-2">
+            <button id="sig-undo" type="button" class="rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-gray-50 disabled:opacity-50" disabled>تراجع</button>
+            <button id="sig-clear" type="button" class="rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-gray-50 disabled:opacity-50" disabled>مسح</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="sig-panel-upload" role="tabpanel" aria-labelledby="sig-tab-upload" class="hidden space-y-3">
+        <div class="checkerboard flex h-52 items-center justify-center overflow-hidden rounded-lg border">
+          <img id="sig-upload-preview" alt="معاينة التوقيع المرفوع" class="hidden max-h-48 max-w-[90%] object-contain" />
+          <span id="sig-upload-empty" class="px-4 text-center text-sm text-gray-500">اختر صورة واضحة للتوقيع على ورقة بيضاء</span>
+        </div>
+        <div class="flex flex-wrap items-center gap-3">
+          <button id="sig-upload-pick" type="button" class="rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-gray-50">اختيار صورة</button>
+          <input id="sig-upload-file" type="file" accept="image/png,image/jpeg,image/webp" class="hidden" />
+          <label class="flex items-center gap-2 text-sm">
+            <input id="sig-upload-remove-white" type="checkbox" class="h-4 w-4" checked />
+            <span>إزالة الخلفية البيضاء</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label for="sig-title-input" class="mb-1.5 block text-sm font-medium">الصفة</label>
+          <input id="sig-title-input" type="text" maxlength="100" list="signer-titles" class={inputClass} placeholder="مثال: المحاسب" />
+          <datalist id="signer-titles">
+            {signerTitles.map(t => <option value={t} />)}
+          </datalist>
+        </div>
+        <div>
+          <label for="sig-name-input" class="mb-1.5 block text-sm font-medium">الاسم على المستندات <span class="font-normal text-gray-500">(اختياري)</span></label>
+          <input id="sig-name-input" type="text" maxlength="100" class={inputClass} />
+        </div>
+      </div>
+
+      <div class="flex flex-wrap gap-3 border-t pt-4">
+        <button id="sig-save" type="button" class="rounded-md bg-primary px-6 py-2 font-medium text-white hover:bg-primary/90 disabled:opacity-60">حفظ التوقيع</button>
+        <button id="sig-cancel" type="button" class="rounded-md border px-4 py-2 font-medium hover:bg-gray-50">إلغاء</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- View dialog -->
+  <dialog id="sig-view-dialog" class="w-[min(30rem,calc(100vw-1.5rem))] rounded-lg bg-white p-0 text-right shadow-2xl backdrop:bg-black/50" aria-labelledby="sig-view-title">
+    <div class="space-y-4 p-5 sm:p-6">
+      <div class="flex items-start justify-between gap-3">
+        <h2 id="sig-view-title" class="text-lg font-bold">التوقيع</h2>
+        <button id="sig-view-close" type="button" class="rounded-md p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-900" aria-label="إغلاق">
+          <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+        </button>
+      </div>
+      <div class="checkerboard flex h-44 items-center justify-center overflow-hidden rounded-md border">
+        <img id="sig-view-img" alt="" class="hidden max-h-40 max-w-[90%] object-contain" />
+        <span id="sig-view-status" class="text-sm text-gray-500">جاري التحميل…</span>
+      </div>
+      <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+        <dt class="text-gray-500">الاسم</dt><dd id="sig-view-name">—</dd>
+        <dt class="text-gray-500">الصفة</dt><dd id="sig-view-role">—</dd>
+        <dt class="text-gray-500">آخر تحديث</dt><dd id="sig-view-updated">—</dd>
+      </dl>
+      <div class="flex justify-end gap-2">
+        <button id="sig-view-edit" type="button" class="rounded-md border px-4 py-2 text-sm font-medium hover:bg-gray-50">استبدال</button>
+        <button id="sig-view-ok" type="button" class="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90">إغلاق</button>
+      </div>
+    </div>
+  </dialog>
+</MainLayout>
+
+<style>
+  .checkerboard {
+    background-color: #fff;
+    background-image:
+      linear-gradient(45deg, #f1f5f9 25%, transparent 25%),
+      linear-gradient(-45deg, #f1f5f9 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #f1f5f9 75%),
+      linear-gradient(-45deg, transparent 75%, #f1f5f9 75%);
+    background-size: 16px 16px;
+    background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+  }
+  .sig-tab[aria-selected='true'] {
+    background: #fff;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
+    color: #0f172a;
+  }
+  .sig-tab[aria-selected='false'] {
+    color: #475569;
+  }
+  .ink-btn[aria-pressed='true'] {
+    --tw-ring-color: #0891b2;
+  }
+</style>
+
+<script>
+  import {
+    api,
+    escapeHtml,
+    loadFinanceContext,
+    formatDate,
+    toast,
+    withBusy,
+    byId,
+    type FinanceContextPayload,
+  } from '@/lib/finance/client';
+
+  // ------------------------------------------------------------------------
+  // Types
+  // ------------------------------------------------------------------------
+
+  interface OrgProfile {
+    companyNameAr: string;
+    companyNameEn: string;
+    crNumber: string;
+    vatNumber: string;
+    address: string;
+    phone: string;
+    email: string;
+    logoImage: string | null;
+    stampImage: string | null;
+    currency: string;
+    vatRate: number;
+    documentFooter: string;
+  }
+
+  interface Signature {
+    userId: string;
+    image: string;
+    signerName: string | null;
+    signerTitle: string | null;
+    updatedAt: string;
+  }
+
+  interface SigUser {
+    id: string;
+    username: string;
+    fullName: string | null;
+    displayName: string;
+    roleName: string | null;
+    roleNameAr: string | null;
+    branchId: string | null;
+    branchName: string | null;
+  }
+
+  interface SigUserRow extends SigUser {
+    hasSignature: boolean;
+    signerName: string | null;
+    signerTitle: string | null;
+    updatedAt: string | null;
+  }
+
+  /** Same limit as the server (≈ 450 KB of image data). */
+  const MAX_DATA_URL = 600_000;
+
+  // ------------------------------------------------------------------------
+  // Image processing (logo / stamp / uploaded signature)
+  // ------------------------------------------------------------------------
+
+  function normalizeDigits(value: string): string {
+    return value
+      .replace(/[٠-٩]/g, d => String(d.charCodeAt(0) - 0x0660))
+      .replace(/[۰-۹]/g, d => String(d.charCodeAt(0) - 0x06f0));
+  }
+
+  async function loadImageFile(file: File): Promise<{ img: HTMLImageElement; release: () => void }> {
+    if (!/^image\/(png|jpeg|webp|gif|bmp)$/.test(file.type)) {
+      throw new Error('صيغة الملف غير مدعومة — اختر صورة PNG أو JPG أو WebP');
+    }
+    if (file.size > 15 * 1024 * 1024) throw new Error('حجم الملف كبير جداً (الحد الأقصى 15 ميجابايت)');
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.decoding = 'async';
+    img.src = url;
+    try {
+      await img.decode();
+    } catch {
+      URL.revokeObjectURL(url);
+      throw new Error('تعذر قراءة الصورة — قد يكون الملف تالفاً');
+    }
+    if (!img.naturalWidth || !img.naturalHeight) {
+      URL.revokeObjectURL(url);
+      throw new Error('تعذر قراءة أبعاد الصورة');
+    }
+    return { img, release: () => URL.revokeObjectURL(url) };
+  }
+
+  function context2d(canvas: HTMLCanvasElement): CanvasRenderingContext2D {
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) throw new Error('المتصفح لا يدعم معالجة الصور');
+    return ctx;
+  }
+
+  function newCanvas(width: number, height: number): HTMLCanvasElement {
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(width));
+    canvas.height = Math.max(1, Math.round(height));
+    return canvas;
+  }
+
+  /** Draws `source` scaled to fit `maxSize`, halving step by step for a smooth downscale. */
+  function drawScaled(source: CanvasImageSource, width: number, height: number, maxSize: number): HTMLCanvasElement {
+    const scale = Math.min(1, maxSize / Math.max(width, height));
+    const targetW = Math.max(1, Math.round(width * scale));
+    const targetH = Math.max(1, Math.round(height * scale));
+    let current: CanvasImageSource = source;
+    let w = width;
+    let h = height;
+    while (w / 2 >= targetW && h / 2 >= targetH) {
+      const step = newCanvas(w / 2, h / 2);
+      const ctx = context2d(step);
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(current, 0, 0, step.width, step.height);
+      current = step;
+      w = step.width;
+      h = step.height;
+    }
+    const out = newCanvas(targetW, targetH);
+    const ctx = context2d(out);
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(current, 0, 0, targetW, targetH);
+    return out;
+  }
+
+  /**
+   * Makes the (near-)white paper transparent. The paper brightness is
+   * estimated from the image border, so photos of slightly grey paper work
+   * too; coloured ink (blue/red stamps) is kept.
+   */
+  function removeWhiteBackground(canvas: HTMLCanvasElement): void {
+    const ctx = context2d(canvas);
+    const { width, height } = canvas;
+    const image = ctx.getImageData(0, 0, width, height);
+    const px = image.data;
+    const lum = (i: number) => 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
+
+    const border: number[] = [];
+    const sample = (x: number, y: number) => {
+      const i = (y * width + x) * 4;
+      if (px[i + 3] > 200) border.push(lum(i));
+    };
+    const stepX = Math.max(1, Math.floor(width / 60));
+    const stepY = Math.max(1, Math.floor(height / 60));
+    for (let x = 0; x < width; x += stepX) { sample(x, 0); sample(x, height - 1); }
+    for (let y = 0; y < height; y += stepY) { sample(0, y); sample(width - 1, y); }
+    border.sort((a, b) => a - b);
+    const paper = border.length ? border[Math.floor(border.length * 0.6)] : 255;
+
+    const high = Math.min(245, Math.max(150, paper - 14));
+    const low = high - 50;
+    for (let i = 0; i < px.length; i += 4) {
+      const max = Math.max(px[i], px[i + 1], px[i + 2]);
+      const min = Math.min(px[i], px[i + 1], px[i + 2]);
+      if (max - min > 70) continue; // saturated ink colour: keep
+      const l = lum(i);
+      if (l >= high) px[i + 3] = 0;
+      else if (l > low) px[i + 3] = Math.round(px[i + 3] * ((high - l) / (high - low)));
+    }
+    ctx.putImageData(image, 0, 0);
+  }
+
+  /** Crops transparent margins (keeps `pad` pixels); null when the canvas is empty. */
+  function trimCanvas(canvas: HTMLCanvasElement, pad: number): HTMLCanvasElement | null {
+    const { width, height } = canvas;
+    const data = context2d(canvas).getImageData(0, 0, width, height).data;
+    let top = height, left = width, right = -1, bottom = -1;
+    for (let y = 0; y < height; y++) {
+      const row = y * width * 4;
+      for (let x = 0; x < width; x++) {
+        if (data[row + x * 4 + 3] > 10) {
+          if (x < left) left = x;
+          if (x > right) right = x;
+          if (y < top) top = y;
+          bottom = y;
+        }
+      }
+    }
+    if (right < 0) return null;
+    left = Math.max(0, left - pad);
+    top = Math.max(0, top - pad);
+    right = Math.min(width - 1, right + pad);
+    bottom = Math.min(height - 1, bottom + pad);
+    const out = newCanvas(right - left + 1, bottom - top + 1);
+    context2d(out).drawImage(canvas, left, top, out.width, out.height, 0, 0, out.width, out.height);
+    return out;
+  }
+
+  function toJpeg(canvas: HTMLCanvasElement, quality: number): string {
+    const flat = newCanvas(canvas.width, canvas.height);
+    const ctx = context2d(flat);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, flat.width, flat.height);
+    ctx.drawImage(canvas, 0, 0);
+    return flat.toDataURL('image/jpeg', quality);
+  }
+
+  interface ProcessOptions {
+    maxSize: number;
+    removeWhite: boolean;
+    trim: boolean;
+    jpegFallback: boolean;
+  }
+
+  /** File → PNG (or JPEG for logos) data URL that fits the server limit. */
+  async function processImageFile(file: File, options: ProcessOptions): Promise<string> {
+    const { img, release } = await loadImageFile(file);
+    try {
+      const sizes = [1, 0.8, 0.6, 0.45].map(f => Math.round(options.maxSize * f));
+      for (const size of sizes) {
+        let canvas = drawScaled(img, img.naturalWidth, img.naturalHeight, size);
+        if (options.removeWhite) removeWhiteBackground(canvas);
+        if (options.trim) {
+          const trimmed = trimCanvas(canvas, 6);
+          if (!trimmed) throw new Error('الصورة فارغة بعد إزالة الخلفية — جرّب إلغاء خيار إزالة الخلفية');
+          canvas = trimmed;
+        }
+        const png = canvas.toDataURL('image/png');
+        if (png.length <= MAX_DATA_URL) return png;
+        if (options.jpegFallback) {
+          for (const quality of [0.9, 0.8]) {
+            const jpeg = toJpeg(canvas, quality);
+            if (jpeg.length <= MAX_DATA_URL) return jpeg;
+          }
+        }
+      }
+      throw new Error('حجم الصورة كبير جداً حتى بعد التصغير (الحد الأقصى 450 كيلوبايت)');
+    } finally {
+      release();
+    }
+  }
+
+  // ------------------------------------------------------------------------
+  // Signature pad (pointer events: mouse, touch, pen; high-DPI aware)
+  // ------------------------------------------------------------------------
+
+  interface InkPoint { x: number; y: number; w: number; t: number }
+
+  const BASE_WIDTH = 2.6;
+  const mid = (a: InkPoint, b: InkPoint) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+
+  function drawStroke(ctx: CanvasRenderingContext2D, pts: InkPoint[], from = 0, finished = true): void {
+    const n = pts.length;
+    if (n === 0) return;
+    if (n === 1) {
+      if (!finished) return;
+      ctx.beginPath();
+      ctx.arc(pts[0].x, pts[0].y, pts[0].w / 2, 0, Math.PI * 2);
+      ctx.fill();
+      return;
+    }
+    const segment = (draw: () => void, width: number) => {
+      ctx.beginPath();
+      ctx.lineWidth = width;
+      draw();
+      ctx.stroke();
+    };
+    // Segments are numbered by the point that closes them: k = 1 … n-1, plus the tail.
+    for (let k = Math.max(1, from); k < n; k++) {
+      if (k === 1) {
+        const m = mid(pts[0], pts[1]);
+        segment(() => { ctx.moveTo(pts[0].x, pts[0].y); ctx.lineTo(m.x, m.y); }, pts[0].w);
+      } else {
+        const a = mid(pts[k - 2], pts[k - 1]);
+        const b = mid(pts[k - 1], pts[k]);
+        segment(() => { ctx.moveTo(a.x, a.y); ctx.quadraticCurveTo(pts[k - 1].x, pts[k - 1].y, b.x, b.y); }, pts[k - 1].w);
+      }
+    }
+    if (finished) {
+      const m = mid(pts[n - 2], pts[n - 1]);
+      segment(() => { ctx.moveTo(m.x, m.y); ctx.lineTo(pts[n - 1].x, pts[n - 1].y); }, pts[n - 1].w);
+    }
+  }
+
+  class SignaturePad {
+    private ctx: CanvasRenderingContext2D;
+    private strokes: InkPoint[][] = [];
+    private current: InkPoint[] | null = null;
+    private pointerId: number | null = null;
+    private dpr = 1;
+    private cssWidth = 0;
+    private cssHeight = 0;
+    color = '#1e3a8a';
+    onChange: () => void = () => {};
+
+    constructor(private canvas: HTMLCanvasElement) {
+      // A plain (GPU) context: willReadFrequently would slow down live drawing.
+      const context = canvas.getContext('2d');
+      if (!context) throw new Error('canvas 2d unsupported');
+      this.ctx = context;
+      canvas.addEventListener('pointerdown', e => this.down(e));
+      canvas.addEventListener('pointermove', e => this.move(e));
+      canvas.addEventListener('pointerup', e => this.up(e));
+      canvas.addEventListener('pointercancel', e => this.up(e));
+      canvas.addEventListener('contextmenu', e => e.preventDefault());
+      if ('ResizeObserver' in window) new ResizeObserver(() => this.resize()).observe(canvas);
+      window.addEventListener('resize', () => this.resize());
+    }
+
+    get isEmpty(): boolean {
+      return this.strokes.length === 0 && !this.current;
+    }
+
+    resize(): void {
+      const rect = this.canvas.getBoundingClientRect();
+      if (rect.width < 1 || rect.height < 1) return; // hidden
+      const dpr = Math.min(window.devicePixelRatio || 1, 3);
+      if (rect.width === this.cssWidth && rect.height === this.cssHeight && dpr === this.dpr) return;
+      this.cssWidth = rect.width;
+      this.cssHeight = rect.height;
+      this.dpr = dpr;
+      this.canvas.width = Math.round(rect.width * dpr);
+      this.canvas.height = Math.round(rect.height * dpr);
+      this.redraw();
+    }
+
+    private style(ctx: CanvasRenderingContext2D): void {
+      ctx.strokeStyle = this.color;
+      ctx.fillStyle = this.color;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+    }
+
+    redraw(): void {
+      const { ctx } = this;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+      ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+      this.style(ctx);
+      for (const stroke of this.strokes) drawStroke(ctx, stroke);
+      if (this.current) drawStroke(ctx, this.current, 1, false);
+    }
+
+    private point(e: PointerEvent, previous?: InkPoint): InkPoint {
+      const rect = this.canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const t = e.timeStamp;
+      let w: number;
+      if (e.pointerType === 'pen' && e.pressure > 0) {
+        w = BASE_WIDTH * (0.45 + e.pressure * 1.1);
+      } else if (previous) {
+        const v = Math.hypot(x - previous.x, y - previous.y) / Math.max(t - previous.t, 1);
+        w = Math.min(BASE_WIDTH * 1.3, Math.max(BASE_WIDTH * 0.5, BASE_WIDTH * 1.3 - v * 0.9));
+      } else {
+        w = BASE_WIDTH;
+      }
+      if (previous) w = previous.w * 0.6 + w * 0.4;
+      return { x, y, w, t };
+    }
+
+    private down(e: PointerEvent): void {
+      if (this.pointerId !== null) return;
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      e.preventDefault();
+      this.resize();
+      this.pointerId = e.pointerId;
+      try { this.canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+      this.current = [this.point(e)];
+      this.onChange();
+    }
+
+    private move(e: PointerEvent): void {
+      if (e.pointerId !== this.pointerId || !this.current) return;
+      e.preventDefault();
+      const events = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : [];
+      for (const ev of events.length ? events : [e]) {
+        const last = this.current[this.current.length - 1];
+        const p = this.point(ev, last);
+        if (Math.hypot(p.x - last.x, p.y - last.y) < 0.8) continue;
+        this.current.push(p);
+        this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+        this.style(this.ctx);
+        drawStroke(this.ctx, this.current, this.current.length - 1, false);
+      }
+    }
+
+    private up(e: PointerEvent): void {
+      if (e.pointerId !== this.pointerId || !this.current) return;
+      const stroke = this.current;
+      this.current = null;
+      this.pointerId = null;
+      try { this.canvas.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+      this.strokes.push(stroke);
+      this.redraw();
+      this.onChange();
+    }
+
+    undo(): void {
+      this.strokes.pop();
+      this.redraw();
+      this.onChange();
+    }
+
+    clear(): void {
+      this.strokes = [];
+      this.current = null;
+      this.pointerId = null;
+      this.redraw();
+      this.onChange();
+    }
+
+    setColor(color: string): void {
+      this.color = color;
+      this.redraw();
+    }
+
+    /** Transparent PNG of the strokes, re-rendered at 2× and trimmed to the ink. */
+    toDataUrl(): string | null {
+      if (this.isEmpty || this.cssWidth < 1) return null;
+      const scale = 2;
+      const canvas = newCanvas(this.cssWidth * scale, this.cssHeight * scale);
+      const ctx = context2d(canvas);
+      ctx.setTransform(scale, 0, 0, scale, 0, 0);
+      this.style(ctx);
+      for (const stroke of this.strokes) drawStroke(ctx, stroke);
+      const trimmed = trimCanvas(canvas, 12);
+      if (!trimmed) return null;
+      const fit = Math.min(1, 640 / trimmed.width, 260 / trimmed.height);
+      const out = fit < 1 ? drawScaled(trimmed, trimmed.width, trimmed.height, Math.max(trimmed.width, trimmed.height) * fit) : trimmed;
+      const url = out.toDataURL('image/png');
+      return url.length <= MAX_DATA_URL ? url : null;
+    }
+  }
+
+  // ------------------------------------------------------------------------
+  // Page state
+  // ------------------------------------------------------------------------
+
+  let ctx: FinanceContextPayload | null = null;
+  let profile: OrgProfile | null = null;
+  let canEdit = false;
+  /** A stamp exists even when its image is not sent to this user. */
+  let hasStamp = false;
+  let orgDirty = false;
+  /** undefined = unchanged, string = new image, null = remove on save. */
+  const pending: { logoImage?: string | null; stampImage?: string | null } = {};
+  let stampSource: File | null = null;
+  let mySignature: Signature | null = null;
+  let myUser: SigUser | null = null;
+  let users: SigUserRow[] = [];
+
+  const ORG_FIELDS: Array<[keyof OrgProfile, string]> = [
+    ['companyNameAr', 'org-name-ar'],
+    ['companyNameEn', 'org-name-en'],
+    ['crNumber', 'org-cr'],
+    ['vatNumber', 'org-vat'],
+    ['phone', 'org-phone'],
+    ['email', 'org-email'],
+    ['address', 'org-address'],
+    ['currency', 'org-currency'],
+    ['vatRate', 'org-vat-rate'],
+    ['documentFooter', 'org-footer'],
+  ];
+
+  function errorMessage(error: unknown): string {
+    return error instanceof Error && error.message ? error.message : 'حدث خطأ غير متوقع';
+  }
+
+  function show(el: HTMLElement, visible: boolean): void {
+    el.classList.toggle('hidden', !visible);
+  }
+
+  function setStatus(el: HTMLElement, message: string, kind: 'error' | 'info' = 'error'): void {
+    el.textContent = message;
+    el.className = `mt-4 text-sm ${kind === 'error' ? 'text-red-700' : 'text-gray-600'}`;
+    show(el, Boolean(message));
+  }
+
+  function setImagePreview(img: HTMLImageElement, empty: HTMLElement, src: string | null): void {
+    if (src) {
+      img.src = src;
+      show(img, true);
+      show(empty, false);
+    } else {
+      img.removeAttribute('src');
+      show(img, false);
+      show(empty, true);
+    }
+  }
+
+  // ------------------------------------------------------------------------
+  // 1. Organization
+  // ------------------------------------------------------------------------
+
+  function orgInput(id: string) {
+    return byId<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(id);
+  }
+
+  function updateFooterCount(): void {
+    byId('org-footer-count').textContent = `${orgInput('org-footer').value.length}/300`;
+  }
+
+  function markDirty(dirty: boolean): void {
+    orgDirty = dirty;
+    show(byId('org-dirty-badge'), dirty && canEdit);
+  }
+
+  function renderImages(): void {
+    if (!profile) return;
+    const logo = pending.logoImage !== undefined ? pending.logoImage : profile.logoImage;
+    const stamp = pending.stampImage !== undefined ? pending.stampImage : profile.stampImage;
+    setImagePreview(byId<HTMLImageElement>('logo-preview'), byId('logo-empty'), logo);
+    setImagePreview(byId<HTMLImageElement>('stamp-preview'), byId('stamp-empty'), stamp);
+    byId('stamp-empty').textContent = !stamp && hasStamp && pending.stampImage === undefined
+      ? 'تم رفع ختم المنشأة — يظهر على المستندات بعد اعتمادها'
+      : 'لم يُرفع ختم — يُستخدم ختم نصي تلقائي';
+    const label = (value: string | null | undefined) =>
+      value === undefined ? '' : value === null ? 'ستُزال عند الحفظ' : 'صورة جديدة — لم تُحفظ بعد';
+    byId('logo-state').textContent = label(pending.logoImage);
+    byId('stamp-state').textContent = label(pending.stampImage);
+    byId<HTMLButtonElement>('logo-remove').disabled = !logo;
+    byId<HTMLButtonElement>('stamp-remove').disabled = !stamp;
+    show(byId('logo-remove'), Boolean(logo));
+    show(byId('stamp-remove'), Boolean(stamp));
+  }
+
+  function fillOrgForm(): void {
+    if (!profile) return;
+    for (const [key, id] of ORG_FIELDS) {
+      const value = profile[key];
+      orgInput(id).value = value === null || value === undefined ? '' : String(value);
+    }
+    delete pending.logoImage;
+    delete pending.stampImage;
+    stampSource = null;
+    updateFooterCount();
+    renderImages();
+    markDirty(false);
+  }
+
+  function applyOrgPermissions(): void {
+    const form = byId<HTMLFormElement>('org-form');
+    form.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>('input, select, textarea').forEach(el => {
+      el.disabled = !canEdit;
+    });
+    form.querySelectorAll<HTMLElement>('.org-edit').forEach(el => show(el, canEdit));
+    show(byId('org-actions'), canEdit);
+    show(byId('org-readonly-badge'), !canEdit);
+  }
+
+  async function loadOrganization(): Promise<void> {
+    const res = await api<{ profile: OrgProfile; canEdit: boolean; hasStamp?: boolean }>('/api/settings/organization');
+    profile = res.profile;
+    canEdit = res.canEdit === true;
+    hasStamp = res.hasStamp === true || Boolean(res.profile.stampImage);
+    fillOrgForm();
+    applyOrgPermissions();
+    show(byId('org-section'), true);
+  }
+
+  function collectOrgBody(): Record<string, unknown> | string {
+    const value = (id: string) => orgInput(id).value.trim();
+    const crNumber = normalizeDigits(value('org-cr')).replace(/\s+/g, '');
+    const vatNumber = normalizeDigits(value('org-vat')).replace(/\s+/g, '');
+    const vatRateText = normalizeDigits(value('org-vat-rate'));
+    if (crNumber && !/^\d{1,20}$/.test(crNumber)) return 'رقم السجل التجاري يجب أن يتكون من أرقام فقط';
+    if (vatNumber && !/^\d{15}$/.test(vatNumber)) return 'الرقم الضريبي يجب أن يتكون من 15 رقماً';
+    if (!/^\d+(\.\d{1,2})?$/.test(vatRateText) || Number(vatRateText) > 100) return 'نسبة الضريبة يجب أن تكون رقماً بين 0 و 100';
+    const email = value('org-email');
+    if (email && !orgInput('org-email').checkValidity()) return 'البريد الإلكتروني غير صالح';
+
+    const body: Record<string, unknown> = {
+      companyNameAr: value('org-name-ar'),
+      companyNameEn: value('org-name-en'),
+      crNumber,
+      vatNumber,
+      phone: normalizeDigits(value('org-phone')),
+      email,
+      address: value('org-address'),
+      currency: value('org-currency'),
+      vatRate: vatRateText,
+      documentFooter: value('org-footer'),
+    };
+    if (pending.logoImage !== undefined) body.logoImage = pending.logoImage;
+    if (pending.stampImage !== undefined) body.stampImage = pending.stampImage;
+    return body;
+  }
+
+  async function saveOrganization(): Promise<void> {
+    const body = collectOrgBody();
+    if (typeof body === 'string') {
+      toast(body, 'error');
+      return;
+    }
+    await withBusy(byId<HTMLButtonElement>('org-save'), 'جاري الحفظ…', async () => {
+      try {
+        const res = await api<{ profile: OrgProfile; warnings?: string[] }>('/api/settings/organization', { body });
+        profile = res.profile;
+        hasStamp = Boolean(res.profile.stampImage);
+        fillOrgForm();
+        toast('تم حفظ بيانات المنشأة');
+        for (const warning of res.warnings ?? []) toast(warning, 'info');
+      } catch (error) {
+        toast(errorMessage(error), 'error');
+      }
+    });
+  }
+
+  async function pickOrgImage(kind: 'logo' | 'stamp', file: File): Promise<void> {
+    const button = byId<HTMLButtonElement>(`${kind}-pick`);
+    await withBusy(button, 'جاري المعالجة…', async () => {
+      try {
+        const removeWhite = kind === 'stamp' && byId<HTMLInputElement>('stamp-remove-white').checked;
+        const dataUrl = await processImageFile(file, {
+          maxSize: 500,
+          removeWhite,
+          trim: kind === 'stamp',
+          jpegFallback: kind === 'logo',
+        });
+        if (kind === 'logo') pending.logoImage = dataUrl;
+        else {
+          pending.stampImage = dataUrl;
+          stampSource = file;
+        }
+        renderImages();
+        markDirty(true);
+      } catch (error) {
+        toast(errorMessage(error), 'error');
+      }
+    });
+  }
+
+  function bindOrganization(): void {
+    const form = byId<HTMLFormElement>('org-form');
+    form.addEventListener('submit', event => {
+      event.preventDefault();
+      if (canEdit) void saveOrganization();
+    });
+    form.addEventListener('input', event => {
+      const target = event.target as HTMLElement;
+      if (target.id === 'stamp-remove-white' || (target as HTMLInputElement).type === 'file') return;
+      if (target.id === 'org-footer') updateFooterCount();
+      markDirty(true);
+    });
+    byId('org-currency').addEventListener('change', () => markDirty(true));
+    byId('org-reset').addEventListener('click', () => {
+      if (orgDirty && !confirm('تجاهل جميع التغييرات غير المحفوظة؟')) return;
+      fillOrgForm();
+    });
+
+    for (const kind of ['logo', 'stamp'] as const) {
+      const input = byId<HTMLInputElement>(`${kind}-file`);
+      byId(`${kind}-pick`).addEventListener('click', () => input.click());
+      input.addEventListener('change', () => {
+        const file = input.files?.[0];
+        input.value = '';
+        if (file) void pickOrgImage(kind, file);
+      });
+      byId(`${kind}-remove`).addEventListener('click', () => {
+        if (kind === 'logo') pending.logoImage = profile?.logoImage ? null : undefined;
+        else {
+          pending.stampImage = profile?.stampImage ? null : undefined;
+          stampSource = null;
+        }
+        renderImages();
+        markDirty(true);
+      });
+    }
+    byId<HTMLInputElement>('stamp-remove-white').addEventListener('change', () => {
+      if (stampSource) void pickOrgImage('stamp', stampSource);
+    });
+
+    window.addEventListener('beforeunload', event => {
+      if (orgDirty && canEdit) {
+        event.preventDefault();
+        event.returnValue = '';
+      }
+    });
+  }
+
+  // ------------------------------------------------------------------------
+  // 2. My signature
+  // ------------------------------------------------------------------------
+
+  function renderMySignature(): void {
+    setImagePreview(byId<HTMLImageElement>('my-sig-img'), byId('my-sig-empty'), mySignature?.image ?? null);
+    byId('my-sig-name').textContent = mySignature?.signerName || myUser?.displayName || '—';
+    byId('my-sig-title-text').textContent = mySignature?.signerTitle || '—';
+    byId('my-sig-updated').textContent = mySignature ? formatDate(mySignature.updatedAt, true) : '—';
+    byId('my-sig-edit').textContent = mySignature ? 'تغيير التوقيع' : 'إضافة توقيع';
+    show(byId('my-sig-delete'), Boolean(mySignature));
+  }
+
+  async function loadMySignature(): Promise<void> {
+    const res = await api<{ signature: Signature | null; user: SigUser }>('/api/settings/signature');
+    mySignature = res.signature;
+    myUser = res.user;
+    renderMySignature();
+    show(byId('my-signature-section'), true);
+  }
+
+  // ------------------------------------------------------------------------
+  // 3. Users' signatures (manager)
+  // ------------------------------------------------------------------------
+
+  function renderUsers(): void {
+    const body = byId('users-sig-body');
+    const term = byId<HTMLInputElement>('users-sig-search').value.trim().toLowerCase();
+    const filter = byId<HTMLSelectElement>('users-sig-filter').value;
+    const rows = users.filter(u => {
+      if (filter === 'missing' && u.hasSignature) return false;
+      if (filter === 'present' && !u.hasSignature) return false;
+      if (!term) return true;
+      return [u.displayName, u.username, u.branchName, u.roleNameAr, u.signerTitle]
+        .some(v => typeof v === 'string' && v.toLowerCase().includes(term));
+    });
+
+    const withSignature = users.filter(u => u.hasSignature).length;
+    byId('users-sig-summary').textContent = `${withSignature} من ${users.length} مستخدمين لديهم توقيع`;
+
+    if (rows.length === 0) {
+      body.innerHTML = `<tr><td colspan="7" class="px-4 py-8 text-center text-gray-500">${
+        users.length ? 'لا توجد نتائج مطابقة' : 'لا يوجد مستخدمون نشطون'
+      }</td></tr>`;
+      return;
+    }
+
+    body.innerHTML = rows.map(u => {
+      const id = escapeHtml(u.id);
+      const isMe = u.id === ctx?.user.id;
+      const badge = u.hasSignature
+        ? '<span class="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800"><span aria-hidden="true">✔</span> مسجّل</span>'
+        : '<span class="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-medium text-red-700"><span aria-hidden="true">✖</span> لا يوجد</span>';
+      const actions = [
+        `<button type="button" data-action="edit" data-id="${id}" class="rounded-md border px-2.5 py-1 text-xs font-medium hover:bg-gray-50">${u.hasSignature ? 'استبدال' : 'إضافة توقيع'}</button>`,
+        u.hasSignature ? `<button type="button" data-action="view" data-id="${id}" class="rounded-md border px-2.5 py-1 text-xs font-medium hover:bg-gray-50">عرض</button>` : '',
+        u.hasSignature ? `<button type="button" data-action="delete" data-id="${id}" class="rounded-md border border-red-200 px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-50">حذف</button>` : '',
+      ].join('');
+      return `<tr class="border-b last:border-0 hover:bg-gray-50/60">
+        <td class="px-4 py-3">
+          <div class="font-medium">${escapeHtml(u.displayName)}${isMe ? ' <span class="text-xs text-gray-500">(أنت)</span>' : ''}</div>
+          <div class="text-xs text-gray-500" dir="ltr">${escapeHtml(u.username)}</div>
+        </td>
+        <td class="px-4 py-3">${escapeHtml(u.roleNameAr || u.roleName || '—')}</td>
+        <td class="px-4 py-3">${escapeHtml(u.branchName || 'جميع الفروع')}</td>
+        <td class="px-4 py-3 text-center">${badge}</td>
+        <td class="px-4 py-3">${escapeHtml(u.signerTitle || '—')}</td>
+        <td class="px-4 py-3 whitespace-nowrap">${u.updatedAt ? escapeHtml(formatDate(u.updatedAt, true)) : '—'}</td>
+        <td class="px-4 py-3"><div class="flex flex-wrap gap-1.5">${actions}</div></td>
+      </tr>`;
+    }).join('');
+  }
+
+  async function loadUsers(): Promise<void> {
+    const body = byId('users-sig-body');
+    try {
+      const res = await api<{ users: SigUserRow[] }>('/api/settings/signature?all=1');
+      users = Array.isArray(res.users) ? res.users : [];
+      renderUsers();
+    } catch (error) {
+      users = [];
+      byId('users-sig-summary').textContent = '';
+      body.innerHTML = `<tr><td colspan="7" class="px-4 py-8 text-center text-red-700">${escapeHtml(errorMessage(error))}
+        <button type="button" data-action="reload" class="mr-2 rounded-md border px-2.5 py-1 text-xs font-medium text-gray-800 hover:bg-gray-50">إعادة المحاولة</button></td></tr>`;
+    }
+  }
+
+  async function deleteSignature(target: { id: string; name: string }, button: HTMLButtonElement | null): Promise<void> {
+    const isMe = target.id === ctx?.user.id;
+    const question = isMe
+      ? 'حذف توقيعك؟ لن يظهر على المستندات المطبوعة بعد ذلك.'
+      : `حذف توقيع «${target.name}»؟ لن يظهر توقيعه على المستندات المطبوعة بعد ذلك.`;
+    if (!confirm(question)) return;
+    await withBusy(button, 'جاري الحذف…', async () => {
+      try {
+        await api('/api/settings/signature', { method: 'DELETE', body: isMe ? {} : { userId: target.id } });
+        toast('تم حذف التوقيع');
+        await afterSignatureChange(target.id);
+      } catch (error) {
+        toast(errorMessage(error), 'error');
+      }
+    });
+  }
+
+  async function afterSignatureChange(userId: string): Promise<void> {
+    const tasks: Promise<void>[] = [];
+    if (userId === ctx?.user.id) tasks.push(loadMySignature().catch(error => toast(errorMessage(error), 'error')));
+    if (ctx?.permissions.canApproveFinance) tasks.push(loadUsers());
+    await Promise.all(tasks);
+  }
+
+  // ------------------------------------------------------------------------
+  // Signature editor dialog
+  // ------------------------------------------------------------------------
+
+  const editor = {
+    target: null as null | { id: string; name: string; existing: Signature | null },
+    tab: 'draw' as 'draw' | 'upload',
+    uploadImage: null as string | null,
+    uploadFile: null as File | null,
+    saving: false,
+  };
+  let pad: SignaturePad | null = null;
+
+  function updatePadControls(): void {
+    const empty = !pad || pad.isEmpty;
+    byId<HTMLButtonElement>('sig-undo').disabled = empty;
+    byId<HTMLButtonElement>('sig-clear').disabled = empty;
+    show(byId('sig-pad-hint'), empty);
+  }
+
+  function selectTab(tab: 'draw' | 'upload', focus = false): void {
+    editor.tab = tab;
+    for (const name of ['draw', 'upload'] as const) {
+      const button = byId<HTMLButtonElement>(`sig-tab-${name}`);
+      const selected = name === tab;
+      button.setAttribute('aria-selected', String(selected));
+      button.tabIndex = selected ? 0 : -1;
+      show(byId(`sig-panel-${name}`), selected);
+      if (selected && focus) button.focus();
+    }
+    if (tab === 'draw') requestAnimationFrame(() => pad?.resize());
+  }
+
+  async function openEditor(userId: string): Promise<void> {
+    let existing: Signature | null = null;
+    let name = '';
+    if (userId === ctx?.user.id) {
+      existing = mySignature;
+      name = myUser?.displayName ?? ctx?.user.displayName ?? '';
+    } else {
+      const row = users.find(u => u.id === userId);
+      name = row?.displayName ?? '';
+      try {
+        const res = await api<{ signature: Signature | null; user: SigUser }>(`/api/settings/signature?userId=${encodeURIComponent(userId)}`);
+        existing = res.signature;
+        name = res.user.displayName;
+      } catch (error) {
+        toast(errorMessage(error), 'error');
+        return;
+      }
+    }
+
+    editor.target = { id: userId, name, existing };
+    editor.uploadImage = null;
+    editor.uploadFile = null;
+    const isMe = userId === ctx?.user.id;
+    byId('sig-dialog-title').textContent = isMe ? 'توقيعي' : `توقيع: ${name}`;
+    byId('sig-dialog-subtitle').textContent = isMe
+      ? 'ارسم توقيعك أو ارفع صورة له. يُحفظ بخلفية شفافة.'
+      : 'تسجيل توقيع هذا المستخدم ليظهر على المستندات التي يعدّها أو يستلمها.';
+    const current = byId('sig-current');
+    if (existing) {
+      byId<HTMLImageElement>('sig-current-img').src = existing.image;
+      current.classList.remove('hidden');
+      current.classList.add('flex');
+    } else {
+      current.classList.add('hidden');
+      current.classList.remove('flex');
+    }
+    byId<HTMLInputElement>('sig-title-input').value = existing?.signerTitle ?? '';
+    const nameInput = byId<HTMLInputElement>('sig-name-input');
+    nameInput.value = existing?.signerName ?? '';
+    nameInput.placeholder = name;
+    setImagePreview(byId<HTMLImageElement>('sig-upload-preview'), byId('sig-upload-empty'), null);
+    byId<HTMLButtonElement>('sig-save').textContent = existing ? 'حفظ التغييرات' : 'حفظ التوقيع';
+
+    const dialog = byId<HTMLDialogElement>('sig-dialog');
+    if (!dialog.open) dialog.showModal();
+    pad?.clear();
+    selectTab('draw');
+    requestAnimationFrame(() => pad?.resize());
+  }
+
+  function closeEditor(): void {
+    if (editor.saving) return;
+    const dialog = byId<HTMLDialogElement>('sig-dialog');
+    if (dialog.open) dialog.close();
+  }
+
+  function editorHasUnsavedInk(): boolean {
+    return Boolean((pad && !pad.isEmpty) || editor.uploadImage);
+  }
+
+  async function processUpload(): Promise<void> {
+    const file = editor.uploadFile;
+    if (!file) return;
+    await withBusy(byId<HTMLButtonElement>('sig-upload-pick'), 'جاري المعالجة…', async () => {
+      try {
+        editor.uploadImage = await processImageFile(file, {
+          maxSize: 600,
+          removeWhite: byId<HTMLInputElement>('sig-upload-remove-white').checked,
+          trim: true,
+          jpegFallback: false,
+        });
+        setImagePreview(byId<HTMLImageElement>('sig-upload-preview'), byId('sig-upload-empty'), editor.uploadImage);
+      } catch (error) {
+        editor.uploadImage = null;
+        setImagePreview(byId<HTMLImageElement>('sig-upload-preview'), byId('sig-upload-empty'), null);
+        toast(errorMessage(error), 'error');
+      }
+    });
+  }
+
+  async function saveEditor(): Promise<void> {
+    const target = editor.target;
+    if (!target) return;
+    let image: string | null = null;
+    if (editor.tab === 'draw') {
+      if (pad && !pad.isEmpty) {
+        image = pad.toDataUrl();
+        if (!image) {
+          toast('تعذر تجهيز صورة التوقيع — امسح وأعد الرسم', 'error');
+          return;
+        }
+      }
+    } else {
+      image = editor.uploadImage;
+    }
+    if (!image && !target.existing) {
+      toast(editor.tab === 'draw' ? 'يرجى رسم التوقيع أولاً' : 'يرجى اختيار صورة التوقيع أولاً', 'error');
+      return;
+    }
+
+    const isMe = target.id === ctx?.user.id;
+    const body: Record<string, unknown> = {
+      signerTitle: byId<HTMLInputElement>('sig-title-input').value.trim(),
+      signerName: byId<HTMLInputElement>('sig-name-input').value.trim(),
+    };
+    if (!isMe) body.userId = target.id;
+    if (image) body.image = image;
+
+    editor.saving = true;
+    try {
+      await withBusy(byId<HTMLButtonElement>('sig-save'), 'جاري الحفظ…', async () => {
+        try {
+          await api('/api/settings/signature', { body });
+          toast(image ? 'تم حفظ التوقيع' : 'تم تحديث بيانات التوقيع');
+          editor.saving = false;
+          closeEditor();
+          await afterSignatureChange(target.id);
+        } catch (error) {
+          toast(errorMessage(error), 'error');
+        }
+      });
+    } finally {
+      editor.saving = false;
+    }
+  }
+
+  function bindEditor(): void {
+    const dialog = byId<HTMLDialogElement>('sig-dialog');
+    const canvas = byId<HTMLCanvasElement>('sig-canvas');
+    try {
+      pad = new SignaturePad(canvas);
+      pad.onChange = updatePadControls;
+    } catch (error) {
+      pad = null;
+      byId('sig-pad-hint').textContent = 'المتصفح لا يدعم الرسم — استخدم رفع صورة';
+      console.error(error);
+    }
+
+    byId('sig-undo').addEventListener('click', () => pad?.undo());
+    byId('sig-clear').addEventListener('click', () => pad?.clear());
+    document.querySelectorAll<HTMLButtonElement>('.ink-btn').forEach(button => {
+      button.addEventListener('click', () => {
+        document.querySelectorAll('.ink-btn').forEach(b => b.setAttribute('aria-pressed', String(b === button)));
+        pad?.setColor(button.dataset.ink || '#1e3a8a');
+      });
+    });
+
+    byId('sig-tab-draw').addEventListener('click', () => selectTab('draw'));
+    byId('sig-tab-upload').addEventListener('click', () => selectTab('upload'));
+    for (const id of ['sig-tab-draw', 'sig-tab-upload']) {
+      byId(id).addEventListener('keydown', event => {
+        if (event.key === 'ArrowLeft' || event.key === 'ArrowRight' || event.key === 'Home' || event.key === 'End') {
+          event.preventDefault();
+          selectTab(editor.tab === 'draw' ? 'upload' : 'draw', true);
+        }
+      });
+    }
+
+    const fileInput = byId<HTMLInputElement>('sig-upload-file');
+    byId('sig-upload-pick').addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files?.[0];
+      fileInput.value = '';
+      if (!file) return;
+      editor.uploadFile = file;
+      void processUpload();
+    });
+    byId('sig-upload-remove-white').addEventListener('change', () => void processUpload());
+
+    byId('sig-save').addEventListener('click', () => void saveEditor());
+    const requestClose = () => {
+      if (editor.saving) return;
+      if (editorHasUnsavedInk() && !confirm('إغلاق دون حفظ التوقيع؟')) return;
+      closeEditor();
+    };
+    byId('sig-cancel').addEventListener('click', requestClose);
+    byId('sig-dialog-close').addEventListener('click', requestClose);
+    dialog.addEventListener('cancel', event => {
+      event.preventDefault(); // Escape: same confirmation as the close button
+      requestClose();
+    });
+    dialog.addEventListener('click', event => {
+      if (event.target === dialog) requestClose(); // backdrop click
+    });
+    dialog.addEventListener('close', () => {
+      editor.target = null;
+      editor.uploadImage = null;
+      editor.uploadFile = null;
+      pad?.clear();
+    });
+  }
+
+  // ------------------------------------------------------------------------
+  // View dialog
+  // ------------------------------------------------------------------------
+
+  let viewingUserId: string | null = null;
+
+  async function openViewer(userId: string): Promise<void> {
+    const dialog = byId<HTMLDialogElement>('sig-view-dialog');
+    const img = byId<HTMLImageElement>('sig-view-img');
+    const status = byId('sig-view-status');
+    viewingUserId = userId;
+    const row = users.find(u => u.id === userId);
+    byId('sig-view-title').textContent = `توقيع: ${row?.displayName ?? ''}`;
+    byId('sig-view-name').textContent = row?.signerName || row?.displayName || '—';
+    byId('sig-view-role').textContent = row?.signerTitle || '—';
+    byId('sig-view-updated').textContent = row?.updatedAt ? formatDate(row.updatedAt, true) : '—';
+    img.alt = `توقيع ${row?.displayName ?? ''}`;
+    show(img, false);
+    status.textContent = 'جاري التحميل…';
+    show(status, true);
+    if (!dialog.open) dialog.showModal();
+    try {
+      const res = await api<{ signature: Signature | null; user: SigUser }>(`/api/settings/signature?userId=${encodeURIComponent(userId)}`);
+      if (viewingUserId !== userId) return;
+      if (res.signature) {
+        img.src = res.signature.image;
+        show(img, true);
+        show(status, false);
+        byId('sig-view-name').textContent = res.signature.signerName || res.user.displayName;
+        byId('sig-view-role').textContent = res.signature.signerTitle || '—';
+        byId('sig-view-updated').textContent = formatDate(res.signature.updatedAt, true);
+      } else {
+        status.textContent = 'لا يوجد توقيع محفوظ لهذا المستخدم';
+      }
+    } catch (error) {
+      if (viewingUserId === userId) status.textContent = errorMessage(error);
+    }
+  }
+
+  function bindViewer(): void {
+    const dialog = byId<HTMLDialogElement>('sig-view-dialog');
+    const close = () => dialog.open && dialog.close();
+    byId('sig-view-close').addEventListener('click', close);
+    byId('sig-view-ok').addEventListener('click', close);
+    dialog.addEventListener('click', event => {
+      if (event.target === dialog) close();
+    });
+    dialog.addEventListener('close', () => {
+      viewingUserId = null;
+    });
+    byId('sig-view-edit').addEventListener('click', () => {
+      const id = viewingUserId;
+      close();
+      if (id) void openEditor(id);
+    });
+  }
+
+  // ------------------------------------------------------------------------
+  // Boot
+  // ------------------------------------------------------------------------
+
+  function bindSignatureSections(): void {
+    byId('my-sig-edit').addEventListener('click', () => {
+      if (ctx) void openEditor(ctx.user.id);
+    });
+    byId('my-sig-delete').addEventListener('click', event => {
+      if (ctx) void deleteSignature({ id: ctx.user.id, name: ctx.user.displayName }, event.currentTarget as HTMLButtonElement);
+    });
+
+    byId('users-sig-body').addEventListener('click', event => {
+      const button = (event.target as HTMLElement).closest<HTMLButtonElement>('button[data-action]');
+      if (!button) return;
+      const action = button.dataset.action;
+      if (action === 'reload') {
+        void loadUsers();
+        return;
+      }
+      const id = button.dataset.id ?? '';
+      const row = users.find(u => u.id === id);
+      if (!row) return;
+      if (action === 'edit') void withBusy(button, '…', () => openEditor(id));
+      else if (action === 'view') void openViewer(id);
+      else if (action === 'delete') void deleteSignature({ id, name: row.displayName }, button);
+    });
+    byId('users-sig-search').addEventListener('input', renderUsers);
+    byId('users-sig-filter').addEventListener('change', renderUsers);
+    byId('users-sig-refresh').addEventListener('click', event =>
+      void withBusy(event.currentTarget as HTMLButtonElement, 'جاري التحديث…', loadUsers));
+  }
+
+  async function init(): Promise<void> {
+    show(byId('page-loading'), true);
+    show(byId('page-error'), false);
+    try {
+      ctx = await loadFinanceContext();
+    } catch (error) {
+      show(byId('page-loading'), false);
+      byId('page-error-text').textContent = errorMessage(error);
+      show(byId('page-error'), true);
+      return;
+    }
+
+    const results = await Promise.allSettled([loadOrganization(), loadMySignature()]);
+    show(byId('page-loading'), false);
+
+    if (results[0].status === 'rejected') {
+      show(byId('org-section'), true);
+      show(byId('org-form'), false);
+      setStatus(byId('org-status'), `تعذر تحميل بيانات المنشأة: ${errorMessage(results[0].reason)}`);
+    }
+    if (results[1].status === 'rejected') {
+      show(byId('my-signature-section'), true);
+      show(byId('my-sig-body'), false);
+      setStatus(byId('my-sig-status'), `تعذر تحميل توقيعك: ${errorMessage(results[1].reason)}`);
+    }
+    if (results.some(r => r.status === 'rejected')) {
+      byId('page-error-text').textContent = results.every(r => r.status === 'rejected')
+        ? 'تعذر تحميل الإعدادات'
+        : 'تعذر تحميل جزء من الإعدادات';
+      show(byId('page-error'), true);
+    }
+
+    if (ctx.permissions.canApproveFinance) {
+      show(byId('users-sig-section'), true);
+      await loadUsers();
+    }
+  }
+
+  try {
+    bindOrganization();
+    bindEditor();
+    bindViewer();
+    bindSignatureSections();
+    byId('page-retry').addEventListener('click', event =>
+      void withBusy(event.currentTarget as HTMLButtonElement, 'جاري المحاولة…', async () => {
+        show(byId('org-form'), true);
+        show(byId('my-sig-body'), true);
+        setStatus(byId('org-status'), '');
+        setStatus(byId('my-sig-status'), '');
+        await init();
+      }));
+    void init();
+  } catch (error) {
+    console.error('Settings page failed to initialise:', error);
+    show(byId('page-loading'), false);
+    byId('page-error-text').textContent = 'تعذر تهيئة الصفحة — حدّث الصفحة وحاول مجدداً';
+    show(byId('page-error'), true);
+  }
+</script>

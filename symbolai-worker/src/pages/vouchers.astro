@@ -1,0 +1,1318 @@
+---
+import MainLayout from '@/layouts/MainLayout.astro';
+
+// Check authentication (middleware enforces it too)
+const cookieHeader = Astro.request.headers.get('Cookie');
+if (!cookieHeader?.includes('session=')) {
+  return Astro.redirect('/auth/login');
+}
+
+const input = 'w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500 disabled:bg-gray-100 disabled:text-gray-500';
+const label = 'block text-sm font-medium mb-1';
+---
+
+<MainLayout title="سندات القبض والصرف - SymbolAI">
+  <div class="space-y-6">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div>
+        <h1 class="text-3xl font-bold">سندات القبض والصرف</h1>
+        <p class="text-muted-foreground mt-2">إصدار السندات المالية واعتمادها من المدير وطباعتها بالتوقيع وختم الشركة</p>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <button id="new-receipt-btn" type="button" class="hidden rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700">
+          + سند قبض جديد
+        </button>
+        <button id="new-payment-btn" type="button" class="hidden rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700">
+          + سند صرف جديد
+        </button>
+      </div>
+    </div>
+
+    <div id="page-error" class="hidden rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700" role="alert"></div>
+
+    <!-- Tabs -->
+    <div class="border-b">
+      <nav class="flex gap-6" role="tablist" aria-label="نوع السند">
+        <button type="button" role="tab" data-type="receipt" class="type-tab border-b-2 px-1 py-3 text-sm font-medium">
+          سندات القبض <span data-count="receipt" class="mr-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">0</span>
+        </button>
+        <button type="button" role="tab" data-type="payment" class="type-tab border-b-2 px-1 py-3 text-sm font-medium">
+          سندات الصرف <span data-count="payment" class="mr-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">0</span>
+        </button>
+      </nav>
+    </div>
+
+    <div id="source-banner" class="hidden items-center justify-between gap-3 rounded-md border border-cyan-200 bg-cyan-50 px-4 py-2 text-sm text-cyan-900">
+      <span id="source-banner-text"></span>
+      <button type="button" id="clear-source" class="rounded border border-cyan-300 bg-white px-3 py-1 text-xs hover:bg-cyan-100">عرض كل السندات</button>
+    </div>
+
+    <!-- Filters -->
+    <div class="rounded-lg border bg-card p-4">
+      <div class="grid items-end gap-3 sm:grid-cols-2 lg:grid-cols-6">
+        <div>
+          <label for="filter-branch" class={label}>الفرع</label>
+          <select id="filter-branch" class={input}><option value="">جاري التحميل...</option></select>
+        </div>
+        <div>
+          <label for="filter-status" class={label}>الحالة</label>
+          <select id="filter-status" class={input}>
+            <option value="">الكل</option>
+            <option value="pending">بانتظار الاعتماد</option>
+            <option value="approved">معتمد</option>
+            <option value="cancelled">ملغي</option>
+          </select>
+        </div>
+        <div>
+          <label for="filter-from" class={label}>من تاريخ</label>
+          <input id="filter-from" type="date" class={input} />
+        </div>
+        <div>
+          <label for="filter-to" class={label}>إلى تاريخ</label>
+          <input id="filter-to" type="date" class={input} />
+        </div>
+        <div class="sm:col-span-2 lg:col-span-2">
+          <label for="filter-q" class={label}>بحث</label>
+          <div class="flex gap-2">
+            <input id="filter-q" type="search" maxlength="100" placeholder="رقم السند، اسم الطرف، البيان، رقم الهوية" class={input} />
+            <button type="button" id="reset-filters" class="shrink-0 rounded-md border px-3 py-2 text-sm hover:bg-gray-50">مسح</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Summary -->
+    <div class="grid gap-4 md:grid-cols-3">
+      <div class="rounded-lg border bg-card p-4">
+        <h3 class="text-sm font-medium text-muted-foreground" id="sum-approved-title">المعتمد</h3>
+        <p class="mt-2 text-2xl font-bold text-green-700" id="sum-approved">—</p>
+        <p class="mt-1 text-xs text-muted-foreground" id="sum-approved-count"></p>
+      </div>
+      <div class="rounded-lg border bg-card p-4">
+        <h3 class="text-sm font-medium text-muted-foreground">بانتظار الاعتماد</h3>
+        <p class="mt-2 text-2xl font-bold text-amber-600" id="sum-pending">—</p>
+        <p class="mt-1 text-xs text-muted-foreground" id="sum-pending-count"></p>
+      </div>
+      <div class="rounded-lg border bg-card p-4">
+        <h3 class="text-sm font-medium text-muted-foreground">السندات الملغاة</h3>
+        <p class="mt-2 text-2xl font-bold text-gray-600" id="sum-cancelled">—</p>
+        <p class="mt-1 text-xs text-muted-foreground">تبقى أرقامها محفوظة في التسلسل للمراجعة</p>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="rounded-lg border bg-card">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="border-b bg-gray-50">
+            <tr>
+              <th class="p-3 text-right font-medium">الرقم</th>
+              <th class="p-3 text-right font-medium">التاريخ</th>
+              <th class="p-3 text-right font-medium">الطرف</th>
+              <th class="p-3 text-right font-medium">المبلغ</th>
+              <th class="p-3 text-right font-medium">البيان</th>
+              <th class="p-3 text-right font-medium">طريقة الدفع</th>
+              <th class="p-3 text-right font-medium">الحالة</th>
+              <th class="p-3 text-right font-medium">إجراءات</th>
+            </tr>
+          </thead>
+          <tbody id="vouchers-body">
+            <tr><td colspan="8" class="p-8 text-center text-muted-foreground">جاري التحميل...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="flex flex-wrap items-center justify-between gap-2 border-t p-3 text-sm">
+        <span id="page-info" class="text-muted-foreground"></span>
+        <div class="flex gap-2">
+          <button type="button" id="prev-page" class="rounded-md border px-3 py-1 hover:bg-gray-50 disabled:opacity-40" disabled>السابق</button>
+          <button type="button" id="next-page" class="rounded-md border px-3 py-1 hover:bg-gray-50 disabled:opacity-40" disabled>التالي</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create / edit dialog -->
+  <dialog id="voucher-dialog" class="w-full max-w-3xl rounded-lg p-0 shadow-xl backdrop:bg-black/40">
+    <form id="voucher-form" novalidate class="flex max-h-[90vh] flex-col">
+      <header class="flex items-start justify-between gap-4 border-b px-6 py-4">
+        <div>
+          <h2 id="dialog-title" class="text-xl font-bold">سند جديد</h2>
+          <p id="dialog-subtitle" class="mt-1 text-sm text-muted-foreground"></p>
+        </div>
+        <button type="button" data-close="voucher-dialog" class="text-xl text-gray-500 hover:text-gray-700" aria-label="إغلاق">✕</button>
+      </header>
+
+      <div class="flex-1 space-y-5 overflow-y-auto px-6 py-4">
+        <div id="form-error" class="hidden rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert"></div>
+        <div id="locked-note" class="hidden rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          هذا السند مولّد آلياً من النظام — لا يمكن تغيير الطرف أو المبلغ، ويمكن تعديل طريقة الدفع والتاريخ والبيان والملاحظات.
+        </div>
+
+        <section class="grid gap-4 md:grid-cols-3">
+          <div>
+            <label for="f-type" class={label}>نوع السند</label>
+            <select id="f-type" class={input}>
+              <option value="receipt">سند قبض</option>
+              <option value="payment">سند صرف</option>
+            </select>
+          </div>
+          <div>
+            <label for="f-date" class={label}>التاريخ</label>
+            <input id="f-date" type="date" required class={input} />
+          </div>
+          <div>
+            <label for="f-party-type" class={label}>نوع الطرف</label>
+            <select id="f-party-type" class={input}>
+              <option value="employee">موظف</option>
+              <option value="customer">عميل</option>
+              <option value="supplier">مورد</option>
+              <option value="other">أخرى</option>
+            </select>
+          </div>
+        </section>
+
+        <section id="employee-row" class="hidden">
+          <label for="f-employee" class={label}>الموظف</label>
+          <select id="f-employee" class={input}><option value="">— اختر الموظف —</option></select>
+          <p id="employee-hint" class="mt-1 text-xs text-muted-foreground"></p>
+        </section>
+
+        <section class="grid gap-4 md:grid-cols-3">
+          <div>
+            <label for="f-party-name" class={label}><span id="party-label">استلمنا من</span> <span class="text-red-600">*</span></label>
+            <input id="f-party-name" type="text" maxlength="150" class={input} autocomplete="off" />
+          </div>
+          <div>
+            <label for="f-party-id" class={label}>رقم الهوية / الإقامة</label>
+            <input id="f-party-id" type="text" maxlength="30" dir="ltr" class={input} autocomplete="off" />
+          </div>
+          <div>
+            <label for="f-party-phone" class={label}>الجوال</label>
+            <input id="f-party-phone" type="tel" maxlength="20" dir="ltr" inputmode="tel" class={input} autocomplete="off" />
+          </div>
+        </section>
+
+        <div>
+          <label for="f-purpose" class={label}>وذلك مقابل (البيان) <span class="text-red-600">*</span></label>
+          <input id="f-purpose" type="text" maxlength="300" class={input} placeholder="مثال: راتب شهر أكتوبر، دفعة من قيمة فاتورة..." />
+        </div>
+
+        <!-- Line items -->
+        <section id="items-wrap" class="rounded-md border p-4">
+          <label class="flex cursor-pointer items-center gap-2 text-sm font-medium">
+            <input id="f-use-items" type="checkbox" class="rounded" />
+            إضافة بنود تفصيلية (الكمية × سعر الوحدة، مع الخصم والضريبة)
+          </label>
+          <div id="items-section" class="mt-3 hidden space-y-3">
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="border-b text-muted-foreground">
+                    <th class="p-2 text-right font-medium">الوصف</th>
+                    <th class="w-24 p-2 text-right font-medium">الكمية</th>
+                    <th class="w-32 p-2 text-right font-medium">سعر الوحدة</th>
+                    <th class="w-32 p-2 text-right font-medium">الإجمالي</th>
+                    <th class="w-10 p-2"></th>
+                  </tr>
+                </thead>
+                <tbody id="items-body"></tbody>
+              </table>
+            </div>
+            <button type="button" id="add-item" class="rounded-md border border-dashed px-3 py-1 text-sm hover:bg-gray-50">+ إضافة بند</button>
+            <div class="grid items-end gap-3 md:grid-cols-2">
+              <div>
+                <label for="f-discount" class={label}>الخصم</label>
+                <input id="f-discount" type="text" inputmode="decimal" dir="ltr" class={input} placeholder="0.00" />
+              </div>
+              <label class="flex cursor-pointer items-center gap-2 pb-2 text-sm">
+                <input id="f-apply-vat" type="checkbox" class="rounded" />
+                <span id="vat-label">تطبيق ضريبة القيمة المضافة</span>
+              </label>
+            </div>
+            <dl class="grid grid-cols-2 gap-x-6 gap-y-1 rounded-md bg-gray-50 p-3 text-sm md:w-1/2 md:mr-auto">
+              <dt class="text-muted-foreground">المجموع</dt><dd id="t-subtotal" class="text-left font-medium" dir="ltr">0.00</dd>
+              <dt class="text-muted-foreground">الخصم</dt><dd id="t-discount" class="text-left font-medium" dir="ltr">0.00</dd>
+              <dt class="text-muted-foreground" id="t-vat-label">الضريبة</dt><dd id="t-vat" class="text-left font-medium" dir="ltr">0.00</dd>
+              <dt class="font-bold">الإجمالي</dt><dd id="t-total" class="text-left font-bold" dir="ltr">0.00</dd>
+            </dl>
+          </div>
+        </section>
+
+        <section class="grid gap-4 md:grid-cols-2">
+          <div>
+            <label for="f-amount" class={label}>المبلغ <span class="text-red-600">*</span></label>
+            <input id="f-amount" type="text" inputmode="decimal" dir="ltr" class={input} placeholder="0.00" />
+          </div>
+          <div>
+            <label for="f-method" class={label}>طريقة الدفع</label>
+            <select id="f-method" class={input}>
+              <option value="cash">نقداً</option>
+              <option value="bank_transfer">حوالة بنكية</option>
+              <option value="cheque">شيك</option>
+              <option value="card">شبكة / مدى</option>
+              <option value="mixed">مختلط (أكثر من طريقة)</option>
+            </select>
+          </div>
+        </section>
+
+        <div class="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-900">
+          <span class="font-medium">المبلغ كتابةً:</span> <span id="words-preview">—</span>
+        </div>
+
+        <section id="mixed-section" class="hidden rounded-md border p-4">
+          <p class="mb-3 text-sm font-medium">توزيع المبلغ على طرق الدفع</p>
+          <div class="grid gap-3 sm:grid-cols-2 md:grid-cols-4">
+            <div><label for="f-cash" class={label}>نقداً</label><input id="f-cash" data-bucket type="text" inputmode="decimal" dir="ltr" class={input} placeholder="0.00" /></div>
+            <div><label for="f-bank" class={label}>حوالة بنكية</label><input id="f-bank" data-bucket type="text" inputmode="decimal" dir="ltr" class={input} placeholder="0.00" /></div>
+            <div><label for="f-cheque" class={label}>شيك</label><input id="f-cheque" data-bucket type="text" inputmode="decimal" dir="ltr" class={input} placeholder="0.00" /></div>
+            <div><label for="f-card" class={label}>شبكة / مدى</label><input id="f-card" data-bucket type="text" inputmode="decimal" dir="ltr" class={input} placeholder="0.00" /></div>
+          </div>
+          <p id="split-remainder" class="mt-3 text-sm"></p>
+        </section>
+
+        <section id="details-section" class="hidden grid gap-4 md:grid-cols-2">
+          <div data-detail="cheque">
+            <label for="f-cheque-number" class={label}>رقم الشيك <span class="text-red-600">*</span></label>
+            <input id="f-cheque-number" type="text" maxlength="30" dir="ltr" class={input} />
+          </div>
+          <div data-detail="cheque">
+            <label for="f-cheque-date" class={label}>تاريخ الشيك</label>
+            <input id="f-cheque-date" type="date" class={input} />
+          </div>
+          <div data-detail="bank">
+            <label for="f-bank-name" class={label}><span id="bank-label">البنك</span></label>
+            <input id="f-bank-name" type="text" maxlength="100" class={input} placeholder="مثال: مصرف الراجحي" />
+          </div>
+          <div data-detail="ref">
+            <label for="f-transaction-ref" class={label}>رقم العملية / الحوالة</label>
+            <input id="f-transaction-ref" type="text" maxlength="60" dir="ltr" class={input} />
+          </div>
+        </section>
+
+        <div>
+          <label for="f-notes" class={label}>ملاحظات</label>
+          <textarea id="f-notes" rows="2" maxlength="1000" class={input}></textarea>
+        </div>
+
+        <label id="approve-now-wrap" class="hidden cursor-pointer items-start gap-2 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-900">
+          <input id="f-approve-now" type="checkbox" class="mt-1 rounded" />
+          <span><span class="font-semibold">اعتماد مباشر</span> — يُعتمد السند فور حفظه ويظهر عليه توقيعك وختم الشركة.</span>
+        </label>
+      </div>
+
+      <footer class="flex justify-end gap-2 border-t px-6 py-4">
+        <button type="button" data-close="voucher-dialog" class="rounded-md border px-4 py-2 text-sm hover:bg-gray-50">إلغاء</button>
+        <button type="submit" id="save-btn" class="rounded-md bg-cyan-600 px-5 py-2 text-sm font-medium text-white hover:bg-cyan-700 disabled:opacity-60">حفظ السند</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <!-- Saved -->
+  <dialog id="saved-dialog" class="w-full max-w-md rounded-lg p-6 shadow-xl backdrop:bg-black/40">
+    <div class="text-center">
+      <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-green-100 text-2xl text-green-700">✓</div>
+      <h2 class="text-lg font-bold">تم حفظ السند</h2>
+      <p class="mt-1 text-sm text-muted-foreground"><span id="saved-number" dir="ltr" class="font-mono font-semibold text-gray-900"></span> — <span id="saved-status"></span></p>
+      <p id="saved-amount" class="mt-1 text-sm"></p>
+    </div>
+    <div class="mt-5 flex flex-wrap justify-center gap-2">
+      <button type="button" id="saved-print" class="rounded-md bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-700">طباعة السند</button>
+      <button type="button" id="saved-print-two" class="rounded-md border px-4 py-2 text-sm hover:bg-gray-50">طباعة نسختين</button>
+      <button type="button" data-close="saved-dialog" class="rounded-md border px-4 py-2 text-sm hover:bg-gray-50">إغلاق</button>
+    </div>
+  </dialog>
+
+  <!-- Cancel -->
+  <dialog id="cancel-dialog" class="w-full max-w-md rounded-lg p-0 shadow-xl backdrop:bg-black/40">
+    <form id="cancel-form" novalidate class="p-6">
+      <h2 class="text-lg font-bold">إلغاء السند <span id="cancel-number" dir="ltr" class="font-mono"></span></h2>
+      <p id="cancel-info" class="mt-1 text-sm text-muted-foreground"></p>
+      <p id="cancel-warning" class="mt-3 hidden rounded-md border border-amber-200 bg-amber-50 p-2 text-sm text-amber-800">
+        هذا السند معتمد — سيُلغى نهائياً ويبقى رقمه في السجل. سبب الإلغاء إلزامي.
+      </p>
+      <label for="cancel-reason" class={`${label} mt-4`}>سبب الإلغاء <span id="cancel-reason-required" class="text-red-600">*</span></label>
+      <textarea id="cancel-reason" rows="3" maxlength="300" class={input}></textarea>
+      <div id="cancel-error" class="mt-2 hidden text-sm text-red-700" role="alert"></div>
+      <div class="mt-5 flex justify-end gap-2">
+        <button type="button" data-close="cancel-dialog" class="rounded-md border px-4 py-2 text-sm hover:bg-gray-50">تراجع</button>
+        <button type="submit" id="cancel-submit" class="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60">تأكيد الإلغاء</button>
+      </div>
+    </form>
+  </dialog>
+</MainLayout>
+
+<script>
+  import {
+    api,
+    escapeHtml,
+    money,
+    loadFinanceContext,
+    fillBranchSelect,
+    formatDate,
+    toast,
+    withBusy,
+    byId,
+    type FinanceContextPayload,
+  } from '@/lib/finance/client';
+  import { amountToArabicWords, formatAmount, fromMinor, toMinor, type CurrencyCode } from '@/lib/finance/money';
+  import { todayIso } from '@/lib/finance/catalog';
+
+  type VType = 'receipt' | 'payment';
+  type Status = 'pending' | 'approved' | 'cancelled';
+  type Method = 'cash' | 'bank_transfer' | 'cheque' | 'card' | 'mixed';
+
+  interface Actions { print: boolean; edit: boolean; approve: boolean; cancel: boolean }
+  interface Voucher {
+    id: string;
+    branchId: string;
+    branchName: string | null;
+    type: VType;
+    number: string;
+    date: string;
+    partyType: 'employee' | 'customer' | 'supplier' | 'other';
+    partyTypeLabel: string;
+    partyName: string;
+    employeeId: string | null;
+    partyIdNumber: string | null;
+    partyPhone: string | null;
+    amount: number;
+    currency: CurrencyCode;
+    purpose: string;
+    paymentMethod: Method;
+    paymentMethodLabel: string;
+    split: { cash: number; bank: number; cheque: number; card: number };
+    chequeNumber: string | null;
+    chequeDate: string | null;
+    bankName: string | null;
+    transactionRef: string | null;
+    items: Array<{ description: string; quantity: number; unitPrice: number; total: number }>;
+    itemCount: number;
+    subtotal: number | null;
+    discount: number | null;
+    vatRate: number | null;
+    vatAmount: number | null;
+    notes: string | null;
+    status: Status;
+    statusLabel: string;
+    sourceType: string;
+    sourceId: string | null;
+    createdByName: string | null;
+    approvedByName: string | null;
+    cancelReason: string | null;
+    actions?: Actions;
+  }
+  interface TypeSummary { count: number; approvedCount: number; totalApproved: number; pendingCount: number; totalPending: number; cancelledCount: number }
+  interface ListResponse {
+    vouchers: Voucher[];
+    total: number;
+    limit: number;
+    offset: number;
+    summary: Record<VType, TypeSummary>;
+    permissions: { createReceipt: boolean; createPayment: boolean; approve: boolean };
+  }
+  interface EmployeeOption { id: string; name: string; nationalId: string; phone: string }
+
+  const PAGE_SIZE = 50;
+  const TYPE_LABEL: Record<VType, string> = { receipt: 'سند قبض', payment: 'سند صرف' };
+  const PARTY_LABEL: Record<VType, string> = { receipt: 'استلمنا من', payment: 'صرفنا إلى' };
+  const BUCKET_LABEL: Record<'cash' | 'bank' | 'cheque' | 'card', string> = { cash: 'نقداً', bank: 'حوالة', cheque: 'شيك', card: 'شبكة' };
+  const STATUS_BADGE: Record<Status, string> = {
+    pending: 'bg-amber-100 text-amber-800',
+    approved: 'bg-green-100 text-green-800',
+    cancelled: 'bg-gray-200 text-gray-600',
+  };
+
+  const params = new URLSearchParams(window.location.search);
+  const state = {
+    ctx: null as FinanceContextPayload | null,
+    type: (params.get('type') === 'payment' ? 'payment' : 'receipt') as VType,
+    branchId: '',
+    status: params.get('status') ?? '',
+    from: params.get('from') ?? '',
+    to: params.get('to') ?? '',
+    q: params.get('q') ?? '',
+    source: params.get('source') ?? '',
+    sourceId: params.get('sourceId') ?? '',
+    offset: 0,
+    total: 0,
+    rows: [] as Voucher[],
+    perms: { createReceipt: false, createPayment: false, approve: false },
+    currency: 'SAR' as CurrencyCode,
+    vatRate: 15,
+    /** VAT rate used by the open form (the voucher's own rate when editing). */
+    formVatRate: 15,
+    editing: null as Voucher | null,
+    lockedParty: false,
+    employees: new Map<string, Promise<EmployeeOption[]>>(),
+    loadSeq: 0,
+    lastSaved: null as Voucher | null,
+    cancelling: null as Voucher | null,
+  };
+
+  // ---------------------------------------------------------------- elements
+  const branchSel = byId<HTMLSelectElement>('filter-branch');
+  const statusSel = byId<HTMLSelectElement>('filter-status');
+  const fromInput = byId<HTMLInputElement>('filter-from');
+  const toInput = byId<HTMLInputElement>('filter-to');
+  const qInput = byId<HTMLInputElement>('filter-q');
+  const tbody = byId<HTMLTableSectionElement>('vouchers-body');
+  const pageError = byId('page-error');
+  const voucherDialog = byId<HTMLDialogElement>('voucher-dialog');
+  const savedDialog = byId<HTMLDialogElement>('saved-dialog');
+  const cancelDialog = byId<HTMLDialogElement>('cancel-dialog');
+  const form = byId<HTMLFormElement>('voucher-form');
+  const f = {
+    type: byId<HTMLSelectElement>('f-type'),
+    date: byId<HTMLInputElement>('f-date'),
+    partyType: byId<HTMLSelectElement>('f-party-type'),
+    employee: byId<HTMLSelectElement>('f-employee'),
+    partyName: byId<HTMLInputElement>('f-party-name'),
+    partyId: byId<HTMLInputElement>('f-party-id'),
+    partyPhone: byId<HTMLInputElement>('f-party-phone'),
+    purpose: byId<HTMLInputElement>('f-purpose'),
+    useItems: byId<HTMLInputElement>('f-use-items'),
+    discount: byId<HTMLInputElement>('f-discount'),
+    applyVat: byId<HTMLInputElement>('f-apply-vat'),
+    amount: byId<HTMLInputElement>('f-amount'),
+    method: byId<HTMLSelectElement>('f-method'),
+    cash: byId<HTMLInputElement>('f-cash'),
+    bank: byId<HTMLInputElement>('f-bank'),
+    cheque: byId<HTMLInputElement>('f-cheque'),
+    card: byId<HTMLInputElement>('f-card'),
+    chequeNumber: byId<HTMLInputElement>('f-cheque-number'),
+    chequeDate: byId<HTMLInputElement>('f-cheque-date'),
+    bankName: byId<HTMLInputElement>('f-bank-name'),
+    transactionRef: byId<HTMLInputElement>('f-transaction-ref'),
+    notes: byId<HTMLTextAreaElement>('f-notes'),
+    approveNow: byId<HTMLInputElement>('f-approve-now'),
+  };
+  const itemsBody = byId<HTMLTableSectionElement>('items-body');
+
+  // ---------------------------------------------------------------- helpers
+  function show(el: HTMLElement, visible: boolean, display = 'block') {
+    el.classList.toggle('hidden', !visible);
+    if (display !== 'block') el.classList.toggle(display, visible);
+  }
+
+  function addDays(iso: string, days: number): string {
+    const d = new Date(`${iso}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + days);
+    return d.toISOString().slice(0, 10);
+  }
+
+  /** Halalas from a user-typed amount; NaN when it is not a valid amount. */
+  function parseMinor(text: string): number {
+    const t = text.replace(/,/g, '').trim();
+    if (!t) return 0;
+    if (!/^\d+(\.\d{1,2})?$/.test(t)) return NaN;
+    return toMinor(t);
+  }
+
+  function parseQty(text: string): number {
+    const n = Number(text.replace(/,/g, '').trim());
+    return Number.isFinite(n) && n > 0 ? Math.round(n * 1000) / 1000 : NaN;
+  }
+
+  function errorMessage(error: unknown): string {
+    return error instanceof Error && error.message ? error.message : 'حدث خطأ غير متوقع';
+  }
+
+  function methodText(v: Voucher): string {
+    if (v.paymentMethod !== 'mixed') return v.paymentMethodLabel;
+    const parts = (Object.keys(BUCKET_LABEL) as Array<keyof typeof BUCKET_LABEL>)
+      .filter(k => toMinor(v.split[k]) > 0)
+      .map(k => BUCKET_LABEL[k]);
+    return `مختلط (${parts.join(' + ')})`;
+  }
+
+  function syncUrl() {
+    const p = new URLSearchParams();
+    p.set('type', state.type);
+    if (state.ctx?.permissions.canViewAllBranches && state.branchId) p.set('branchId', state.branchId);
+    if (state.status) p.set('status', state.status);
+    if (state.from) p.set('from', state.from);
+    if (state.to) p.set('to', state.to);
+    if (state.q) p.set('q', state.q);
+    if (state.source) p.set('source', state.source);
+    if (state.sourceId) p.set('sourceId', state.sourceId);
+    history.replaceState(null, '', `${window.location.pathname}?${p.toString()}`);
+  }
+
+  // ---------------------------------------------------------------- list
+  function renderTabs() {
+    document.querySelectorAll<HTMLButtonElement>('.type-tab').forEach(tab => {
+      const active = tab.dataset.type === state.type;
+      tab.setAttribute('aria-selected', String(active));
+      tab.classList.toggle('border-cyan-600', active);
+      tab.classList.toggle('text-cyan-700', active);
+      tab.classList.toggle('border-transparent', !active);
+      tab.classList.toggle('text-muted-foreground', !active);
+    });
+    byId('sum-approved-title').textContent = state.type === 'receipt' ? 'المقبوضات المعتمدة' : 'المصروفات المعتمدة';
+  }
+
+  function renderMessageRow(html: string) {
+    tbody.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-muted-foreground">${html}</td></tr>`;
+  }
+
+  function renderSummary(summary: Record<VType, TypeSummary>) {
+    const s = summary[state.type];
+    byId('sum-approved').textContent = money(s.totalApproved);
+    byId('sum-approved-count').textContent = `${s.approvedCount} سند معتمد`;
+    byId('sum-pending').textContent = money(s.totalPending);
+    byId('sum-pending-count').textContent = `${s.pendingCount} سند بانتظار اعتماد المدير`;
+    byId('sum-cancelled').textContent = String(s.cancelledCount);
+    document.querySelectorAll<HTMLElement>('[data-count]').forEach(el => {
+      const t = el.dataset.count as VType;
+      el.textContent = String(summary[t]?.count ?? 0);
+    });
+  }
+
+  function renderTable() {
+    if (state.rows.length === 0) {
+      const filtered = state.status || state.from || state.to || state.q || state.source;
+      renderMessageRow(filtered ? 'لا توجد سندات مطابقة للفلاتر المحددة' : `لا توجد ${state.type === 'receipt' ? 'سندات قبض' : 'سندات صرف'} في هذا الفرع بعد`);
+      return;
+    }
+    tbody.innerHTML = state.rows
+      .map(v => {
+        const a = v.actions ?? { print: true, edit: false, approve: false, cancel: false };
+        const source =
+          v.sourceType === 'payroll'
+            ? '<span class="mt-1 inline-block rounded bg-indigo-50 px-1.5 text-xs text-indigo-700">مسير رواتب</span>'
+            : v.sourceType === 'request'
+              ? '<span class="mt-1 inline-block rounded bg-purple-50 px-1.5 text-xs text-purple-700">طلب موظف</span>'
+              : '';
+        const statusExtra =
+          v.status === 'approved' && v.approvedByName
+            ? `<div class="mt-1 text-xs text-muted-foreground">${escapeHtml(v.approvedByName)}</div>`
+            : v.status === 'cancelled' && v.cancelReason
+              ? `<div class="mt-1 max-w-[12rem] truncate text-xs text-muted-foreground" title="${escapeHtml(v.cancelReason)}">${escapeHtml(v.cancelReason)}</div>`
+              : '';
+        const buttons = [
+          `<a href="/vouchers/print/${encodeURIComponent(v.id)}" target="_blank" rel="noopener" class="rounded border px-2 py-1 text-xs hover:bg-gray-50">طباعة</a>`,
+          a.approve ? `<button type="button" data-action="approve" data-id="${escapeHtml(v.id)}" class="rounded bg-green-600 px-2 py-1 text-xs text-white hover:bg-green-700">اعتماد</button>` : '',
+          a.edit ? `<button type="button" data-action="edit" data-id="${escapeHtml(v.id)}" class="rounded border px-2 py-1 text-xs hover:bg-gray-50">تعديل</button>` : '',
+          a.cancel ? `<button type="button" data-action="cancel" data-id="${escapeHtml(v.id)}" class="rounded border border-red-200 px-2 py-1 text-xs text-red-700 hover:bg-red-50">إلغاء</button>` : '',
+        ].join('');
+        return `
+          <tr class="border-b align-top hover:bg-gray-50 ${v.status === 'cancelled' ? 'opacity-70' : ''}">
+            <td class="whitespace-nowrap p-3"><span dir="ltr" class="font-mono font-semibold">${escapeHtml(v.number)}</span>${source ? `<div>${source}</div>` : ''}</td>
+            <td class="whitespace-nowrap p-3">${escapeHtml(formatDate(v.date))}</td>
+            <td class="p-3"><div class="font-medium">${escapeHtml(v.partyName)}</div><div class="text-xs text-muted-foreground">${escapeHtml(v.partyTypeLabel)}</div></td>
+            <td class="whitespace-nowrap p-3 font-semibold ${v.status === 'cancelled' ? 'line-through' : ''}">${escapeHtml(money(v.amount))}</td>
+            <td class="max-w-xs p-3"><div class="truncate" title="${escapeHtml(v.purpose)}">${escapeHtml(v.purpose)}</div>${v.itemCount ? `<div class="text-xs text-muted-foreground">${v.itemCount} بند</div>` : ''}</td>
+            <td class="whitespace-nowrap p-3">${escapeHtml(methodText(v))}</td>
+            <td class="p-3"><span class="inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_BADGE[v.status]}">${escapeHtml(v.statusLabel)}</span>${statusExtra}</td>
+            <td class="p-3"><div class="flex flex-wrap gap-1">${buttons}</div></td>
+          </tr>`;
+      })
+      .join('');
+  }
+
+  function renderPager() {
+    const from = state.total === 0 ? 0 : state.offset + 1;
+    const to = Math.min(state.offset + state.rows.length, state.total);
+    byId('page-info').textContent = state.total ? `عرض ${from}–${to} من ${state.total} سند` : '';
+    byId<HTMLButtonElement>('prev-page').disabled = state.offset === 0;
+    byId<HTMLButtonElement>('next-page').disabled = state.offset + PAGE_SIZE >= state.total;
+  }
+
+  function renderCreateButtons() {
+    show(byId('new-receipt-btn'), state.perms.createReceipt);
+    show(byId('new-payment-btn'), state.perms.createPayment);
+  }
+
+  function renderSourceBanner() {
+    const banner = byId('source-banner');
+    const active = Boolean(state.source);
+    banner.classList.toggle('hidden', !active);
+    banner.classList.toggle('flex', active);
+    if (active) {
+      const what = state.source === 'payroll' ? 'المولّدة من مسير الرواتب' : state.source === 'request' ? 'المرتبطة بطلب موظف' : 'اليدوية';
+      byId('source-banner-text').textContent = `يتم عرض السندات ${what}${state.sourceId ? ' المحددة فقط' : ''}.`;
+    }
+  }
+
+  async function loadList() {
+    if (!state.branchId) {
+      renderMessageRow('يرجى اختيار الفرع');
+      return;
+    }
+    const seq = ++state.loadSeq;
+    renderMessageRow('جاري التحميل...');
+    const p = new URLSearchParams({ branchId: state.branchId, type: state.type, limit: String(PAGE_SIZE), offset: String(state.offset) });
+    if (state.status) p.set('status', state.status);
+    if (state.from) p.set('from', state.from);
+    if (state.to) p.set('to', state.to);
+    if (state.q) p.set('q', state.q);
+    if (state.source) p.set('source', state.source);
+    if (state.sourceId) p.set('sourceId', state.sourceId);
+    try {
+      const data = await api<ListResponse>(`/api/vouchers/list?${p.toString()}`);
+      if (seq !== state.loadSeq) return;
+      state.rows = data.vouchers;
+      state.total = data.total;
+      state.perms = data.permissions;
+      renderSummary(data.summary);
+      renderTable();
+      renderPager();
+      renderCreateButtons();
+    } catch (error) {
+      if (seq !== state.loadSeq) return;
+      renderMessageRow(`<span class="text-red-700">${escapeHtml(errorMessage(error))}</span> <button type="button" data-action="retry" class="mr-2 rounded border px-2 py-1 text-xs hover:bg-gray-50">إعادة المحاولة</button>`);
+      byId('page-info').textContent = '';
+    }
+  }
+
+  function reload(resetPage = true) {
+    if (resetPage) state.offset = 0;
+    syncUrl();
+    void loadList();
+  }
+
+  // ---------------------------------------------------------------- employees
+  function loadEmployees(branchId: string): Promise<EmployeeOption[]> {
+    let pending = state.employees.get(branchId);
+    if (!pending) {
+      pending = api<{ employees?: Array<Record<string, unknown>> }>(`/api/employees/list?branchId=${encodeURIComponent(branchId)}&activeOnly=1`)
+        .then(r =>
+          (r.employees ?? []).map(e => ({
+            id: String(e.id ?? ''),
+            name: String(e.employee_name ?? e.employeeName ?? e.name ?? ''),
+            nationalId: String(e.national_id ?? e.nationalId ?? ''),
+            phone: String(e.phone ?? ''),
+          })).filter(e => e.id && e.name),
+        )
+        .catch(error => {
+          state.employees.delete(branchId);
+          throw error;
+        });
+      state.employees.set(branchId, pending);
+    }
+    return pending;
+  }
+
+  async function fillEmployeeSelect(branchId: string, selectedId: string | null, fallbackName?: string) {
+    const hint = byId('employee-hint');
+    f.employee.innerHTML = '<option value="">جاري تحميل الموظفين...</option>';
+    f.employee.disabled = true;
+    hint.textContent = '';
+    try {
+      const list = await loadEmployees(branchId);
+      const options = [...list];
+      if (selectedId && !options.some(e => e.id === selectedId)) {
+        options.unshift({ id: selectedId, name: fallbackName || selectedId, nationalId: '', phone: '' });
+      }
+      f.employee.innerHTML =
+        '<option value="">— اختر الموظف —</option>' +
+        options.map(e => `<option value="${escapeHtml(e.id)}">${escapeHtml(e.name)}${e.nationalId ? ` — ${escapeHtml(e.nationalId)}` : ''}</option>`).join('');
+      f.employee.value = selectedId ?? '';
+      if (!list.length) hint.textContent = 'لا يوجد موظفون نشطون في هذا الفرع — اختر نوع طرف آخر.';
+    } catch (error) {
+      f.employee.innerHTML = '<option value="">تعذر تحميل الموظفين</option>';
+      hint.textContent = `${errorMessage(error)} — يمكنك اختيار «أخرى» وكتابة الاسم يدوياً.`;
+    } finally {
+      f.employee.disabled = state.lockedParty;
+    }
+  }
+
+  async function onEmployeeChange() {
+    const id = f.employee.value;
+    if (!id) return;
+    const list = await loadEmployees(currentBranchForForm()).catch(() => [] as EmployeeOption[]);
+    const emp = list.find(e => e.id === id);
+    if (!emp) return;
+    f.partyName.value = emp.name;
+    if (emp.nationalId) f.partyId.value = emp.nationalId;
+    if (emp.phone && !f.partyPhone.value) f.partyPhone.value = emp.phone;
+  }
+
+  function currentBranchForForm(): string {
+    return state.editing?.branchId ?? state.branchId;
+  }
+
+  // ---------------------------------------------------------------- form: items & totals
+  function addItemRow(item?: { description: string; quantity: number; unitPrice: number }) {
+    const tr = document.createElement('tr');
+    tr.className = 'border-b';
+    tr.innerHTML = `
+      <td class="p-1"><input data-field="description" type="text" maxlength="200" class="w-full rounded border px-2 py-1 text-sm" /></td>
+      <td class="p-1"><input data-field="quantity" type="text" inputmode="decimal" dir="ltr" class="w-full rounded border px-2 py-1 text-sm" /></td>
+      <td class="p-1"><input data-field="unitPrice" type="text" inputmode="decimal" dir="ltr" class="w-full rounded border px-2 py-1 text-sm" placeholder="0.00" /></td>
+      <td class="p-1 text-left font-medium" dir="ltr" data-field="total">0.00</td>
+      <td class="p-1 text-center"><button type="button" data-remove-item class="text-red-600 hover:text-red-800" aria-label="حذف البند">✕</button></td>`;
+    const q = (name: string) => tr.querySelector<HTMLInputElement>(`[data-field="${name}"]`)!;
+    q('description').value = item?.description ?? '';
+    q('quantity').value = item ? String(item.quantity) : '1';
+    q('unitPrice').value = item ? formatAmount(item.unitPrice).replace(/,/g, '') : '';
+    itemsBody.appendChild(tr);
+    return tr;
+  }
+
+  interface ItemsCalc { valid: boolean; subtotal: number; discount: number; vat: number; total: number; rate: number }
+
+  function calcItems(): ItemsCalc {
+    let valid = true;
+    let subtotal = 0;
+    itemsBody.querySelectorAll('tr').forEach(tr => {
+      const qty = parseQty(tr.querySelector<HTMLInputElement>('[data-field="quantity"]')!.value);
+      const price = parseMinor(tr.querySelector<HTMLInputElement>('[data-field="unitPrice"]')!.value || '');
+      const desc = tr.querySelector<HTMLInputElement>('[data-field="description"]')!.value.trim();
+      const cell = tr.querySelector<HTMLElement>('[data-field="total"]')!;
+      if (Number.isNaN(qty) || Number.isNaN(price)) {
+        valid = false;
+        cell.textContent = '—';
+        return;
+      }
+      if (!desc) valid = false;
+      const line = Math.round((Math.round(qty * 1000) * price) / 1000);
+      subtotal += line;
+      cell.textContent = formatAmount(fromMinor(line));
+    });
+    const discount = parseMinor(f.discount.value);
+    if (Number.isNaN(discount) || discount > subtotal) valid = false;
+    const disc = Number.isNaN(discount) ? 0 : Math.min(discount, subtotal);
+    const rate = f.applyVat.checked ? state.formVatRate : 0;
+    const vat = Math.round(((subtotal - disc) * Math.round(rate * 100)) / 10000);
+    const total = subtotal - disc + vat;
+    if (itemsBody.children.length === 0 || total <= 0) valid = false;
+    return { valid, subtotal, discount: disc, vat, total, rate };
+  }
+
+  /** Current amount in halalas (from items when used), NaN when invalid. */
+  function currentAmountMinor(): number {
+    if (f.useItems.checked) {
+      const c = calcItems();
+      byId('t-subtotal').textContent = formatAmount(fromMinor(c.subtotal));
+      byId('t-discount').textContent = formatAmount(fromMinor(c.discount));
+      byId('t-vat-label').textContent = c.rate ? `الضريبة (${c.rate}%)` : 'الضريبة';
+      byId('t-vat').textContent = formatAmount(fromMinor(c.vat));
+      byId('t-total').textContent = formatAmount(fromMinor(c.total));
+      f.amount.value = c.total > 0 ? formatAmount(fromMinor(c.total)).replace(/,/g, '') : '';
+      return c.total > 0 ? c.total : NaN;
+    }
+    return parseMinor(f.amount.value);
+  }
+
+  function refreshAmounts() {
+    const amount = currentAmountMinor();
+    const words = byId('words-preview');
+    words.textContent = Number.isFinite(amount) && amount > 0 ? amountToArabicWords(fromMinor(amount), state.currency) : '—';
+
+    const remainder = byId('split-remainder');
+    if (f.method.value === 'mixed') {
+      const buckets = [f.cash, f.bank, f.cheque, f.card].map(i => parseMinor(i.value));
+      if (buckets.some(Number.isNaN)) {
+        remainder.className = 'mt-3 text-sm text-red-700';
+        remainder.textContent = 'يرجى إدخال مبالغ صحيحة (بحد أقصى منزلتين عشريتين)';
+      } else if (!Number.isFinite(amount) || amount <= 0) {
+        remainder.className = 'mt-3 text-sm text-muted-foreground';
+        remainder.textContent = 'أدخل مبلغ السند أولاً';
+      } else {
+        const sum = buckets.reduce((a, b) => a + b, 0);
+        const diff = amount - sum;
+        if (diff === 0) {
+          remainder.className = 'mt-3 text-sm font-medium text-green-700';
+          remainder.textContent = `✓ مجموع التوزيع يطابق مبلغ السند (${money(fromMinor(amount))})`;
+        } else {
+          remainder.className = 'mt-3 text-sm font-medium text-red-700';
+          remainder.textContent =
+            diff > 0 ? `المتبقي غير الموزع: ${money(fromMinor(diff))}` : `التوزيع يزيد عن مبلغ السند بمقدار ${money(fromMinor(-diff))}`;
+        }
+      }
+    }
+    refreshPaymentDetails();
+  }
+
+  function refreshPaymentDetails() {
+    const method = f.method.value as Method;
+    const mixed = method === 'mixed';
+    const pos = (input: HTMLInputElement) => {
+      const m = parseMinor(input.value);
+      return Number.isFinite(m) && m > 0;
+    };
+    const cheque = method === 'cheque' || (mixed && pos(f.cheque));
+    const bank = method === 'bank_transfer' || (mixed && pos(f.bank));
+    const card = method === 'card' || (mixed && pos(f.card));
+    show(byId('mixed-section'), mixed);
+    document.querySelectorAll<HTMLElement>('[data-detail="cheque"]').forEach(el => show(el, cheque));
+    document.querySelectorAll<HTMLElement>('[data-detail="bank"]').forEach(el => show(el, cheque || bank));
+    document.querySelectorAll<HTMLElement>('[data-detail="ref"]').forEach(el => show(el, bank || card));
+    byId('bank-label').textContent = cheque && !bank ? 'مسحوب على بنك' : 'البنك';
+    const details = byId('details-section');
+    details.classList.toggle('hidden', !(cheque || bank || card));
+    details.classList.toggle('grid', cheque || bank || card);
+  }
+
+  function setItemsMode(on: boolean) {
+    f.useItems.checked = on;
+    show(byId('items-section'), on);
+    f.amount.readOnly = on;
+    f.amount.classList.toggle('bg-gray-100', on);
+    if (on && itemsBody.children.length === 0) addItemRow();
+    refreshAmounts();
+  }
+
+  function refreshPartyFields() {
+    const type = f.type.value as VType;
+    byId('party-label').textContent = PARTY_LABEL[type];
+    const isEmployee = f.partyType.value === 'employee';
+    show(byId('employee-row'), isEmployee);
+    f.partyName.readOnly = isEmployee || state.lockedParty;
+    f.partyName.classList.toggle('bg-gray-100', isEmployee || state.lockedParty);
+    if (isEmployee && !state.lockedParty && f.employee.options.length <= 1) {
+      void fillEmployeeSelect(currentBranchForForm(), null);
+    }
+  }
+
+  function setFormError(message: string | null) {
+    const box = byId('form-error');
+    box.textContent = message ?? '';
+    show(box, Boolean(message));
+    if (message) box.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+
+  function branchName(id: string): string {
+    return state.ctx?.branches.find(b => b.id === id)?.name ?? id;
+  }
+
+  // ---------------------------------------------------------------- open dialog
+  function resetForm() {
+    form.reset();
+    itemsBody.innerHTML = '';
+    state.editing = null;
+    state.lockedParty = false;
+    setFormError(null);
+    show(byId('locked-note'), false);
+    f.type.disabled = false;
+    f.partyType.disabled = false;
+    f.useItems.disabled = false;
+    f.discount.disabled = false;
+    f.applyVat.disabled = false;
+    f.amount.readOnly = false;
+    state.formVatRate = state.vatRate;
+    f.employee.innerHTML = '<option value="">— اختر الموظف —</option>';
+    const today = todayIso();
+    f.date.value = today;
+    f.date.max = addDays(today, 1);
+    byId('vat-label').textContent = `تطبيق ضريبة القيمة المضافة (${state.formVatRate}%)`;
+    const approveWrap = byId('approve-now-wrap');
+    approveWrap.classList.toggle('hidden', !state.perms.approve);
+    approveWrap.classList.toggle('flex', state.perms.approve);
+  }
+
+  function configureTypeOptions(selected: VType) {
+    Array.from(f.type.options).forEach(o => {
+      o.disabled = o.value === 'receipt' ? !state.perms.createReceipt : !state.perms.createPayment;
+    });
+    f.type.value = selected;
+  }
+
+  function openCreate(type: VType) {
+    resetForm();
+    configureTypeOptions(type);
+    f.partyType.value = type === 'payment' ? 'employee' : 'customer';
+    f.method.value = 'cash';
+    byId('dialog-title').textContent = `${TYPE_LABEL[type]} جديد`;
+    byId('dialog-subtitle').textContent = `الفرع: ${branchName(state.branchId)} — سيُعطى الرقم تلقائياً عند الحفظ`;
+    setItemsMode(false);
+    refreshPartyFields();
+    refreshAmounts();
+    voucherDialog.showModal();
+    if (f.partyType.value === 'employee') f.employee.focus();
+    else f.partyName.focus();
+  }
+
+  async function openEdit(id: string, button: HTMLButtonElement | null) {
+    try {
+      const { voucher: v } = await withBusy(button, '...', () => api<{ voucher: Voucher }>(`/api/vouchers/get?id=${encodeURIComponent(id)}`));
+      resetForm();
+      state.editing = v;
+      state.lockedParty = v.sourceType !== 'manual';
+      configureTypeOptions(v.type);
+      f.type.disabled = true;
+      byId('dialog-title').textContent = `تعديل ${TYPE_LABEL[v.type]}`;
+      byId('dialog-subtitle').textContent = `${v.number} — الفرع: ${v.branchName ?? branchName(v.branchId)}`;
+      show(byId('locked-note'), state.lockedParty);
+      f.date.value = v.date;
+      f.partyType.value = v.partyType;
+      f.partyType.disabled = state.lockedParty;
+      f.partyName.value = v.partyName;
+      f.partyId.value = v.partyIdNumber ?? '';
+      f.partyPhone.value = v.partyPhone ?? '';
+      f.purpose.value = v.purpose;
+      f.notes.value = v.notes ?? '';
+      f.method.value = v.paymentMethod;
+      const amt = (n: number) => (toMinor(n) > 0 ? formatAmount(n).replace(/,/g, '') : '');
+      f.cash.value = v.paymentMethod === 'mixed' ? amt(v.split.cash) : '';
+      f.bank.value = v.paymentMethod === 'mixed' ? amt(v.split.bank) : '';
+      f.cheque.value = v.paymentMethod === 'mixed' ? amt(v.split.cheque) : '';
+      f.card.value = v.paymentMethod === 'mixed' ? amt(v.split.card) : '';
+      f.chequeNumber.value = v.chequeNumber ?? '';
+      f.chequeDate.value = v.chequeDate ?? '';
+      f.bankName.value = v.bankName ?? '';
+      f.transactionRef.value = v.transactionRef ?? '';
+      if (v.items.length) {
+        v.items.forEach(item => addItemRow(item));
+        f.discount.value = v.discount && toMinor(v.discount) > 0 ? amt(v.discount) : '';
+        f.applyVat.checked = Boolean(v.vatRate && v.vatRate > 0);
+        if (v.vatRate && v.vatRate > 0) {
+          state.formVatRate = v.vatRate;
+          byId('vat-label').textContent = `تطبيق ضريبة القيمة المضافة (${v.vatRate}%)`;
+        }
+        setItemsMode(true);
+      } else {
+        f.amount.value = amt(v.amount);
+        setItemsMode(false);
+      }
+      if (state.lockedParty) {
+        f.useItems.disabled = true;
+        f.amount.readOnly = true;
+        f.amount.classList.add('bg-gray-100');
+        itemsBody.querySelectorAll('input, button').forEach(el => ((el as HTMLInputElement).disabled = true));
+        f.discount.disabled = true;
+        f.applyVat.disabled = true;
+      }
+      if (v.partyType === 'employee') {
+        await fillEmployeeSelect(v.branchId, v.employeeId, v.partyName);
+      }
+      refreshPartyFields();
+      refreshAmounts();
+      voucherDialog.showModal();
+    } catch (error) {
+      toast(errorMessage(error), 'error');
+    }
+  }
+
+  // ---------------------------------------------------------------- submit
+  function buildBody(): Record<string, unknown> | string {
+    const type = f.type.value as VType;
+    const method = f.method.value as Method;
+    const body: Record<string, unknown> = {
+      type,
+      branchId: currentBranchForForm(),
+      date: f.date.value,
+      partyType: f.partyType.value,
+      partyName: f.partyName.value.trim(),
+      partyIdNumber: f.partyId.value.trim(),
+      partyPhone: f.partyPhone.value.trim(),
+      purpose: f.purpose.value.trim(),
+      paymentMethod: method,
+      notes: f.notes.value.trim(),
+    };
+    if (!f.date.value) return 'يرجى اختيار تاريخ السند';
+    if (f.partyType.value === 'employee' && !state.lockedParty) {
+      if (!f.employee.value) return 'يرجى اختيار الموظف';
+      body.employeeId = f.employee.value;
+    } else if (!body.partyName) {
+      return `يرجى إدخال الاسم (${PARTY_LABEL[type]})`;
+    }
+    if (!body.purpose) return 'يرجى إدخال البيان (وذلك مقابل)';
+
+    let amountMinor: number;
+    if (f.useItems.checked && !state.lockedParty) {
+      const c = calcItems();
+      if (!c.valid) return 'يرجى إكمال البنود بشكل صحيح (وصف، كمية أكبر من صفر، سعر صحيح) والتأكد أن الخصم لا يتجاوز المجموع';
+      body.items = Array.from(itemsBody.querySelectorAll('tr')).map(tr => ({
+        description: tr.querySelector<HTMLInputElement>('[data-field="description"]')!.value.trim(),
+        quantity: tr.querySelector<HTMLInputElement>('[data-field="quantity"]')!.value.trim(),
+        unitPrice: tr.querySelector<HTMLInputElement>('[data-field="unitPrice"]')!.value.trim() || '0',
+      }));
+      body.discount = f.discount.value.trim() || '0';
+      body.applyVat = f.applyVat.checked;
+      if (f.applyVat.checked) body.vatRate = state.formVatRate;
+      amountMinor = c.total;
+    } else {
+      amountMinor = parseMinor(f.amount.value);
+      if (!Number.isFinite(amountMinor) || amountMinor <= 0) return 'يرجى إدخال مبلغ صحيح أكبر من صفر';
+      body.amount = f.amount.value.replace(/,/g, '').trim();
+    }
+
+    if (method === 'mixed') {
+      const pairs: Array<[string, HTMLInputElement]> = [['cashAmount', f.cash], ['bankAmount', f.bank], ['chequeAmount', f.cheque], ['cardAmount', f.card]];
+      let sum = 0;
+      for (const [key, input] of pairs) {
+        const m = parseMinor(input.value);
+        if (Number.isNaN(m)) return 'مبالغ طرق الدفع غير صحيحة';
+        sum += m;
+        body[key] = input.value.replace(/,/g, '').trim() || '0';
+      }
+      if (sum !== amountMinor) return 'مجموع مبالغ طرق الدفع لا يساوي مبلغ السند';
+    }
+    const visible = (el: HTMLElement) => !el.closest('.hidden');
+    if (visible(f.chequeNumber)) {
+      if (!f.chequeNumber.value.trim()) return 'رقم الشيك مطلوب';
+      body.chequeNumber = f.chequeNumber.value.trim();
+      body.chequeDate = f.chequeDate.value;
+    }
+    if (visible(f.bankName)) body.bankName = f.bankName.value.trim();
+    if (visible(f.transactionRef)) body.transactionRef = f.transactionRef.value.trim();
+    if (state.perms.approve && f.approveNow.checked) body.approveNow = true;
+    if (state.editing) body.id = state.editing.id;
+    return body;
+  }
+
+  async function submitForm(event: SubmitEvent) {
+    event.preventDefault();
+    const body = buildBody();
+    if (typeof body === 'string') {
+      setFormError(body);
+      return;
+    }
+    setFormError(null);
+    const editing = Boolean(state.editing);
+    const button = byId<HTMLButtonElement>('save-btn');
+    try {
+      const { voucher } = await withBusy(button, 'جاري الحفظ...', () =>
+        api<{ voucher: Voucher }>(editing ? '/api/vouchers/update' : '/api/vouchers/create', { body }),
+      );
+      voucherDialog.close();
+      toast(editing ? `تم تعديل السند ${voucher.number}` : `تم إنشاء السند ${voucher.number}`);
+      state.lastSaved = voucher;
+      byId('saved-number').textContent = voucher.number;
+      byId('saved-status').textContent = voucher.statusLabel;
+      byId('saved-amount').textContent = `${TYPE_LABEL[voucher.type]} بمبلغ ${money(voucher.amount)} — ${voucher.partyName}`;
+      savedDialog.showModal();
+      if (voucher.type !== state.type) {
+        state.type = voucher.type;
+        renderTabs();
+      }
+      reload(!editing);
+    } catch (error) {
+      setFormError(errorMessage(error));
+    }
+  }
+
+  // ---------------------------------------------------------------- approve / cancel
+  async function approveVoucher(id: string, button: HTMLButtonElement) {
+    const v = state.rows.find(r => r.id === id);
+    if (!v) return;
+    const ok = window.confirm(`اعتماد ${TYPE_LABEL[v.type]} رقم ${v.number} بمبلغ ${money(v.amount)}؟\nسيظهر توقيعك وختم الشركة على السند المطبوع.`);
+    if (!ok) return;
+    try {
+      await withBusy(button, 'جاري الاعتماد...', () => api('/api/vouchers/approve', { body: { id } }));
+      toast(`تم اعتماد السند ${v.number}`);
+      reload(false);
+    } catch (error) {
+      toast(errorMessage(error), 'error');
+      reload(false);
+    }
+  }
+
+  function openCancel(id: string) {
+    const v = state.rows.find(r => r.id === id);
+    if (!v) return;
+    state.cancelling = v;
+    byId('cancel-number').textContent = v.number;
+    byId('cancel-info').textContent = `${TYPE_LABEL[v.type]} — ${v.partyName} — ${money(v.amount)}`;
+    const approved = v.status === 'approved';
+    show(byId('cancel-warning'), approved);
+    show(byId('cancel-reason-required'), approved, 'inline');
+    byId<HTMLTextAreaElement>('cancel-reason').value = '';
+    byId('cancel-error').classList.add('hidden');
+    cancelDialog.showModal();
+    byId('cancel-reason').focus();
+  }
+
+  async function submitCancel(event: SubmitEvent) {
+    event.preventDefault();
+    const v = state.cancelling;
+    if (!v) return;
+    const reason = byId<HTMLTextAreaElement>('cancel-reason').value.trim();
+    const errorBox = byId('cancel-error');
+    if (v.status === 'approved' && reason.length < 3) {
+      errorBox.textContent = 'يرجى كتابة سبب الإلغاء';
+      errorBox.classList.remove('hidden');
+      return;
+    }
+    try {
+      const res = await withBusy(byId<HTMLButtonElement>('cancel-submit'), 'جاري الإلغاء...', () =>
+        api<{ warnings?: string[] }>('/api/vouchers/cancel', { body: { id: v.id, reason } }),
+      );
+      cancelDialog.close();
+      toast(`تم إلغاء السند ${v.number}`);
+      for (const warning of res.warnings ?? []) toast(warning, 'info');
+      reload(false);
+    } catch (error) {
+      errorBox.textContent = errorMessage(error);
+      errorBox.classList.remove('hidden');
+    }
+  }
+
+  // ---------------------------------------------------------------- wiring
+  document.querySelectorAll<HTMLButtonElement>('.type-tab').forEach(tab =>
+    tab.addEventListener('click', () => {
+      const type = tab.dataset.type === 'payment' ? 'payment' : 'receipt';
+      if (type === state.type) return;
+      state.type = type;
+      renderTabs();
+      reload();
+    }),
+  );
+
+  branchSel.addEventListener('change', () => {
+    state.branchId = branchSel.value;
+    reload();
+  });
+  statusSel.addEventListener('change', () => {
+    state.status = statusSel.value;
+    reload();
+  });
+  fromInput.addEventListener('change', () => {
+    state.from = fromInput.value;
+    reload();
+  });
+  toInput.addEventListener('change', () => {
+    state.to = toInput.value;
+    reload();
+  });
+  let searchTimer: ReturnType<typeof setTimeout> | undefined;
+  qInput.addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      state.q = qInput.value.trim();
+      reload();
+    }, 350);
+  });
+  byId('reset-filters').addEventListener('click', () => {
+    state.status = state.from = state.to = state.q = '';
+    statusSel.value = fromInput.value = toInput.value = qInput.value = '';
+    reload();
+  });
+  byId('clear-source').addEventListener('click', () => {
+    state.source = state.sourceId = '';
+    renderSourceBanner();
+    reload();
+  });
+  byId('prev-page').addEventListener('click', () => {
+    state.offset = Math.max(0, state.offset - PAGE_SIZE);
+    reload(false);
+  });
+  byId('next-page').addEventListener('click', () => {
+    state.offset += PAGE_SIZE;
+    reload(false);
+  });
+
+  byId('new-receipt-btn').addEventListener('click', () => openCreate('receipt'));
+  byId('new-payment-btn').addEventListener('click', () => openCreate('payment'));
+
+  tbody.addEventListener('click', event => {
+    const button = (event.target as HTMLElement).closest<HTMLButtonElement>('button[data-action]');
+    if (!button) return;
+    const id = button.dataset.id ?? '';
+    switch (button.dataset.action) {
+      case 'approve':
+        void approveVoucher(id, button);
+        break;
+      case 'edit':
+        void openEdit(id, button);
+        break;
+      case 'cancel':
+        openCancel(id);
+        break;
+      case 'retry':
+        void loadList();
+        break;
+    }
+  });
+
+  document.querySelectorAll<HTMLButtonElement>('[data-close]').forEach(button =>
+    button.addEventListener('click', () => byId<HTMLDialogElement>(button.dataset.close!).close()),
+  );
+
+  f.type.addEventListener('change', () => {
+    const type = f.type.value as VType;
+    byId('dialog-title').textContent = `${TYPE_LABEL[type]} جديد`;
+    refreshPartyFields();
+  });
+  f.partyType.addEventListener('change', () => {
+    if (f.partyType.value !== 'employee') {
+      f.employee.value = '';
+    } else {
+      f.partyName.value = '';
+      f.partyId.value = '';
+    }
+    refreshPartyFields();
+  });
+  f.employee.addEventListener('change', () => void onEmployeeChange());
+  f.useItems.addEventListener('change', () => setItemsMode(f.useItems.checked));
+  byId('add-item').addEventListener('click', () => {
+    if (itemsBody.children.length >= 30) {
+      toast('الحد الأقصى 30 بنداً في السند الواحد', 'error');
+      return;
+    }
+    addItemRow().querySelector<HTMLInputElement>('[data-field="description"]')!.focus();
+    refreshAmounts();
+  });
+  itemsBody.addEventListener('input', refreshAmounts);
+  itemsBody.addEventListener('click', event => {
+    const remove = (event.target as HTMLElement).closest('[data-remove-item]');
+    if (!remove) return;
+    remove.closest('tr')?.remove();
+    if (itemsBody.children.length === 0) addItemRow();
+    refreshAmounts();
+  });
+  [f.discount, f.amount, f.cash, f.bank, f.cheque, f.card].forEach(input => input.addEventListener('input', refreshAmounts));
+  f.applyVat.addEventListener('change', refreshAmounts);
+  f.method.addEventListener('change', () => {
+    if (f.method.value === 'mixed' && ![f.cash, f.bank, f.cheque, f.card].some(i => i.value.trim())) {
+      // Start the split with everything in cash so the remainder reads naturally.
+      const amount = currentAmountMinor();
+      if (Number.isFinite(amount) && amount > 0) f.cash.value = formatAmount(fromMinor(amount)).replace(/,/g, '');
+    }
+    refreshAmounts();
+  });
+  form.addEventListener('submit', event => void submitForm(event as SubmitEvent));
+  byId<HTMLFormElement>('cancel-form').addEventListener('submit', event => void submitCancel(event as SubmitEvent));
+
+  byId('saved-print').addEventListener('click', () => {
+    if (state.lastSaved) window.open(`/vouchers/print/${encodeURIComponent(state.lastSaved.id)}`, '_blank', 'noopener');
+    savedDialog.close();
+  });
+  byId('saved-print-two').addEventListener('click', () => {
+    if (state.lastSaved) window.open(`/vouchers/print/${encodeURIComponent(state.lastSaved.id)}?copies=2`, '_blank', 'noopener');
+    savedDialog.close();
+  });
+
+  // ---------------------------------------------------------------- init
+  async function init() {
+    renderTabs();
+    statusSel.value = ['pending', 'approved', 'cancelled'].includes(state.status) ? state.status : '';
+    state.status = statusSel.value;
+    fromInput.value = /^\d{4}-\d{2}-\d{2}$/.test(state.from) ? state.from : '';
+    toInput.value = /^\d{4}-\d{2}-\d{2}$/.test(state.to) ? state.to : '';
+    state.from = fromInput.value;
+    state.to = toInput.value;
+    qInput.value = state.q;
+    renderSourceBanner();
+    try {
+      const ctx = await loadFinanceContext();
+      state.ctx = ctx;
+      state.currency = ctx.organization.currency;
+      state.vatRate = ctx.organization.vatRate;
+      state.branchId = fillBranchSelect(branchSel, ctx);
+      const wanted = params.get('branchId');
+      if (wanted && ctx.permissions.canViewAllBranches && ctx.branches.some(b => b.id === wanted)) {
+        branchSel.value = wanted;
+        state.branchId = wanted;
+      }
+      if (!state.branchId) {
+        renderMessageRow('لا يوجد فرع مرتبط بحسابك');
+        return;
+      }
+      syncUrl();
+      await loadList();
+    } catch (error) {
+      pageError.textContent = `تعذر تحميل بيانات الصفحة: ${errorMessage(error)}`;
+      pageError.classList.remove('hidden');
+      renderMessageRow(`<span class="text-red-700">${escapeHtml(errorMessage(error))}</span> <button type="button" data-action="retry-init" class="mr-2 rounded border px-2 py-1 text-xs hover:bg-gray-50">إعادة المحاولة</button>`);
+      tbody.querySelector('[data-action="retry-init"]')?.addEventListener('click', () => {
+        pageError.classList.add('hidden');
+        void init();
+      });
+    }
+  }
+
+  void init();
+</script>

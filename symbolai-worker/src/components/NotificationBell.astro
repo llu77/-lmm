@@ -1,0 +1,431 @@
+---
+// In-app notifications bell for the header (no props).
+// Hidden until /api/notifications/list answers for a signed-in user, so it
+// renders nothing on pages without a session or when the API is unavailable.
+// Uses plain fetch on purpose: client.ts api() redirects to the login page on 401.
+---
+
+<div id="notification-bell" class="relative print:hidden" hidden>
+  <button
+    type="button"
+    data-nb="button"
+    class="relative inline-flex h-9 w-9 items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+    aria-haspopup="true"
+    aria-expanded="false"
+    aria-controls="notification-bell-panel"
+    aria-label="الإشعارات"
+  >
+    <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+      <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+    </svg>
+    <span
+      data-nb="badge"
+      class="absolute -top-0.5 -end-0.5 min-w-[1.125rem] h-[1.125rem] rounded-full bg-red-600 px-1 text-center text-[10px] font-bold leading-[1.125rem] text-white ring-2 ring-white"
+      aria-hidden="true"
+      hidden
+    ></span>
+  </button>
+
+  <div
+    id="notification-bell-panel"
+    data-nb="panel"
+    class="absolute end-0 top-full z-[60] mt-2 w-80 max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-lg border bg-white text-right shadow-xl"
+    aria-label="الإشعارات"
+    hidden
+  >
+    <div class="flex items-center justify-between gap-2 border-b bg-gray-50 px-4 py-2.5">
+      <h2 class="text-sm font-semibold text-gray-900">الإشعارات</h2>
+      <button
+        type="button"
+        data-nb="mark-all"
+        class="rounded px-1 text-xs font-medium text-blue-700 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:text-gray-400 disabled:no-underline"
+        disabled
+      >
+        تعليم الكل كمقروء
+      </button>
+    </div>
+    <p data-nb="status" class="px-4 py-8 text-center text-sm text-gray-500" role="status">جاري التحميل…</p>
+    <ul data-nb="list" role="menu" aria-label="قائمة الإشعارات" class="max-h-[min(24rem,70vh)] divide-y overflow-y-auto overscroll-contain" hidden></ul>
+  </div>
+</div>
+
+<script>
+  interface BellNotification {
+    id: string;
+    type: string;
+    severity: string;
+    title: string;
+    message: string;
+    link: string | null;
+    isRead: boolean;
+    createdAt: string;
+  }
+
+  const POLL_MS = 60_000;
+  const LIST_URL = '/api/notifications/list?limit=20';
+  const READ_URL = '/api/notifications/read';
+
+  /** Same-origin relative links only ("/x"); never "//host", "/\host" or other schemes. */
+  function safeLink(value: unknown): string | null {
+    if (typeof value !== 'string') return null;
+    const link = value.trim();
+    return /^\/(?![/\\])[^\s\\]*$/.test(link) ? link : null;
+  }
+
+  function parseTimestamp(value: string): Date | null {
+    if (!value) return null;
+    const iso = /^\d{4}-\d{2}-\d{2}$/.test(value)
+      ? `${value}T12:00:00Z`
+      : value.includes('T') ? value : `${value.replace(' ', 'T')}Z`;
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
+  let relativeFormatter: Intl.RelativeTimeFormat | null = null;
+  try {
+    relativeFormatter = new Intl.RelativeTimeFormat('ar-u-nu-latn', { numeric: 'auto' });
+  } catch {
+    relativeFormatter = null;
+  }
+  let absoluteFormatter: Intl.DateTimeFormat | null = null;
+  try {
+    absoluteFormatter = new Intl.DateTimeFormat('ar-SA-u-ca-gregory-nu-latn', {
+      year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+    });
+  } catch {
+    absoluteFormatter = null;
+  }
+
+  function absoluteTime(d: Date): string {
+    return absoluteFormatter ? absoluteFormatter.format(d) : d.toISOString().slice(0, 16).replace('T', ' ');
+  }
+
+  /** "قبل 5 دقائق", "أمس", … */
+  function relativeTime(d: Date): string {
+    const diff = (d.getTime() - Date.now()) / 1000;
+    const abs = Math.abs(diff);
+    if (abs < 45) return 'الآن';
+    if (!relativeFormatter) return absoluteTime(d);
+    const steps: Array<[number, number, Intl.RelativeTimeFormatUnit]> = [
+      [3600, 60, 'minute'],
+      [86400, 3600, 'hour'],
+      [7 * 86400, 86400, 'day'],
+      [30 * 86400, 7 * 86400, 'week'],
+      [365 * 86400, 30 * 86400, 'month'],
+    ];
+    for (const [limit, unitSeconds, unit] of steps) {
+      if (abs < limit) return relativeFormatter.format(Math.round(diff / unitSeconds), unit);
+    }
+    return relativeFormatter.format(Math.round(diff / (365 * 86400)), 'year');
+  }
+
+  const SEVERITY_DOT: Record<string, string> = {
+    info: 'bg-blue-500',
+    success: 'bg-green-500',
+    warning: 'bg-amber-500',
+    critical: 'bg-red-600',
+  };
+
+  function isNotification(value: unknown): value is BellNotification {
+    const n = value as BellNotification;
+    return !!n && typeof n === 'object' && typeof n.id === 'string' && typeof n.title === 'string';
+  }
+
+  function initNotificationBell(): void {
+    const root = document.getElementById('notification-bell');
+    if (!root || root.dataset.ready === '1') return;
+    root.dataset.ready = '1';
+
+    const q = <T extends HTMLElement>(name: string) => root.querySelector<T>(`[data-nb="${name}"]`);
+    const button = q<HTMLButtonElement>('button');
+    const badge = q<HTMLSpanElement>('badge');
+    const panel = q<HTMLDivElement>('panel');
+    const markAll = q<HTMLButtonElement>('mark-all');
+    const status = q<HTMLParagraphElement>('status');
+    const list = q<HTMLUListElement>('list');
+    if (!button || !badge || !panel || !markAll || !status || !list) return;
+
+    let items: BellNotification[] = [];
+    let unread = 0;
+    let loaded = false;
+    let failed = false;
+    let stopped = false;
+    let lastFetch = 0;
+    let timer: number | undefined;
+    let inFlight: Promise<void> | null = null;
+
+    const isOpen = () => !panel.hidden;
+
+    function renderBadge(): void {
+      badge!.hidden = unread <= 0;
+      badge!.textContent = unread > 99 ? '99+' : String(unread);
+      button!.setAttribute('aria-label', unread > 0 ? `الإشعارات، ${unread} غير مقروءة` : 'الإشعارات');
+      markAll!.disabled = unread <= 0;
+    }
+
+    function itemNode(n: BellNotification): HTMLLIElement {
+      const li = document.createElement('li');
+      li.setAttribute('role', 'none');
+
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.setAttribute('role', 'menuitem');
+      item.dataset.id = n.id;
+      item.className = n.isRead
+        ? 'flex w-full items-start gap-3 px-4 py-3 text-right transition-colors hover:bg-gray-50 focus:outline-none focus-visible:bg-gray-100'
+        : 'flex w-full items-start gap-3 bg-blue-50 px-4 py-3 text-right transition-colors hover:bg-blue-100/70 focus:outline-none focus-visible:bg-blue-100';
+
+      const dot = document.createElement('span');
+      dot.setAttribute('aria-hidden', 'true');
+      dot.className = n.isRead
+        ? 'mt-1.5 h-2 w-2 shrink-0 rounded-full bg-transparent'
+        : `mt-1.5 h-2 w-2 shrink-0 rounded-full ${SEVERITY_DOT[n.severity] ?? SEVERITY_DOT.info}`;
+
+      const body = document.createElement('span');
+      body.className = 'min-w-0 flex-1';
+
+      const title = document.createElement('span');
+      title.className = n.isRead ? 'block text-sm font-semibold text-gray-700' : 'block text-sm font-bold text-gray-900';
+      title.textContent = n.title;
+
+      const message = document.createElement('span');
+      message.className = 'mt-0.5 whitespace-pre-line break-words text-xs leading-5 text-gray-600 line-clamp-3';
+      message.textContent = n.message;
+
+      body.append(title, message);
+
+      const when = parseTimestamp(n.createdAt);
+      if (when) {
+        const time = document.createElement('time');
+        time.className = 'mt-1 block text-[11px] text-gray-400';
+        time.dateTime = when.toISOString();
+        time.title = absoluteTime(when);
+        time.textContent = relativeTime(when);
+        body.append(time);
+      }
+
+      const srState = document.createElement('span');
+      srState.className = 'sr-only';
+      srState.textContent = n.isRead ? '' : ' (غير مقروء)';
+      body.append(srState);
+
+      item.append(dot, body);
+      item.addEventListener('click', () => void activate(n));
+      li.append(item);
+      return li;
+    }
+
+    function renderList(): void {
+      if (!loaded) {
+        status!.textContent = failed ? 'تعذر تحميل الإشعارات — حاول لاحقاً' : 'جاري التحميل…';
+        status!.hidden = false;
+        list!.hidden = true;
+        return;
+      }
+      if (items.length === 0) {
+        status!.textContent = 'لا توجد إشعارات';
+        status!.hidden = false;
+        list!.hidden = true;
+        list!.replaceChildren();
+        return;
+      }
+      status!.hidden = !failed;
+      if (failed) status!.textContent = 'تعذر تحديث الإشعارات — تُعرض آخر نسخة محمّلة';
+      list!.hidden = false;
+      const active = document.activeElement as HTMLElement | null;
+      const focusedId = active && list!.contains(active) ? active.dataset.id : undefined;
+      list!.replaceChildren(...items.map(itemNode));
+      if (focusedId) list!.querySelector<HTMLButtonElement>(`[data-id="${CSS.escape(focusedId)}"]`)?.focus();
+    }
+
+    function render(): void {
+      renderBadge();
+      if (isOpen()) renderList();
+    }
+
+    function hideBell(): void {
+      close(false);
+      root!.hidden = true;
+    }
+
+    async function refresh(): Promise<void> {
+      if (stopped) return;
+      if (inFlight) return inFlight;
+      inFlight = (async () => {
+        try {
+          const response = await fetch(LIST_URL, {
+            credentials: 'same-origin',
+            headers: { Accept: 'application/json' },
+            cache: 'no-store',
+          });
+          if (response.status === 401 || response.status === 403) {
+            // Not signed in (or account disabled): show nothing, stop polling.
+            stopped = true;
+            hideBell();
+            return;
+          }
+          const data = (await response.json().catch(() => null)) as
+            | { success?: boolean; notifications?: unknown; unreadCount?: unknown }
+            | null;
+          if (!response.ok || !data || data.success !== true || !Array.isArray(data.notifications)) {
+            throw new Error(`notifications: HTTP ${response.status}`);
+          }
+          items = data.notifications.filter(isNotification);
+          unread = Math.max(0, Number(data.unreadCount) || 0);
+          loaded = true;
+          failed = false;
+          lastFetch = Date.now();
+          root!.hidden = false;
+          render();
+        } catch (error) {
+          failed = true;
+          if (!loaded) root!.hidden = true; // never show a broken bell
+          else render();
+          console.warn('Notifications unavailable:', error);
+        } finally {
+          inFlight = null;
+        }
+      })();
+      return inFlight;
+    }
+
+    async function postRead(body: { ids?: string[]; all?: boolean }): Promise<boolean> {
+      try {
+        const response = await fetch(READ_URL, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify(body),
+          keepalive: true,
+        });
+        const data = (await response.json().catch(() => null)) as { success?: boolean; unreadCount?: unknown } | null;
+        if (!response.ok || !data || data.success !== true) return false;
+        unread = Math.max(0, Number(data.unreadCount) || 0);
+        renderBadge();
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
+    async function activate(n: BellNotification): Promise<void> {
+      const link = safeLink(n.link);
+      let request: Promise<boolean> | null = null;
+      if (!n.isRead) {
+        n.isRead = true;
+        unread = Math.max(0, unread - 1);
+        render();
+        request = postRead({ ids: [n.id] });
+      }
+      if (!link) return;
+      if (request) {
+        // keepalive lets the request finish during navigation; wait briefly anyway.
+        await Promise.race([request, new Promise(resolve => setTimeout(resolve, 1200))]);
+      }
+      window.location.assign(link);
+    }
+
+    function menuItems(): HTMLButtonElement[] {
+      return Array.from(list!.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'));
+    }
+
+    function open(focusFirst: boolean): void {
+      if (isOpen()) return;
+      panel!.hidden = false;
+      button!.setAttribute('aria-expanded', 'true');
+      renderList();
+      if (focusFirst) (menuItems()[0] ?? markAll)?.focus();
+      void refresh();
+    }
+
+    function close(restoreFocus: boolean): void {
+      if (!isOpen()) return;
+      panel!.hidden = true;
+      button!.setAttribute('aria-expanded', 'false');
+      if (restoreFocus) button!.focus();
+    }
+
+    button.addEventListener('click', () => (isOpen() ? close(false) : open(false)));
+    button.addEventListener('keydown', event => {
+      if (event.key === 'ArrowDown' && !isOpen()) {
+        event.preventDefault();
+        open(true);
+      }
+    });
+
+    markAll.addEventListener('click', async () => {
+      if (unread <= 0) return;
+      markAll.disabled = true;
+      const previous = items.map(n => n.isRead);
+      const previousUnread = unread;
+      items.forEach(n => (n.isRead = true));
+      unread = 0;
+      render();
+      if (!(await postRead({ all: true }))) {
+        // Roll back the optimistic update, then resync with the server.
+        items.forEach((n, i) => (n.isRead = previous[i] ?? n.isRead));
+        unread = previousUnread;
+        render();
+        await refresh();
+      }
+    });
+
+    panel.addEventListener('keydown', event => {
+      const entries = menuItems();
+      const index = entries.indexOf(document.activeElement as HTMLButtonElement);
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        close(true);
+      } else if (event.key === 'ArrowDown' && entries.length) {
+        event.preventDefault();
+        entries[(index + 1) % entries.length].focus();
+      } else if (event.key === 'ArrowUp' && entries.length) {
+        event.preventDefault();
+        entries[index <= 0 ? entries.length - 1 : index - 1].focus();
+      } else if (event.key === 'Home' && entries.length) {
+        event.preventDefault();
+        entries[0].focus();
+      } else if (event.key === 'End' && entries.length) {
+        event.preventDefault();
+        entries[entries.length - 1].focus();
+      }
+    });
+
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && isOpen()) close(root.contains(document.activeElement));
+    });
+    document.addEventListener('pointerdown', event => {
+      if (isOpen() && event.target instanceof Node && !root.contains(event.target)) close(false);
+    });
+    root.addEventListener('focusout', event => {
+      const next = event.relatedTarget as Node | null;
+      if (isOpen() && next && !root.contains(next)) close(false);
+    });
+
+    // Poll every 60 s, only while the tab is visible.
+    function schedule(): void {
+      window.clearTimeout(timer);
+      if (stopped || document.visibilityState !== 'visible') return;
+      timer = window.setTimeout(() => {
+        void refresh().finally(schedule);
+      }, POLL_MS);
+    }
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState !== 'visible') {
+        window.clearTimeout(timer);
+        return;
+      }
+      if (Date.now() - lastFetch >= POLL_MS) void refresh().finally(schedule);
+      else schedule();
+    });
+
+    void refresh().finally(schedule);
+  }
+
+  try {
+    initNotificationBell();
+  } catch (error) {
+    console.warn('Notification bell failed to initialise:', error);
+  }
+</script>

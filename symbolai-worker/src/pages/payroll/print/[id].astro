@@ -1,0 +1,536 @@
+---
+// Printable payroll: the sheet (A4 landscape), the payslips (A4 portrait, two
+// per page) or both. ?view=sheet|payslips|both
+import PrintShell from '@/components/print/PrintShell.astro';
+import DocHeader from '@/components/print/DocHeader.astro';
+import SignatureBlock from '@/components/print/SignatureBlock.astro';
+import { financeAuth } from '@/lib/finance/http';
+import { canAccessBranch } from '@/lib/permissions';
+import { DEFAULT_PROFILE, getOrganizationProfile, getUserSignatures, type OrganizationProfile, type UserSignature } from '@/lib/finance/documents';
+import {
+  canUsePayroll,
+  loadRun,
+  loadRunItems,
+  parseActiveColumns,
+  riyadhDate,
+  runReference,
+  OPTIONAL_PAYROLL_COLUMNS,
+  RUN_STATUS_LABELS,
+  type StoredPayrollItem,
+} from '@/lib/finance/payroll-runs';
+import { computeBranchPayroll, type PayrollRunRow } from '@/lib/finance/payroll-data';
+import type { PayrollLine } from '@/lib/finance/payroll-engine';
+import { PAYROLL_COLUMN_LABELS, periodLabelAr, periodLabelEn, todayIso, type PayrollColumn } from '@/lib/finance/catalog';
+import { CURRENCIES, amountToArabicWords, amountToEnglishWords, formatAmount, fromMinor, toMinor } from '@/lib/finance/money';
+
+type View = 'sheet' | 'payslips' | 'both';
+const viewParam = Astro.url.searchParams.get('view');
+const view: View = viewParam === 'payslips' || viewParam === 'both' ? viewParam : 'sheet';
+
+let errorMessage: string | null = null;
+let run: PayrollRunRow | null = null;
+let items: StoredPayrollItem[] = [];
+let org: OrganizationProfile = DEFAULT_PROFILE;
+let signatures = new Map<string, UserSignature>();
+/** Drafts only: true when the live payroll no longer matches the saved draft; null when it could not be checked. */
+let staleDraft: boolean | null = false;
+
+const auth = await financeAuth({ request: Astro.request, locals: Astro.locals });
+if (auth instanceof Response) {
+  if (auth.status === 401) return Astro.redirect('/auth/login');
+  Astro.response.status = auth.status;
+  errorMessage = await auth
+    .json()
+    .then((body: { error?: string }) => body.error || 'تعذر التحقق من الصلاحيات')
+    .catch(() => 'تعذر التحقق من الصلاحيات');
+} else if (!canUsePayroll(auth.session)) {
+  Astro.response.status = 403;
+  errorMessage = 'صلاحيات غير كافية لعرض مسير الرواتب';
+} else {
+  try {
+    run = await loadRun(auth.db, Astro.params.id ?? '');
+    if (!run) {
+      Astro.response.status = 404;
+      errorMessage = 'مسير الرواتب غير موجود';
+    } else if (!canAccessBranch(auth.session, run.branch_id)) {
+      Astro.response.status = 403;
+      errorMessage = 'لا يمكنك الوصول إلى بيانات هذا الفرع';
+      run = null;
+    } else {
+      [items, org, signatures] = await Promise.all([
+        loadRunItems(auth.db, run.id),
+        getOrganizationProfile(auth.db),
+        getUserSignatures(auth.db, [run.created_by, run.approved_by]),
+      ]);
+      if (run.status === 'draft') {
+        // A draft is a snapshot: entries added or changed after it was saved
+        // are not on it. Warn on every printed page when it is out of date.
+        try {
+          const live = await computeBranchPayroll(auth.db, run.branch_id, run.period);
+          staleDraft = live.fingerprint !== run.fingerprint;
+        } catch (error) {
+          console.error('Payroll print: live recompute failed:', error);
+          staleDraft = null;
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Payroll print failed:', error);
+    Astro.response.status = 500;
+    errorMessage = 'حدث خطأ أثناء تحميل مسير الرواتب';
+    run = null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Derived values (only meaningful when `run` is set)
+// ---------------------------------------------------------------------------
+type Amount = Exclude<keyof StoredPayrollItem, 'employeeId' | 'employeeName' | 'nationalId' | 'lines' | 'warnings' | 'sortOrder'>;
+interface Column { key: Amount; ar: string; en: string; cls?: string }
+
+const status = run?.status ?? 'draft';
+const isApproved = status === 'approved' || status === 'paid';
+const storedActive = run ? parseActiveColumns(run.active_columns_json) : [];
+// Overtime & co. are printed whenever any employee has them, even if the stored list says otherwise.
+const active = OPTIONAL_PAYROLL_COLUMNS.filter(c => storedActive.includes(c) || items.some(i => toMinor(i[c]) !== 0));
+const optional = (keys: PayrollColumn[]): Column[] =>
+  keys.filter(k => active.includes(k)).map(k => ({ key: k, ar: PAYROLL_COLUMN_LABELS[k].ar, en: PAYROLL_COLUMN_LABELS[k].en }));
+
+const earningColumns: Column[] = [
+  { key: 'baseSalary', ar: 'الأساسي', en: 'Basic' },
+  { key: 'supervisorAllowance', ar: 'بدل إشراف', en: 'Supervision' },
+  { key: 'incentives', ar: 'حوافز', en: 'Incentives' },
+  ...optional(['overtime', 'bonus', 'otherEarnings']),
+  { key: 'totalEarnings', ar: 'إجمالي المستحقات', en: 'Gross pay', cls: 'subtotal' },
+];
+const deductionColumns: Column[] = [
+  ...optional(['advances', 'penalties', 'absenceDeductions', 'otherDeductions']),
+  { key: 'totalDeductions', ar: 'إجمالي الاستقطاعات', en: 'Total deductions', cls: 'subtotal' },
+];
+
+const sum = (key: Amount) => fromMinor(items.reduce((s, item) => s + toMinor(item[key]), 0));
+const totalNet = sum('netSalary');
+const cell = (value: number) => (toMinor(value) === 0 ? '-' : formatAmount(value));
+
+const periodAr = run ? periodLabelAr(run.period) : '';
+const periodEn = run ? periodLabelEn(run.period) : '';
+const reference = run ? runReference(run) : '';
+const statusLabel = RUN_STATUS_LABELS[status];
+const branchName = run?.branch_name ?? run?.branch_id ?? '';
+const printDate = todayIso();
+const currencySymbol = CURRENCIES[org.currency]?.symbol ?? org.currency;
+// Stored timestamps are UTC; print the Riyadh calendar day.
+const day = (value: string | null | undefined) => riyadhDate(value);
+const watermark = status === 'draft' ? 'مسودة — غير معتمد' : status === 'cancelled' ? 'ملغي' : null;
+const staleNotice =
+  status !== 'draft'
+    ? null
+    : staleDraft === true
+      ? 'تنبيه: هذه المسودة غير محدّثة — أُضيفت أو تغيّرت بنود بعد حفظها. حدّث المسودة قبل الطباعة'
+      : staleDraft === null
+        ? 'تنبيه: تعذر التحقق من أن هذه المسودة محدّثة — حدّث المسودة قبل الطباعة'
+        : null;
+
+const creatorSignature = run?.created_by ? signatures.get(run.created_by) : undefined;
+const approverSignature = isApproved && run?.approved_by ? signatures.get(run.approved_by) : undefined;
+const approverName = isApproved ? run?.approved_by_name ?? null : null;
+
+const sheetSignatures = [
+  {
+    titleAr: 'أعدّه',
+    titleEn: 'Prepared by',
+    name: run?.created_by_name ?? null,
+    signatureImage: creatorSignature?.image ?? null,
+    date: day(run?.created_at),
+  },
+  {
+    titleAr: 'اعتمده المدير',
+    titleEn: 'Approved by',
+    name: approverName,
+    signatureImage: approverSignature?.image ?? null,
+    stamp: isApproved,
+    date: isApproved ? day(run?.approved_at) : null,
+  },
+];
+
+const SOURCE_LABELS: Record<string, string> = {
+  manual: 'يدوي',
+  request: 'طلب',
+  bonus_record: 'بونص',
+  legacy_advance: 'سجل سابق',
+  legacy_deduction: 'سجل سابق',
+};
+const UNITS: Record<string, string> = { overtime: 'ساعة', late: 'ساعة', absence: 'يوم', unpaid_leave: 'يوم' };
+const qtyText = (line: PayrollLine) =>
+  line.quantity !== null && line.quantity !== undefined && line.rate !== null && line.rate !== undefined
+    ? `${line.quantity}${UNITS[line.category] ? ` ${UNITS[line.category]}` : ''} × ${formatAmount(line.rate)}`
+    : '';
+
+const detailLines = items.flatMap(item => item.lines.map(line => ({ item, line })));
+
+// Payslips: two per A4 page.
+const slipPages: StoredPayrollItem[][] = [];
+for (let i = 0; i < items.length; i += 2) slipPages.push(items.slice(i, i + 2));
+
+const backHref = run ? `/payroll?branchId=${encodeURIComponent(run.branch_id)}&period=${run.period}` : '/payroll';
+const title = run ? `مسير رواتب ${periodAr} — ${branchName}` : 'مسير الرواتب';
+---
+
+<PrintShell
+  title={title}
+  orientation={view === 'payslips' ? 'portrait' : 'landscape'}
+  backHref={backHref}
+  watermark={errorMessage ? null : watermark}
+>
+  <Fragment slot="toolbar">
+    {run && (
+      <>
+        <a class={view === 'sheet' ? 'primary' : 'secondary'} href="?view=sheet">المسير</a>
+        <a class={view === 'payslips' ? 'primary' : 'secondary'} href="?view=payslips">قسائم الرواتب</a>
+        <a class={view === 'both' ? 'primary' : 'secondary'} href="?view=both">الكل</a>
+      </>
+    )}
+  </Fragment>
+
+  {errorMessage && (
+    <section class="sheet portrait error-sheet">
+      <div class="error-box">
+        <div class="error-title">تعذر عرض المستند</div>
+        <p>{errorMessage}</p>
+        <a href="/payroll">العودة إلى صفحة الرواتب</a>
+      </div>
+    </section>
+  )}
+
+  {run && (view === 'sheet' || view === 'both') && (
+    <section class="sheet landscape payroll-sheet">
+      {staleNotice && <div class="stale-banner" role="alert">{staleNotice}</div>}
+      <DocHeader
+        org={org}
+        titleAr="مسير رواتب"
+        titleEn="Payroll Sheet"
+        branchName={branchName}
+        subtitle={`شهر ${periodAr} — ${periodEn} — ${branchName}`}
+      />
+
+      <div class="meta-line">
+        <span>رقم المسير / Ref: <b class="num">{reference}</b></span>
+        <span>الحالة / Status: <b class={`status status-${status}`}>{statusLabel.ar} / {statusLabel.en}</b></span>
+        <span>عدد الموظفين / Employees: <b class="num">{items.length}</b></span>
+        {isApproved && run.approved_at && <span>تاريخ الاعتماد: <b class="num">{day(run.approved_at)}</b></span>}
+        {status === 'paid' && run.paid_at && <span>تاريخ الصرف: <b class="num">{day(run.paid_at)}</b></span>}
+        <span>تاريخ الطباعة / Printed: <b class="num">{printDate}</b></span>
+      </div>
+      {status === 'cancelled' && run.cancel_reason && (
+        <div class="cancel-note">سبب الإلغاء: {run.cancel_reason}</div>
+      )}
+
+      <table class="sheet-table">
+        <thead>
+          <tr class="group-row">
+            <th rowspan="2" class="col-no">#<div class="en">No.</div></th>
+            <th rowspan="2" class="col-name">الموظف<div class="en">Employee</div></th>
+            <th rowspan="2" class="col-id">رقم الهوية<div class="en">ID No.</div></th>
+            <th colspan={earningColumns.length} class="group earnings">المستحقات <span class="en">Earnings</span></th>
+            <th colspan={deductionColumns.length} class="group deductions">الاستقطاعات <span class="en">Deductions</span></th>
+            <th rowspan="2" class="col-net">الصافي<div class="en">Net pay</div></th>
+            <th rowspan="2" class="col-sign">توقيع الموظف<div class="en">Signature</div></th>
+          </tr>
+          <tr>
+            {earningColumns.map(c => <th class:list={['amount-head', 'earn', c.cls, c.key === 'overtime' && 'highlight']}>{c.ar}<div class="en">{c.en}</div></th>)}
+            {deductionColumns.map(c => <th class:list={['amount-head', 'ded', c.cls]}>{c.ar}<div class="en">{c.en}</div></th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((item, index) => (
+            <tr>
+              <td class="num center">{index + 1}</td>
+              <td class="name">{item.employeeName}</td>
+              <td class="num center">{item.nationalId ?? '-'}</td>
+              {earningColumns.map(c => <td class:list={['num', 'amount', c.cls]}>{cell(item[c.key])}</td>)}
+              {deductionColumns.map(c => <td class:list={['num', 'amount', c.cls]}>{cell(item[c.key])}</td>)}
+              <td class:list={['num', 'amount', 'net', toMinor(item.netSalary) < 0 && 'negative']}>{formatAmount(item.netSalary)}</td>
+              <td class="sign"></td>
+            </tr>
+          ))}
+          {items.length === 0 && (
+            <tr><td colspan={earningColumns.length + deductionColumns.length + 5} class="center muted">لا توجد بيانات</td></tr>
+          )}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="3" class="total-label">الإجمالي <span class="en">Total</span></td>
+            {earningColumns.map(c => <td class:list={['num', 'amount', c.cls]}>{formatAmount(sum(c.key))}</td>)}
+            {deductionColumns.map(c => <td class:list={['num', 'amount', c.cls]}>{formatAmount(sum(c.key))}</td>)}
+            <td class="num amount net">{formatAmount(totalNet)}</td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <div class="net-summary">
+        <div class="net-figure">
+          <div class="label">صافي الرواتب المستحقة <span class="en">Total net payroll</span></div>
+          <div class="value num">{formatAmount(totalNet)} <span class="currency">{currencySymbol}</span></div>
+        </div>
+        <div class="net-words">
+          <div>{amountToArabicWords(totalNet, org.currency)}</div>
+          <div class="en">{amountToEnglishWords(totalNet, org.currency)}</div>
+        </div>
+      </div>
+
+      {detailLines.length > 0 && (
+        <div class="details">
+          <div class="details-title">بيان البنود المتغيرة <span class="en">Variable items breakdown</span></div>
+          <table class="details-table">
+            <thead>
+              <tr>
+                <th>الموظف</th>
+                <th>البند</th>
+                <th>البيان</th>
+                <th>الكمية × السعر</th>
+                <th>المصدر</th>
+                <th>مستحق</th>
+                <th>مستقطع</th>
+              </tr>
+            </thead>
+            <tbody>
+              {detailLines.map(({ item, line }) => (
+                <tr>
+                  <td>{item.employeeName}</td>
+                  <td>{line.labelAr}</td>
+                  <td>{line.description ?? ''}</td>
+                  <td class="num">{qtyText(line)}</td>
+                  <td>{SOURCE_LABELS[line.sourceType] ?? line.sourceType}</td>
+                  <td class="num amount">{line.kind === 'earning' ? formatAmount(line.amount) : ''}</td>
+                  <td class="num amount">{line.kind === 'deduction' ? formatAmount(line.amount) : ''}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <SignatureBlock slots={sheetSignatures} stampImage={org.stampImage} companyName={org.companyNameAr} />
+      {org.documentFooter && <div class="doc-footer">{org.documentFooter}</div>}
+    </section>
+  )}
+
+  {run && (view === 'payslips' || view === 'both') && slipPages.map(page => (
+    <section class="sheet portrait slips">
+      {staleNotice && <div class="stale-banner" role="alert">{staleNotice}</div>}
+      {page.map((item, index) => {
+        const earnings = item.lines.filter(l => l.kind === 'earning');
+        const deductions = item.lines.filter(l => l.kind === 'deduction');
+        return (
+          <>
+            {index === 1 && <div class="cut-line"><span>✂</span></div>}
+            <article class="slip">
+              <DocHeader
+                org={org}
+                titleAr="قسيمة راتب"
+                titleEn="Payslip"
+                branchName={branchName}
+                subtitle={`شهر ${periodAr} — ${periodEn}`}
+              />
+              <div class="slip-info">
+                <div><span class="k">الموظف / Employee:</span> <b>{item.employeeName}</b></div>
+                <div><span class="k">رقم الهوية / ID:</span> <b class="num">{item.nationalId ?? '-'}</b></div>
+                <div><span class="k">رقم المسير / Ref:</span> <b class="num">{reference}</b></div>
+                <div><span class="k">الحالة / Status:</span> <b>{statusLabel.ar}</b></div>
+              </div>
+              <div class="slip-tables">
+                <table class="slip-table">
+                  <thead><tr><th>المستحقات <span class="en">Earnings</span></th><th class="amount">المبلغ</th></tr></thead>
+                  <tbody>
+                    <tr><td>الراتب الأساسي <span class="en">Basic salary</span></td><td class="num amount">{formatAmount(item.baseSalary)}</td></tr>
+                    {toMinor(item.supervisorAllowance) !== 0 && (
+                      <tr><td>بدل إشراف <span class="en">Supervision allowance</span></td><td class="num amount">{formatAmount(item.supervisorAllowance)}</td></tr>
+                    )}
+                    {toMinor(item.incentives) !== 0 && (
+                      <tr><td>حوافز <span class="en">Incentives</span></td><td class="num amount">{formatAmount(item.incentives)}</td></tr>
+                    )}
+                    {earnings.map(line => (
+                      <tr>
+                        <td>
+                          {line.labelAr}
+                          {line.description && <span class="desc"> — {line.description}</span>}
+                          {qtyText(line) && <span class="qty num"> ({qtyText(line)})</span>}
+                        </td>
+                        <td class="num amount">{formatAmount(line.amount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot><tr><td>إجمالي المستحقات <span class="en">Gross pay</span></td><td class="num amount">{formatAmount(item.totalEarnings)}</td></tr></tfoot>
+                </table>
+                <table class="slip-table">
+                  <thead><tr><th>الاستقطاعات <span class="en">Deductions</span></th><th class="amount">المبلغ</th></tr></thead>
+                  <tbody>
+                    {deductions.map(line => (
+                      <tr>
+                        <td>
+                          {line.labelAr}
+                          {line.description && <span class="desc"> — {line.description}</span>}
+                          {qtyText(line) && <span class="qty num"> ({qtyText(line)})</span>}
+                        </td>
+                        <td class="num amount">{formatAmount(line.amount)}</td>
+                      </tr>
+                    ))}
+                    {deductions.length === 0 && <tr><td colspan="2" class="muted center">لا توجد استقطاعات</td></tr>}
+                  </tbody>
+                  <tfoot><tr><td>إجمالي الاستقطاعات <span class="en">Total deductions</span></td><td class="num amount">{formatAmount(item.totalDeductions)}</td></tr></tfoot>
+                </table>
+              </div>
+              <div class="slip-net">
+                <div class="slip-net-label">صافي الراتب <span class="en">Net pay</span></div>
+                <div class="slip-net-value num">{formatAmount(item.netSalary)} <span class="currency">{currencySymbol}</span></div>
+                <div class="slip-net-words">{amountToArabicWords(item.netSalary, org.currency)}</div>
+              </div>
+              <SignatureBlock
+                slots={[
+                  { titleAr: 'توقيع الموظف', titleEn: 'Employee', name: item.employeeName, handwritten: true },
+                  {
+                    titleAr: 'اعتمده المدير',
+                    titleEn: 'Approved by',
+                    name: approverName,
+                    signatureImage: approverSignature?.image ?? null,
+                    stamp: isApproved,
+                  },
+                ]}
+                stampImage={org.stampImage}
+                companyName={org.companyNameAr}
+              />
+            </article>
+          </>
+        );
+      })}
+    </section>
+  ))}
+</PrintShell>
+
+<style is:global>
+  @page payroll-landscape { size: A4 landscape; margin: 9mm; }
+  @page payroll-portrait { size: A4 portrait; margin: 9mm; }
+  .sheet.landscape { page: payroll-landscape; }
+  .sheet.portrait { page: payroll-portrait; }
+</style>
+
+<style>
+  .error-sheet { min-height: auto !important; }
+  .error-box { text-align: center; padding: 60px 20px; }
+  .error-title { font-size: 22px; font-weight: 800; color: var(--accent); margin-bottom: 10px; }
+  .error-box a { color: var(--navy); }
+
+  .meta-line {
+    display: flex; flex-wrap: wrap; gap: 6px 18px; justify-content: center;
+    font-size: 11px; color: var(--muted); margin: 2px 0 8px;
+  }
+  .meta-line b { color: var(--ink); }
+  .status-draft { color: #b45309 !important; }
+  .status-approved { color: #1d4ed8 !important; }
+  .status-paid { color: var(--ok) !important; }
+  .status-cancelled { color: var(--accent) !important; }
+  .cancel-note { text-align: center; color: var(--accent); font-weight: 700; margin-bottom: 6px; }
+  .stale-banner {
+    border: 2.5px solid #b91c1c; border-radius: 6px; background: #fee2e2; color: #991b1b;
+    font-size: 14px; font-weight: 800; text-align: center; padding: 7px 12px; margin-bottom: 8px;
+    break-inside: avoid; page-break-inside: avoid;
+  }
+
+  .sheet-table { width: 100%; border-collapse: collapse; font-size: 10px; line-height: 1.3; }
+  .sheet-table th, .sheet-table td { border: 1px solid var(--line); padding: 3px 4px; }
+  .sheet-table thead { display: table-header-group; }
+  .sheet-table tfoot { display: table-row-group; }
+  .sheet-table tr { break-inside: avoid; page-break-inside: avoid; }
+  .sheet-table th { background: var(--navy); color: #fff; font-weight: 700; text-align: center; vertical-align: middle; }
+  .sheet-table th .en { font-size: 8.5px; font-weight: 500; opacity: .85; }
+  .sheet-table th.group { font-size: 11px; }
+  .sheet-table th.group.earnings { background: #14532d; }
+  .sheet-table th.group.deductions { background: #7f1d1d; }
+  .sheet-table th.earn { background: #166534; }
+  .sheet-table th.ded { background: #991b1b; }
+  .sheet-table th.subtotal { background: #0f172a; }
+  .sheet-table th.highlight { background: #b45309; }
+  .sheet-table td.amount { text-align: left; white-space: nowrap; }
+  .sheet-table td.subtotal { background: var(--panel); font-weight: 700; }
+  .sheet-table td.net { background: #e0ecff; font-weight: 800; font-size: 10.5px; }
+  .sheet-table td.negative { color: var(--accent); }
+  .sheet-table td.center { text-align: center; }
+  .sheet-table td.name { font-weight: 600; min-width: 34mm; }
+  .sheet-table .col-no { width: 7mm; }
+  .sheet-table .col-id { width: 21mm; }
+  .sheet-table .col-sign { width: 27mm; }
+  .sheet-table td.sign { height: 7mm; }
+  .sheet-table tbody tr:nth-child(even) td:not(.subtotal):not(.net) { background: #f9fafb; }
+  .sheet-table tfoot td { background: var(--panel); font-weight: 800; border-top: 2px solid var(--line); }
+  .sheet-table tfoot td.net { background: #c7dbff; }
+  .total-label { text-align: center; }
+
+  .net-summary {
+    display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: center;
+    margin-top: 10px; border: 2px solid var(--navy); border-radius: 8px; padding: 8px 12px; break-inside: avoid;
+  }
+  .net-figure .label { font-size: 11px; font-weight: 700; color: var(--navy); }
+  .net-figure .value { font-size: 20px; font-weight: 800; color: var(--accent); }
+  .currency { font-size: 12px; color: var(--muted); }
+  .net-words { font-size: 12px; font-weight: 700; border-inline-start: 1px solid var(--soft-line); padding-inline-start: 12px; }
+  .net-words .en { font-size: 10.5px; font-weight: 600; color: var(--muted); }
+
+  .details { margin-top: 10px; break-inside: auto; }
+  .details-title { font-weight: 800; color: var(--navy); font-size: 12px; margin-bottom: 4px; }
+  .details-title .en { color: var(--muted); font-weight: 600; font-size: 10px; }
+  .details-table { width: 100%; border-collapse: collapse; font-size: 9.5px; }
+  .details-table thead { display: table-header-group; }
+  .details-table th { background: var(--panel); border: 1px solid var(--soft-line); padding: 2px 4px; }
+  .details-table td { border: 1px solid var(--soft-line); padding: 2px 4px; }
+  .details-table td.amount { text-align: left; white-space: nowrap; }
+  .details-table tr { break-inside: avoid; }
+  .doc-footer { margin-top: 8px; text-align: center; font-size: 10px; color: var(--muted); }
+
+  /* Payslips: two per A4 portrait page */
+  .slips { display: flex; flex-direction: column; }
+  .slip { padding: 2mm 0; break-inside: avoid; page-break-inside: avoid; }
+  .slip :global(.doc-header) { padding-bottom: 4px; }
+  .slip :global(.org-name) { font-size: 13px; }
+  .slip :global(.org-meta) { font-size: 9.5px; }
+  .slip :global(.logo) { max-height: 44px; }
+  .slip :global(.doc-title) { margin: 4px 0 4px; }
+  .slip :global(.title-ar) { font-size: 17px; letter-spacing: 3px; }
+  .slip :global(.title-en) { font-size: 11px; }
+  .slip :global(.subtitle) { font-size: 11px; }
+  .slip :global(.signatures) { margin-top: 6px; }
+  .slip :global(.sig-area) { height: 58px; }
+  .slip :global(.sig-img) { max-height: 50px; }
+  .slip :global(.stamp-img), .slip :global(.seal) { width: 56px; height: 56px; top: 1px; }
+  .slip :global(.seal-inner) { width: 46px; height: 46px; }
+  .slip :global(.seal-company) { display: none; }
+  .slip-info {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 2px 16px;
+    font-size: 11px; background: var(--panel); border-radius: 6px; padding: 4px 8px; margin-bottom: 5px;
+  }
+  .slip-info .k { color: var(--muted); }
+  .slip-tables { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: start; }
+  .slip-table { width: 100%; border-collapse: collapse; font-size: 10px; }
+  .slip-table th { background: var(--navy); color: #fff; padding: 3px 5px; text-align: right; }
+  .slip-table th.amount { text-align: left; width: 22mm; }
+  .slip-table th .en { font-size: 8.5px; opacity: .85; }
+  .slip-table td { border-bottom: 1px solid var(--soft-line); padding: 2px 5px; vertical-align: top; }
+  .slip-table td .en { font-size: 8.5px; color: var(--muted); }
+  .slip-table td.amount { text-align: left; white-space: nowrap; }
+  .slip-table td.center { text-align: center; }
+  .slip-table .desc { color: var(--muted); font-size: 9px; }
+  .slip-table .qty { color: var(--muted); font-size: 9px; }
+  .slip-table tfoot td { font-weight: 800; border-top: 1.5px solid var(--line); border-bottom: 0; background: var(--panel); }
+  .slip-net {
+    display: grid; grid-template-columns: auto auto 1fr; align-items: center; gap: 10px;
+    margin-top: 6px; border: 2px solid var(--accent); border-radius: 8px; padding: 4px 10px; background: #fff7f7;
+  }
+  .slip-net-label { font-weight: 800; color: var(--navy); font-size: 12px; }
+  .slip-net-label .en { font-size: 9.5px; color: var(--muted); }
+  .slip-net-value { font-size: 17px; font-weight: 800; color: var(--accent); }
+  .slip-net-words { font-size: 10.5px; font-weight: 700; }
+  .cut-line {
+    position: relative; border-top: 1.5px dashed #9ca3af; margin: 4mm 0; height: 0;
+  }
+  .cut-line span { position: absolute; top: -10px; inset-inline-start: 6mm; background: #fff; padding: 0 4px; color: #6b7280; font-size: 13px; }
+</style>

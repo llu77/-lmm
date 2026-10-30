@@ -1,0 +1,62 @@
+---
+// Company letterhead + bilingual document title, for vouchers and payroll prints.
+import type { OrganizationProfile } from '@/lib/finance/documents';
+
+interface Props {
+  org: OrganizationProfile;
+  titleAr: string;
+  titleEn: string;
+  branchName?: string | null;
+  /** Optional line under the title, e.g. the payroll month. */
+  subtitle?: string | null;
+}
+
+const { org, titleAr, titleEn, branchName, subtitle } = Astro.props;
+---
+
+<header class="doc-header">
+  <div class="org org-ar">
+    <div class="org-name">{org.companyNameAr}</div>
+    {branchName && <div class="org-meta">{branchName}</div>}
+    {org.crNumber && <div class="org-meta">س.ت: <span class="num">{org.crNumber}</span></div>}
+    {org.vatNumber && <div class="org-meta">الرقم الضريبي: <span class="num">{org.vatNumber}</span></div>}
+  </div>
+
+  <div class="logo-cell">
+    {org.logoImage ? <img class="logo" src={org.logoImage} alt="" /> : <div class="logo-placeholder" />}
+  </div>
+
+  <div class="org org-en en">
+    <div class="org-name">{org.companyNameEn}</div>
+    {org.crNumber && <div class="org-meta">C.R.: {org.crNumber}</div>}
+    {org.vatNumber && <div class="org-meta">VAT No.: {org.vatNumber}</div>}
+  </div>
+</header>
+
+<div class="doc-title">
+  <div class="title-ar">{titleAr}</div>
+  <div class="title-en en">{titleEn}</div>
+  {subtitle && <div class="subtitle">{subtitle}</div>}
+</div>
+
+<style>
+  .doc-header {
+    display: grid;
+    grid-template-columns: 1fr 90px 1fr;
+    align-items: center;
+    gap: 12px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--navy);
+  }
+  .org-ar { text-align: right; }
+  .org-en { text-align: left; }
+  .org-name { font-size: 17px; font-weight: 800; color: var(--navy); }
+  .org-meta { font-size: 11px; color: var(--muted); }
+  .logo-cell { display: flex; justify-content: center; }
+  .logo { max-width: 86px; max-height: 70px; object-fit: contain; }
+  .logo-placeholder { width: 1px; height: 40px; }
+  .doc-title { text-align: center; margin: 12px 0 10px; }
+  .title-ar { font-size: 26px; font-weight: 800; color: var(--accent); letter-spacing: 6px; }
+  .title-en { font-size: 16px; font-weight: 700; color: var(--accent); letter-spacing: 1px; }
+  .subtitle { margin-top: 2px; font-size: 13px; font-weight: 600; color: var(--navy); }
+</style>

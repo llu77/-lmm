@@ -1,544 +1,1196 @@
 ---
 import MainLayout from '@/layouts/MainLayout.astro';
 
-// Check authentication
+// Check authentication (the middleware enforces it too)
 const cookieHeader = Astro.request.headers.get('Cookie');
 if (!cookieHeader?.includes('session=')) {
   return Astro.redirect('/auth/login');
 }
 ---
 
-<MainLayout title="الرواتب - SymbolAI">
-  <div class="space-y-6">
-    <div>
-      <h1 class="text-3xl font-bold">إدارة الرواتب</h1>
-      <p class="text-muted-foreground mt-2">حساب وإدارة رواتب الموظفين الشهرية</p>
+<MainLayout title="مسير الرواتب - SymbolAI">
+  <div class="space-y-6" id="payroll-page">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div>
+        <h1 class="text-3xl font-bold">مسير الرواتب</h1>
+        <p class="text-muted-foreground mt-2">
+          احتساب الرواتب الشهرية من الراتب الثابت والمستحقات والاستقطاعات المعتمدة (الإضافي، السلف، الجزاءات، الغياب، البونص)، ثم الاعتماد والصرف وإصدار سندات الصرف.
+        </p>
+      </div>
+      <a
+        id="adjustments-link"
+        href="/advances-deductions"
+        class="rounded-md border px-4 py-2 text-sm font-medium hover:bg-gray-50"
+      >
+        إدارة المستحقات والاستقطاعات
+      </a>
     </div>
 
-    <!-- Calculation Section -->
-    <div class="rounded-lg border bg-card p-6">
-      <h2 class="text-xl font-semibold mb-4">حساب الرواتب</h2>
+    <div id="page-error" class="hidden rounded-lg border border-red-200 bg-red-50 p-4 text-red-700" role="alert"></div>
 
-      <div class="flex gap-4 items-end mb-4">
-        <div class="flex-1">
-          <label class="block text-sm font-medium mb-2">الشهر</label>
-          <select id="calc-month" class="w-full rounded-md border px-3 py-2">
-            <option value="1">يناير</option>
-            <option value="2">فبراير</option>
-            <option value="3">مارس</option>
-            <option value="4">أبريل</option>
-            <option value="5">مايو</option>
-            <option value="6">يونيو</option>
-            <option value="7">يوليو</option>
-            <option value="8">أغسطس</option>
-            <option value="9">سبتمبر</option>
-            <option value="10">أكتوبر</option>
-            <option value="11">نوفمبر</option>
-            <option value="12">ديسمبر</option>
-          </select>
+    <!-- Filters -->
+    <div id="filters-card" class="rounded-lg border bg-card p-6">
+      <div class="grid gap-4 md:grid-cols-4 items-end">
+        <div>
+          <label for="branch-select" class="block text-sm font-medium mb-2">الفرع</label>
+          <select id="branch-select" class="w-full rounded-md border px-3 py-2 bg-white"></select>
         </div>
-
-        <div class="flex-1">
-          <label class="block text-sm font-medium mb-2">السنة</label>
-          <select id="calc-year" class="w-full rounded-md border px-3 py-2">
-            <option value="2024">2024</option>
-            <option value="2025">2025</option>
-          </select>
+        <div>
+          <label for="month-select" class="block text-sm font-medium mb-2">الشهر</label>
+          <select id="month-select" class="w-full rounded-md border px-3 py-2 bg-white"></select>
         </div>
-
-        <button
-          id="calculate-btn"
-          class="bg-primary text-white px-6 py-2 rounded-md hover:bg-primary/90 font-medium"
-        >
-          حساب الرواتب
-        </button>
-      </div>
-
-      <!-- Calculation Results -->
-      <div id="calculation-results" class="hidden">
-        <!-- Summary Cards -->
-        <div class="grid gap-4 md:grid-cols-4 mb-6">
-          <div class="rounded-lg border bg-blue-50 p-4">
-            <h3 class="text-sm font-medium text-blue-700">عدد الموظفين</h3>
-            <p class="text-2xl font-bold mt-2 text-blue-600" id="summary-count">0</p>
-          </div>
-          <div class="rounded-lg border bg-green-50 p-4">
-            <h3 class="text-sm font-medium text-green-700">إجمالي الرواتب الأساسية</h3>
-            <p class="text-2xl font-bold mt-2 text-green-600" id="summary-gross">0 ج.م</p>
-          </div>
-          <div class="rounded-lg border bg-yellow-50 p-4">
-            <h3 class="text-sm font-medium text-yellow-700">إجمالي الخصومات</h3>
-            <p class="text-2xl font-bold mt-2 text-yellow-600" id="summary-deductions">0 ج.م</p>
-          </div>
-          <div class="rounded-lg border bg-purple-50 p-4">
-            <h3 class="text-sm font-medium text-purple-700">صافي الرواتب</h3>
-            <p class="text-2xl font-bold mt-2 text-purple-600" id="summary-net">0 ج.م</p>
-          </div>
+        <div>
+          <label for="year-select" class="block text-sm font-medium mb-2">السنة</label>
+          <select id="year-select" class="w-full rounded-md border px-3 py-2 bg-white"></select>
         </div>
-
-        <!-- Detailed Table -->
-        <div class="overflow-x-auto mb-4">
-          <table class="w-full text-sm">
-            <thead>
-              <tr class="border-b bg-gray-50">
-                <th class="text-right p-3 font-medium">الموظف</th>
-                <th class="text-right p-3 font-medium">الراتب الأساسي</th>
-                <th class="text-right p-3 font-medium">بدل إشراف</th>
-                <th class="text-right p-3 font-medium">حوافز</th>
-                <th class="text-right p-3 font-medium">مكافآت</th>
-                <th class="text-right p-3 font-medium">إجمالي المستحقات</th>
-                <th class="text-right p-3 font-medium">سلف</th>
-                <th class="text-right p-3 font-medium">خصومات</th>
-                <th class="text-right p-3 font-medium">صافي المستحق</th>
-              </tr>
-            </thead>
-            <tbody id="payroll-table-body">
-              <!-- Rows will be inserted here -->
-            </tbody>
-            <tfoot>
-              <tr class="border-t-2 font-bold bg-gray-50">
-                <td class="p-3">الإجمالي</td>
-                <td class="p-3" id="total-base">0</td>
-                <td class="p-3" id="total-allowance">0</td>
-                <td class="p-3" id="total-incentives">0</td>
-                <td class="p-3" id="total-bonus">0</td>
-                <td class="p-3 text-green-600" id="total-earnings">0</td>
-                <td class="p-3 text-red-600" id="total-advances">0</td>
-                <td class="p-3 text-red-600" id="total-deductions">0</td>
-                <td class="p-3 text-purple-600 text-lg" id="total-net">0</td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-
-        <!-- Action Buttons -->
-        <div class="flex gap-3 justify-end">
+        <div>
           <button
-            id="save-payroll-btn"
-            class="bg-primary text-white px-6 py-2 rounded-md hover:bg-primary/90 font-medium"
+            id="calculate-btn"
+            type="button"
+            class="w-full bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 font-medium disabled:opacity-60"
           >
-            حفظ سجل الرواتب
+            حساب
           </button>
         </div>
       </div>
+    </div>
 
-      <div id="no-results" class="text-center p-8 text-muted-foreground hidden">
-        اختر الشهر والسنة ثم اضغط "حساب الرواتب"
+    <!-- Sheet -->
+    <div id="sheet-loading" class="rounded-lg border bg-card p-10 text-center text-muted-foreground">
+      جاري تحميل البيانات...
+    </div>
+    <div id="sheet-error" class="hidden rounded-lg border border-red-200 bg-red-50 p-6 text-center text-red-700">
+      <p id="sheet-error-text" class="mb-3"></p>
+      <button type="button" data-action="retry" class="rounded-md border border-red-300 bg-white px-4 py-2 text-sm hover:bg-red-100">
+        إعادة المحاولة
+      </button>
+    </div>
+
+    <div id="sheet-section" class="hidden space-y-4">
+      <div class="rounded-lg border bg-card p-4 flex flex-wrap items-center justify-between gap-3">
+        <div class="flex flex-wrap items-center gap-3">
+          <h2 class="text-xl font-semibold" id="sheet-title"></h2>
+          <span id="status-badge" class="rounded-full px-3 py-1 text-xs font-semibold"></span>
+          <span id="status-meta" class="text-sm text-muted-foreground"></span>
+        </div>
+        <div id="action-bar" class="flex flex-wrap gap-2"></div>
+      </div>
+
+      <div id="banners" class="space-y-3"></div>
+
+      <div class="grid gap-4 grid-cols-2 lg:grid-cols-4">
+        <div class="rounded-lg border bg-card p-4">
+          <h3 class="text-sm font-medium text-muted-foreground">عدد الموظفين</h3>
+          <p class="text-2xl font-bold mt-2" id="card-count">0</p>
+        </div>
+        <div class="rounded-lg border bg-card p-4">
+          <h3 class="text-sm font-medium text-muted-foreground">إجمالي المستحقات</h3>
+          <p class="text-2xl font-bold mt-2 text-green-700" id="card-earnings">0</p>
+        </div>
+        <div class="rounded-lg border bg-card p-4">
+          <h3 class="text-sm font-medium text-muted-foreground">إجمالي الاستقطاعات</h3>
+          <p class="text-2xl font-bold mt-2 text-red-700" id="card-deductions">0</p>
+        </div>
+        <div class="rounded-lg border bg-card p-4">
+          <h3 class="text-sm font-medium text-muted-foreground">صافي الرواتب</h3>
+          <p class="text-2xl font-bold mt-2 text-blue-700" id="card-net">0</p>
+        </div>
+      </div>
+
+      <div class="rounded-lg border bg-card p-4 md:p-6">
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <h3 class="text-lg font-semibold">تفاصيل المسير</h3>
+          <div class="flex flex-wrap items-center gap-4">
+            <label class="flex items-center gap-2 text-sm">
+              <input type="checkbox" id="show-all-columns" class="rounded" />
+              <span>عرض جميع الأعمدة</span>
+            </label>
+            <button type="button" data-action="toggle-all" id="toggle-all-btn" class="text-sm text-blue-700 hover:underline">
+              توسيع الكل
+            </button>
+          </div>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm" id="payroll-table">
+            <thead id="payroll-thead"></thead>
+            <tbody id="payroll-tbody"></tbody>
+            <tfoot id="payroll-tfoot"></tfoot>
+          </table>
+        </div>
+        <p class="mt-3 text-xs text-muted-foreground">اضغط على اسم الموظف لعرض كل بنود راتبه (البيان، الكمية × السعر، المصدر).</p>
       </div>
     </div>
 
-    <!-- Historical Records -->
+    <!-- History -->
     <div class="rounded-lg border bg-card p-6">
-      <h2 class="text-xl font-semibold mb-4">السجلات السابقة</h2>
-
-      <div class="flex gap-3 mb-4">
-        <select id="history-month" class="rounded-md border px-3 py-2 text-sm">
-          <option value="">جميع الأشهر</option>
-          <option value="1">يناير</option>
-          <option value="2">فبراير</option>
-          <option value="3">مارس</option>
-          <option value="4">أبريل</option>
-          <option value="5">مايو</option>
-          <option value="6">يونيو</option>
-          <option value="7">يوليو</option>
-          <option value="8">أغسطس</option>
-          <option value="9">سبتمبر</option>
-          <option value="10">أكتوبر</option>
-          <option value="11">نوفمبر</option>
-          <option value="12">ديسمبر</option>
-        </select>
-        <select id="history-year" class="rounded-md border px-3 py-2 text-sm">
-          <option value="">جميع السنوات</option>
-          <option value="2024">2024</option>
-          <option value="2025">2025</option>
-        </select>
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <h2 class="text-xl font-semibold">سجل مسيرات الرواتب</h2>
+        <span id="history-caption" class="text-sm text-muted-foreground"></span>
       </div>
-
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead>
-            <tr class="border-b">
-              <th class="text-right p-3 font-medium">الشهر/السنة</th>
-              <th class="text-right p-3 font-medium">عدد الموظفين</th>
-              <th class="text-right p-3 font-medium">صافي الرواتب</th>
-              <th class="text-right p-3 font-medium">تم الإنشاء بواسطة</th>
-              <th class="text-right p-3 font-medium">التاريخ</th>
+            <tr class="border-b bg-gray-50">
+              <th class="text-right p-3 font-medium">الفترة</th>
+              <th class="text-right p-3 font-medium">الحالة</th>
+              <th class="text-right p-3 font-medium">الموظفون</th>
+              <th class="text-right p-3 font-medium">إجمالي المستحقات</th>
+              <th class="text-right p-3 font-medium">إجمالي الاستقطاعات</th>
+              <th class="text-right p-3 font-medium">الصافي</th>
+              <th class="text-right p-3 font-medium">أعدّه</th>
+              <th class="text-right p-3 font-medium">اعتمده</th>
+              <th class="text-right p-3 font-medium">السندات</th>
               <th class="text-right p-3 font-medium">إجراءات</th>
             </tr>
           </thead>
-          <tbody id="history-table-body">
-            <tr>
-              <td colspan="6" class="text-center p-8 text-muted-foreground">
-                جاري التحميل...
-              </td>
-            </tr>
+          <tbody id="history-tbody">
+            <tr><td colspan="10" class="text-center p-8 text-muted-foreground">جاري التحميل...</td></tr>
           </tbody>
         </table>
       </div>
     </div>
   </div>
 
-  <!-- View Payroll Details Dialog -->
-  <dialog id="view-payroll-dialog" class="rounded-lg p-6 shadow-lg max-w-5xl w-full">
-    <div class="flex items-center justify-between mb-4">
-      <h3 class="text-xl font-semibold">تفاصيل الرواتب</h3>
-      <button id="close-payroll-dialog" class="text-gray-500 hover:text-gray-700">✕</button>
-    </div>
+  <!-- Quick-add adjustment -->
+  <dialog id="adjustment-dialog" class="w-full max-w-lg rounded-lg p-0 shadow-xl backdrop:bg-black/50">
+    <form id="adjustment-form" class="p-6 space-y-4" novalidate>
+      <div class="flex items-center justify-between">
+        <h3 class="text-lg font-semibold">إضافة بند — <span id="adj-period"></span></h3>
+        <button type="button" data-close class="text-gray-500 hover:text-gray-700" aria-label="إغلاق">✕</button>
+      </div>
+      <div>
+        <label for="adj-employee" class="block text-sm font-medium mb-1">الموظف</label>
+        <select id="adj-employee" class="w-full rounded-md border px-3 py-2 bg-white" required></select>
+      </div>
+      <div>
+        <label for="adj-category" class="block text-sm font-medium mb-1">نوع البند</label>
+        <select id="adj-category" class="w-full rounded-md border px-3 py-2 bg-white" required></select>
+      </div>
+      <div id="adj-qty-row" class="grid grid-cols-2 gap-3">
+        <div>
+          <label for="adj-quantity" id="adj-qty-label" class="block text-sm font-medium mb-1">الكمية</label>
+          <input id="adj-quantity" type="number" min="0" step="0.25" inputmode="decimal" class="w-full rounded-md border px-3 py-2" />
+        </div>
+        <div>
+          <label for="adj-rate" id="adj-rate-label" class="block text-sm font-medium mb-1">السعر</label>
+          <input id="adj-rate" type="number" min="0" step="0.01" inputmode="decimal" class="w-full rounded-md border px-3 py-2" />
+        </div>
+        <p id="adj-rate-hint" class="col-span-2 text-xs text-muted-foreground"></p>
+      </div>
+      <div id="adj-amount-row" class="hidden">
+        <label for="adj-amount" class="block text-sm font-medium mb-1">المبلغ</label>
+        <input id="adj-amount" type="number" min="0" step="0.01" inputmode="decimal" class="w-full rounded-md border px-3 py-2" />
+      </div>
+      <div id="adj-computed" class="rounded-md bg-gray-50 p-3 text-sm"></div>
+      <div>
+        <label for="adj-description" class="block text-sm font-medium mb-1">البيان (اختياري)</label>
+        <input id="adj-description" type="text" maxlength="300" class="w-full rounded-md border px-3 py-2" placeholder="مثال: عمل إضافي أيام الجمعة" />
+      </div>
+      <p id="adj-error" class="hidden text-sm text-red-600" role="alert"></p>
+      <div class="flex justify-end gap-2 pt-2 border-t">
+        <button type="button" data-close class="border px-4 py-2 rounded-md hover:bg-gray-50">إلغاء</button>
+        <button type="submit" id="adj-submit" class="bg-blue-600 text-white px-5 py-2 rounded-md hover:bg-blue-700 disabled:opacity-60">حفظ البند</button>
+      </div>
+    </form>
+  </dialog>
 
-    <div id="payroll-details-content">
-      <!-- Payroll details will be inserted here -->
-    </div>
+  <!-- Pay -->
+  <dialog id="pay-dialog" class="w-full max-w-lg rounded-lg p-0 shadow-xl backdrop:bg-black/50">
+    <form id="pay-form" class="p-6 space-y-4" novalidate>
+      <div class="flex items-center justify-between">
+        <h3 class="text-lg font-semibold" id="pay-title">صرف الرواتب</h3>
+        <button type="button" data-close class="text-gray-500 hover:text-gray-700" aria-label="إغلاق">✕</button>
+      </div>
+      <p class="text-sm" id="pay-summary"></p>
+      <fieldset>
+        <legend class="block text-sm font-medium mb-2">طريقة الصرف</legend>
+        <div class="flex gap-6">
+          <label class="flex items-center gap-2 text-sm"><input type="radio" name="pay-method" value="bank_transfer" checked /> حوالة بنكية</label>
+          <label class="flex items-center gap-2 text-sm"><input type="radio" name="pay-method" value="cash" /> نقداً</label>
+        </div>
+      </fieldset>
+      <label id="pay-vouchers-row" class="flex items-center gap-2 text-sm">
+        <input type="checkbox" id="pay-vouchers" class="rounded" checked />
+        <span>إصدار سند صرف لكل موظف</span>
+      </label>
+      <p id="pay-note" class="text-xs text-muted-foreground"></p>
+      <p id="pay-error" class="hidden text-sm text-red-600" role="alert"></p>
+      <div class="flex justify-end gap-2 pt-2 border-t">
+        <button type="button" data-close class="border px-4 py-2 rounded-md hover:bg-gray-50">إلغاء</button>
+        <button type="submit" id="pay-submit" class="bg-green-600 text-white px-5 py-2 rounded-md hover:bg-green-700 disabled:opacity-60">تأكيد الصرف</button>
+      </div>
+    </form>
+  </dialog>
 
-    <div class="flex justify-end mt-4 pt-4 border-t">
-      <button
-        id="close-payroll-dialog-btn"
-        class="border px-6 py-2 rounded-md hover:bg-gray-50"
-      >
-        إغلاق
-      </button>
-    </div>
+  <!-- Cancel -->
+  <dialog id="cancel-dialog" class="w-full max-w-lg rounded-lg p-0 shadow-xl backdrop:bg-black/50">
+    <form id="cancel-form" class="p-6 space-y-4" novalidate>
+      <div class="flex items-center justify-between">
+        <h3 class="text-lg font-semibold">إلغاء مسير الرواتب</h3>
+        <button type="button" data-close class="text-gray-500 hover:text-gray-700" aria-label="إغلاق">✕</button>
+      </div>
+      <p class="text-sm text-muted-foreground" id="cancel-summary"></p>
+      <div>
+        <label for="cancel-reason" class="block text-sm font-medium mb-1">سبب الإلغاء</label>
+        <textarea id="cancel-reason" rows="3" maxlength="500" class="w-full rounded-md border px-3 py-2" required></textarea>
+      </div>
+      <p id="cancel-error" class="hidden text-sm text-red-600" role="alert"></p>
+      <div class="flex justify-end gap-2 pt-2 border-t">
+        <button type="button" data-close class="border px-4 py-2 rounded-md hover:bg-gray-50">تراجع</button>
+        <button type="submit" id="cancel-submit" class="bg-red-600 text-white px-5 py-2 rounded-md hover:bg-red-700 disabled:opacity-60">إلغاء المسير</button>
+      </div>
+    </form>
   </dialog>
 
   <script>
-    interface PayrollEmployee {
+    import {
+      api,
+      ApiError,
+      byId,
+      escapeHtml,
+      fillBranchSelect,
+      fillPeriodSelects,
+      formatDate,
+      loadFinanceContext,
+      money,
+      readPeriod,
+      toast,
+      withBusy,
+      type FinanceContextPayload,
+    } from '@/lib/finance/client';
+    import { ADJUSTMENT_CATEGORIES, parsePeriod, type AdjustmentCategory } from '@/lib/finance/catalog';
+    import { formatAmount, toMinor, fromMinor } from '@/lib/finance/money';
+
+    // ------------------------------------------------------------------
+    // Types (mirror the API responses)
+    // ------------------------------------------------------------------
+    type Status = 'draft' | 'approved' | 'paid' | 'cancelled';
+    interface Line {
+      adjustmentId: string;
+      category: string;
+      kind: 'earning' | 'deduction';
+      labelAr: string;
+      amount: number;
+      quantity: number | null;
+      rate: number | null;
+      description: string | null;
+      sourceType: string;
+    }
+    interface Item {
       employeeId: string;
       employeeName: string;
-      nationalId: string;
+      nationalId: string | null;
       baseSalary: number;
       supervisorAllowance: number;
       incentives: number;
+      fixedSalary: number;
+      overtime: number;
       bonus: number;
-      grossSalary: number;
+      otherEarnings: number;
       totalEarnings: number;
       advances: number;
-      deductions: number;
+      penalties: number;
+      absenceDeductions: number;
+      otherDeductions: number;
       totalDeductions: number;
       netSalary: number;
+      lines: Line[];
+      warnings: string[];
+      dailyRate?: number;
+      overtimeHourlyRate?: number;
     }
-
-    interface PayrollRecord {
+    interface Run {
       id: string;
-      branch_id: string;
-      month: string;
-      year: number;
-      employees: PayrollEmployee[];
-      total_net_salary: number;
-      generated_by: string;
-      generated_at: string;
+      reference: string;
+      branchId: string;
+      branchName: string | null;
+      period: string;
+      periodLabelAr: string;
+      status: Status;
+      statusLabel: string;
+      employeeCount: number;
+      totalEarnings: number;
+      totalDeductions: number;
+      totalNet: number;
+      activeColumns: string[];
+      createdByName: string | null;
+      createdAt: string;
+      updatedAt: string;
+      approvedByName: string | null;
+      approvedAt: string | null;
+      paidByName: string | null;
+      paidAt: string | null;
+      cancelledByName: string | null;
+      cancelledAt: string | null;
+      cancelReason: string | null;
+      voucherCount: number | null;
+    }
+    interface Orphan {
+      employeeName: string;
+      categoryLabel: string;
+      kind: 'earning' | 'deduction';
+      amount: number;
+      description: string | null;
+      reasonAr: string;
+    }
+    interface CalcResponse {
+      branchId: string;
+      branchName: string;
+      period: string;
+      periodLabelAr: string;
+      employeeCount: number;
+      items: Item[];
+      activeColumns: string[];
+      orphans: Orphan[];
+      run: Run | null;
+      locked: boolean;
+      stale: boolean;
+      changedSinceApproval: boolean;
+    }
+    interface GetResponse {
+      run: Run;
+      items: Item[];
+      activeColumns: string[];
+      vouchers: Array<{ id: string; status: string }>;
     }
 
-    let currentPayrollData: PayrollEmployee[] = [];
-    let currentTotals: any = null;
-    let currentMonth: string = '';
-    let currentYear: string = '';
+    type AmountKey = Exclude<keyof Item, 'employeeId' | 'employeeName' | 'nationalId' | 'lines' | 'warnings' | 'dailyRate' | 'overtimeHourlyRate'>;
+    interface Column { key: AmountKey; label: string; group: 'earn' | 'ded' | 'net'; optional?: boolean; strong?: boolean }
 
-    const monthNames = [
-      '', 'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
-      'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'
+    const COLUMNS: Column[] = [
+      { key: 'baseSalary', label: 'الأساسي', group: 'earn' },
+      { key: 'supervisorAllowance', label: 'بدل إشراف', group: 'earn' },
+      { key: 'incentives', label: 'حوافز', group: 'earn' },
+      { key: 'overtime', label: 'إضافي', group: 'earn', optional: true },
+      { key: 'bonus', label: 'مكافآت', group: 'earn', optional: true },
+      { key: 'otherEarnings', label: 'مستحقات أخرى', group: 'earn', optional: true },
+      { key: 'totalEarnings', label: 'إجمالي المستحقات', group: 'earn', strong: true },
+      { key: 'advances', label: 'سلف', group: 'ded', optional: true },
+      { key: 'penalties', label: 'جزاءات', group: 'ded', optional: true },
+      { key: 'absenceDeductions', label: 'غياب وإجازات', group: 'ded', optional: true },
+      { key: 'otherDeductions', label: 'استقطاعات أخرى', group: 'ded', optional: true },
+      { key: 'totalDeductions', label: 'إجمالي الاستقطاعات', group: 'ded', strong: true },
+      { key: 'netSalary', label: 'الصافي', group: 'net', strong: true },
     ];
 
-    // Helper functions
-    function formatCurrency(amount: number): string {
-      return `${amount.toFixed(2)} ج.م`;
-    }
+    const STATUS_STYLES: Record<Status | 'preview', string> = {
+      preview: 'bg-gray-100 text-gray-700',
+      draft: 'bg-amber-100 text-amber-800',
+      approved: 'bg-blue-100 text-blue-800',
+      paid: 'bg-green-100 text-green-800',
+      cancelled: 'bg-gray-200 text-gray-600',
+    };
+    const STATUS_LABELS: Record<Status, string> = { draft: 'مسودة', approved: 'معتمد', paid: 'مدفوع', cancelled: 'ملغي' };
+    const SOURCE_LABELS: Record<string, string> = {
+      manual: 'يدوي',
+      request: 'طلب',
+      bonus_record: 'بونص',
+      legacy_advance: 'سجل سابق',
+      legacy_deduction: 'سجل سابق',
+    };
+    const UNITS: Record<string, string> = { overtime: 'ساعة', late: 'ساعة', absence: 'يوم', unpaid_leave: 'يوم' };
 
-    function formatDate(dateStr: string): string {
-      if (!dateStr) return '-';
-      return new Date(dateStr).toLocaleDateString('ar-EG');
-    }
-
-    // Set current month/year
-    const now = new Date();
-    (document.getElementById('calc-month') as HTMLSelectElement).value = (now.getMonth() + 1).toString();
-    (document.getElementById('calc-year') as HTMLSelectElement).value = now.getFullYear().toString();
-
-    // Calculate payroll
-    document.getElementById('calculate-btn')?.addEventListener('click', async () => {
-      const month = (document.getElementById('calc-month') as HTMLSelectElement).value;
-      const year = (document.getElementById('calc-year') as HTMLSelectElement).value;
-
-      try {
-        const response = await fetch('/api/payroll/calculate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            branchId: 'BR001',
-            month,
-            year
-          })
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-          currentPayrollData = data.payrollData;
-          currentTotals = data.totals;
-          currentMonth = month;
-          currentYear = year;
-
-          renderPayrollResults(data);
-          document.getElementById('calculation-results')!.classList.remove('hidden');
-          document.getElementById('no-results')!.classList.add('hidden');
-        } else {
-          alert(data.error || 'حدث خطأ أثناء الحساب');
-          document.getElementById('calculation-results')!.classList.add('hidden');
-          document.getElementById('no-results')!.classList.remove('hidden');
-        }
-      } catch (error) {
-        console.error('Error calculating payroll:', error);
-        alert('حدث خطأ أثناء حساب الرواتب');
-      }
-    });
-
-    function renderPayrollResults(data: any) {
-      // Update summary cards
-      document.getElementById('summary-count')!.textContent = data.employeeCount.toString();
-      document.getElementById('summary-gross')!.textContent = formatCurrency(data.totals.totalGrossSalary);
-      document.getElementById('summary-deductions')!.textContent = formatCurrency(
-        data.totals.totalAdvances + data.totals.totalDeductions
-      );
-      document.getElementById('summary-net')!.textContent = formatCurrency(data.totals.totalNetSalary);
-
-      // Render table
-      const tbody = document.getElementById('payroll-table-body')!;
-      tbody.innerHTML = data.payrollData.map((emp: PayrollEmployee) => `
-        <tr class="border-b hover:bg-gray-50">
-          <td class="p-3 font-medium">${emp.employeeName}</td>
-          <td class="p-3">${formatCurrency(emp.baseSalary)}</td>
-          <td class="p-3">${formatCurrency(emp.supervisorAllowance)}</td>
-          <td class="p-3">${formatCurrency(emp.incentives)}</td>
-          <td class="p-3">${formatCurrency(emp.bonus)}</td>
-          <td class="p-3 font-semibold text-green-600">${formatCurrency(emp.totalEarnings)}</td>
-          <td class="p-3 text-red-600">${formatCurrency(emp.advances)}</td>
-          <td class="p-3 text-red-600">${formatCurrency(emp.deductions)}</td>
-          <td class="p-3 font-bold text-purple-600">${formatCurrency(emp.netSalary)}</td>
-        </tr>
-      `).join('');
-
-      // Update totals row
-      document.getElementById('total-base')!.textContent = formatCurrency(
-        data.payrollData.reduce((sum: number, e: PayrollEmployee) => sum + e.baseSalary, 0)
-      );
-      document.getElementById('total-allowance')!.textContent = formatCurrency(
-        data.payrollData.reduce((sum: number, e: PayrollEmployee) => sum + e.supervisorAllowance, 0)
-      );
-      document.getElementById('total-incentives')!.textContent = formatCurrency(
-        data.payrollData.reduce((sum: number, e: PayrollEmployee) => sum + e.incentives, 0)
-      );
-      document.getElementById('total-bonus')!.textContent = formatCurrency(data.totals.totalBonus);
-      document.getElementById('total-earnings')!.textContent = formatCurrency(data.totals.totalEarnings);
-      document.getElementById('total-advances')!.textContent = formatCurrency(data.totals.totalAdvances);
-      document.getElementById('total-deductions')!.textContent = formatCurrency(data.totals.totalDeductions);
-      document.getElementById('total-net')!.textContent = formatCurrency(data.totals.totalNetSalary);
-    }
-
-    // Save payroll
-    document.getElementById('save-payroll-btn')?.addEventListener('click', async () => {
-      if (!currentPayrollData.length) {
-        alert('لا توجد بيانات لحفظها');
-        return;
-      }
-
-      if (!confirm('هل تريد حفظ سجل الرواتب؟ لن تتمكن من التعديل بعد الحفظ.')) {
-        return;
-      }
-
-      try {
-        const response = await fetch('/api/payroll/save', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            branchId: 'BR001',
-            month: currentMonth,
-            year: currentYear,
-            payrollData: currentPayrollData,
-            totals: currentTotals
-          })
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-          alert('تم حفظ سجل الرواتب بنجاح');
-          loadHistoricalRecords();
-          // Clear current calculation
-          document.getElementById('calculation-results')!.classList.add('hidden');
-          document.getElementById('no-results')!.classList.remove('hidden');
-          currentPayrollData = [];
-        } else {
-          alert(data.error || 'حدث خطأ أثناء الحفظ');
-        }
-      } catch (error) {
-        console.error('Error saving payroll:', error);
-        alert('حدث خطأ أثناء حفظ الرواتب');
-      }
-    });
-
-    // Load historical records
-    async function loadHistoricalRecords() {
-      const month = (document.getElementById('history-month') as HTMLSelectElement).value;
-      const year = (document.getElementById('history-year') as HTMLSelectElement).value;
-
-      try {
-        let url = '/api/payroll/list?branchId=BR001';
-        if (month) url += `&month=${month}`;
-        if (year) url += `&year=${year}`;
-
-        const response = await fetch(url);
-        const data = await response.json();
-
-        if (data.success) {
-          renderHistoricalRecords(data.payrollRecords);
-        }
-      } catch (error) {
-        console.error('Error loading historical records:', error);
-      }
-    }
-
-    function renderHistoricalRecords(records: PayrollRecord[]) {
-      const tbody = document.getElementById('history-table-body')!;
-
-      if (records.length === 0) {
-        tbody.innerHTML = `
-          <tr>
-            <td colspan="6" class="text-center p-8 text-muted-foreground">
-              لا توجد سجلات
-            </td>
-          </tr>
-        `;
-        return;
-      }
-
-      tbody.innerHTML = records.map(record => `
-        <tr class="border-b hover:bg-gray-50">
-          <td class="p-3 font-medium">${monthNames[parseInt(record.month)]} ${record.year}</td>
-          <td class="p-3">${record.employees.length}</td>
-          <td class="p-3 font-semibold text-purple-600">${formatCurrency(record.total_net_salary)}</td>
-          <td class="p-3">${record.generated_by || '-'}</td>
-          <td class="p-3 text-sm text-gray-600">${formatDate(record.generated_at)}</td>
-          <td class="p-3">
-            <button
-              onclick="viewPayrollDetails('${record.id}')"
-              class="text-primary hover:underline text-sm"
-            >
-              عرض التفاصيل
-            </button>
-          </td>
-        </tr>
-      `).join('');
-    }
-
-    // View payroll details
-    const viewDialog = document.getElementById('view-payroll-dialog') as HTMLDialogElement;
-
-    (window as any).viewPayrollDetails = async function(payrollId: string) {
-      try {
-        const response = await fetch(`/api/payroll/list?branchId=BR001`);
-        const data = await response.json();
-
-        if (data.success) {
-          const record = data.payrollRecords.find((r: PayrollRecord) => r.id === payrollId);
-          if (record) {
-            renderPayrollDetails(record);
-            viewDialog.showModal();
-          }
-        }
-      } catch (error) {
-        console.error('Error loading payroll details:', error);
-      }
+    /** Categories entered as quantity × rate, with the suggested rate for the employee. */
+    const QTY_MODES: Partial<Record<AdjustmentCategory, { label: string; rate: (i: Item) => number; hint: string }>> = {
+      overtime: {
+        label: 'عدد الساعات',
+        rate: i => i.overtimeHourlyRate ?? 0,
+        hint: 'سعر الساعة المقترح = أجر الساعة (الراتب الثابت ÷ 30 ÷ 8) + 50% من أجر الساعة الأساسي — المادة 107 من نظام العمل. يمكنك تعديله.',
+      },
+      absence: { label: 'عدد أيام الغياب', rate: i => i.dailyRate ?? 0, hint: 'أجر اليوم = الراتب الثابت ÷ 30. يمكنك تعديله.' },
+      unpaid_leave: { label: 'عدد أيام الإجازة', rate: i => i.dailyRate ?? 0, hint: 'أجر اليوم = الراتب الثابت ÷ 30. يمكنك تعديله.' },
+      late: { label: 'عدد ساعات التأخير', rate: i => fromMinor(Math.round(toMinor(i.dailyRate ?? 0) / 8)), hint: 'أجر الساعة = أجر اليوم ÷ 8. يمكنك تعديله.' },
     };
 
-    function renderPayrollDetails(record: PayrollRecord) {
-      const content = document.getElementById('payroll-details-content')!;
+    // ------------------------------------------------------------------
+    // State
+    // ------------------------------------------------------------------
+    let ctx: FinanceContextPayload | null = null;
+    let calc: CalcResponse | null = null;
+    let stored: GetResponse | null = null;
+    const expanded = new Set<string>();
+    let requestSeq = 0;
 
-      const totals = record.employees.reduce((acc, emp) => ({
-        totalGross: acc.totalGross + emp.grossSalary,
-        totalBonus: acc.totalBonus + emp.bonus,
-        totalEarnings: acc.totalEarnings + emp.totalEarnings,
-        totalAdvances: acc.totalAdvances + emp.advances,
-        totalDeductions: acc.totalDeductions + emp.deductions,
-        totalNet: acc.totalNet + emp.netSalary
-      }), {
-        totalGross: 0,
-        totalBonus: 0,
-        totalEarnings: 0,
-        totalAdvances: 0,
-        totalDeductions: 0,
-        totalNet: 0
-      });
+    // workers-types redefines Element.remove(), so HTMLSelectElement fails byId's
+    // HTMLElement constraint under `astro check`; look selects up through this helper.
+    const selectById = (id: string) => byId(id) as unknown as HTMLSelectElement;
+    const branchSelect = selectById('branch-select');
+    const monthSelect = selectById('month-select');
+    const yearSelect = selectById('year-select');
+    const calculateBtn = byId<HTMLButtonElement>('calculate-btn');
 
-      content.innerHTML = `
-        <div class="mb-4 p-4 bg-gray-50 rounded">
-          <h4 class="font-semibold mb-2">معلومات السجل</h4>
-          <div class="grid grid-cols-3 gap-4 text-sm">
-            <div>
-              <span class="text-gray-600">الشهر/السنة:</span>
-              <span class="font-medium mr-2">${monthNames[parseInt(record.month)]} ${record.year}</span>
-            </div>
-            <div>
-              <span class="text-gray-600">عدد الموظفين:</span>
-              <span class="font-medium mr-2">${record.employees.length}</span>
-            </div>
-            <div>
-              <span class="text-gray-600">صافي الرواتب:</span>
-              <span class="font-medium mr-2 text-purple-600">${formatCurrency(record.total_net_salary)}</span>
-            </div>
-          </div>
-        </div>
+    const perms = () => ctx?.permissions;
+    const isAdmin = () => perms()?.canApproveFinance === true;
+    const canRun = () => perms()?.canGeneratePayroll === true || isAdmin();
+    const canAdjust = () => perms()?.canGeneratePayroll === true || perms()?.canManageEmployees === true || isAdmin();
 
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm">
-            <thead>
-              <tr class="border-b bg-gray-50">
-                <th class="text-right p-2 font-medium">الموظف</th>
-                <th class="text-right p-2 font-medium">الراتب الأساسي</th>
-                <th class="text-right p-2 font-medium">المكافآت</th>
-                <th class="text-right p-2 font-medium">إجمالي المستحقات</th>
-                <th class="text-right p-2 font-medium">الخصومات</th>
-                <th class="text-right p-2 font-medium">صافي المستحق</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${record.employees.map(emp => `
-                <tr class="border-b">
-                  <td class="p-2 font-medium">${emp.employeeName}</td>
-                  <td class="p-2">${formatCurrency(emp.baseSalary)}</td>
-                  <td class="p-2">${formatCurrency(emp.bonus)}</td>
-                  <td class="p-2 text-green-600">${formatCurrency(emp.totalEarnings)}</td>
-                  <td class="p-2 text-red-600">${formatCurrency(emp.totalDeductions)}</td>
-                  <td class="p-2 font-bold text-purple-600">${formatCurrency(emp.netSalary)}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-            <tfoot>
-              <tr class="border-t-2 font-bold bg-gray-50">
-                <td class="p-2">الإجمالي</td>
-                <td class="p-2">${formatCurrency(totals.totalGross)}</td>
-                <td class="p-2">${formatCurrency(totals.totalBonus)}</td>
-                <td class="p-2 text-green-600">${formatCurrency(totals.totalEarnings)}</td>
-                <td class="p-2 text-red-600">${formatCurrency(totals.totalAdvances + totals.totalDeductions)}</td>
-                <td class="p-2 text-purple-600 text-lg">${formatCurrency(totals.totalNet)}</td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      `;
+    const currentRun = (): Run | null => stored?.run ?? calc?.run ?? null;
+    const currentItems = (): Item[] => stored?.items ?? calc?.items ?? [];
+    const sumOf = (items: Item[], key: AmountKey) => fromMinor(items.reduce((s, i) => s + toMinor(i[key]), 0));
+
+    function show(id: string, visible: boolean) {
+      byId(id).classList.toggle('hidden', !visible);
     }
 
-    document.getElementById('close-payroll-dialog')?.addEventListener('click', () => {
-      viewDialog.close();
+    function amountCell(value: number, strong = false): string {
+      if (toMinor(value) === 0 && !strong) return '<span class="text-gray-400">—</span>';
+      const negative = toMinor(value) < 0 ? ' text-red-600' : '';
+      return `<span class="tabular-nums${negative}">${escapeHtml(formatAmount(value))}</span>`;
+    }
+
+    // ------------------------------------------------------------------
+    // Init
+    // ------------------------------------------------------------------
+    async function init() {
+      try {
+        ctx = await loadFinanceContext();
+      } catch (error) {
+        showPageError(error instanceof Error ? error.message : 'تعذر تحميل بيانات المستخدم');
+        return;
+      }
+      if (!canRun()) {
+        showPageError('لا تملك صلاحية الاطلاع على مسير الرواتب.');
+        return;
+      }
+
+      const params = new URLSearchParams(window.location.search);
+      fillBranchSelect(branchSelect, ctx);
+      const wantedBranch = params.get('branchId');
+      if (wantedBranch && !branchSelect.disabled && [...branchSelect.options].some(o => o.value === wantedBranch)) {
+        branchSelect.value = wantedBranch;
+      }
+      const wantedPeriod = params.get('period');
+      fillPeriodSelects(monthSelect, yearSelect, wantedPeriod && parsePeriod(wantedPeriod) ? wantedPeriod : undefined);
+
+      if (!branchSelect.value) {
+        showPageError('لا يوجد فرع مرتبط بحسابك — تواصل مع المدير.');
+        return;
+      }
+
+      calculateBtn.addEventListener('click', () => calculate());
+      branchSelect.addEventListener('change', () => {
+        calculate();
+        loadHistory();
+      });
+      yearSelect.addEventListener('change', () => loadHistory());
+      byId<HTMLInputElement>('show-all-columns').addEventListener('change', () => renderTable());
+
+      await Promise.all([calculate(), loadHistory()]);
+    }
+
+    function showPageError(message: string) {
+      const box = byId('page-error');
+      box.textContent = message;
+      box.classList.remove('hidden');
+      show('sheet-loading', false);
+      show('sheet-section', false);
+      show('filters-card', false);
+      byId('history-tbody').innerHTML = `<tr><td colspan="10" class="text-center p-8 text-muted-foreground">—</td></tr>`;
+    }
+
+    // ------------------------------------------------------------------
+    // Calculation
+    // ------------------------------------------------------------------
+    async function calculate() {
+      const branchId = branchSelect.value;
+      const period = readPeriod(monthSelect, yearSelect);
+      const seq = ++requestSeq;
+      show('sheet-error', false);
+      if (!calc) show('sheet-loading', true);
+      // Not withBusy: overlapping calculations would restore the busy label.
+      calculateBtn.disabled = true;
+      calculateBtn.textContent = 'جاري الحساب...';
+      try {
+        const data = await api<CalcResponse>('/api/payroll/calculate', { body: { branchId, period } });
+        let saved: GetResponse | null = null;
+        if (data.run && (data.run.status === 'approved' || data.run.status === 'paid')) {
+          // A closed period shows the approved sheet exactly as it was approved.
+          saved = await api<GetResponse>(`/api/payroll/get?id=${encodeURIComponent(data.run.id)}`);
+        }
+        if (seq !== requestSeq) return; // a newer request superseded this one
+        calc = data;
+        stored = saved;
+        updateUrl(branchId, period);
+        render();
+      } catch (error) {
+        if (seq !== requestSeq) return;
+        calc = null;
+        stored = null;
+        show('sheet-loading', false);
+        show('sheet-section', false);
+        byId('sheet-error-text').textContent = `تعذر حساب الرواتب: ${error instanceof Error ? error.message : ''}`;
+        show('sheet-error', true);
+      } finally {
+        if (seq === requestSeq) {
+          calculateBtn.disabled = false;
+          calculateBtn.textContent = 'حساب';
+        }
+      }
+    }
+
+    function updateUrl(branchId: string, period: string) {
+      const url = new URL(window.location.href);
+      url.searchParams.set('branchId', branchId);
+      url.searchParams.set('period', period);
+      window.history.replaceState(null, '', url);
+      byId<HTMLAnchorElement>('adjustments-link').href =
+        `/advances-deductions?branchId=${encodeURIComponent(branchId)}&period=${encodeURIComponent(period)}`;
+    }
+
+    // ------------------------------------------------------------------
+    // Rendering
+    // ------------------------------------------------------------------
+    function render() {
+      if (!calc) return;
+      show('sheet-loading', false);
+      show('sheet-section', true);
+      const run = currentRun();
+      const items = currentItems();
+
+      byId('sheet-title').textContent = `مسير رواتب ${calc.periodLabelAr} — ${calc.branchName}`;
+      const badge = byId('status-badge');
+      badge.className = `rounded-full px-3 py-1 text-xs font-semibold ${STATUS_STYLES[run?.status ?? 'preview']}`;
+      badge.textContent = run ? STATUS_LABELS[run.status] : 'معاينة غير محفوظة';
+      byId('status-meta').textContent = statusMeta(run);
+
+      byId('card-count').textContent = String(items.length);
+      byId('card-earnings').textContent = money(sumOf(items, 'totalEarnings'));
+      byId('card-deductions').textContent = money(sumOf(items, 'totalDeductions'));
+      byId('card-net').textContent = money(sumOf(items, 'netSalary'));
+
+      renderActions(run, items);
+      renderBanners(run, items);
+      renderTable();
+      markStaleHistoryRuns();
+    }
+
+    /** Flags the open draft's print links in the history table while it is stale. */
+    function markStaleHistoryRuns() {
+      const run = currentRun();
+      const staleId = run && isStaleDraft(run) ? run.id : null;
+      document.querySelectorAll<HTMLElement>('[data-stale-run]').forEach(el => {
+        el.classList.toggle('hidden', el.dataset.staleRun !== staleId);
+      });
+    }
+
+    function statusMeta(run: Run | null): string {
+      if (!run) return '';
+      const parts = [`رقم المسير ${run.reference}`];
+      if (run.createdByName) parts.push(`أعدّه ${run.createdByName} — ${formatDate(run.createdAt, true)}`);
+      if (run.status === 'draft' && run.updatedAt && run.updatedAt !== run.createdAt) parts.push(`آخر تحديث ${formatDate(run.updatedAt, true)}`);
+      if (run.approvedByName) parts.push(`اعتمده ${run.approvedByName} — ${formatDate(run.approvedAt, true)}`);
+      if (run.paidByName) parts.push(`صرفه ${run.paidByName} — ${formatDate(run.paidAt, true)}`);
+      return parts.join(' · ');
+    }
+
+    function button(action: string, label: string, style: 'primary' | 'success' | 'danger' | 'neutral' | 'warning' = 'neutral', extra = ''): string {
+      const styles = {
+        primary: 'bg-blue-600 text-white hover:bg-blue-700',
+        success: 'bg-green-600 text-white hover:bg-green-700',
+        danger: 'border border-red-300 text-red-700 hover:bg-red-50',
+        warning: 'bg-amber-500 text-white hover:bg-amber-600',
+        neutral: 'border hover:bg-gray-50',
+      }[style];
+      return `<button type="button" data-action="${escapeHtml(action)}" class="rounded-md px-4 py-2 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed ${styles}" ${extra}>${escapeHtml(label)}</button>`;
+    }
+
+    function link(href: string, label: string, newTab = true, warning = ''): string {
+      const style = warning
+        ? 'border-amber-400 bg-amber-50 text-amber-900 hover:bg-amber-100'
+        : 'hover:bg-gray-50';
+      return `<a href="${escapeHtml(href)}" ${newTab ? 'target="_blank" rel="noopener"' : ''}${warning ? ` title="${escapeHtml(warning)}"` : ''} class="rounded-md border px-4 py-2 text-sm font-medium ${style}">${escapeHtml(label)}</a>`;
+    }
+
+    const STALE_PRINT_WARNING = 'المسودة غير محدّثة — أُضيفت أو تغيّرت بنود بعد حفظها. حدّث المسودة قبل الطباعة';
+
+    /** The open draft no longer matches the live data (its print would miss entries). */
+    const isStaleDraft = (run: Run | null) => run?.status === 'draft' && calc?.stale === true;
+
+    function renderActions(run: Run | null, items: Item[]) {
+      if (!calc) return;
+      const html: string[] = [];
+      const hasEmployees = items.length > 0;
+      if (!calc.locked && canAdjust() && calc.items.length > 0) html.push(button('add-adjustment', '+ إضافة بند', 'neutral'));
+      if (canRun() && hasEmployees && !calc.locked) {
+        if (!run) html.push(button('save', 'حفظ كمسودة', 'primary'));
+        else if (run.status === 'draft') html.push(button('save', 'تحديث المسودة', calc.stale ? 'warning' : 'neutral'));
+      }
+      if (run?.status === 'draft' && isAdmin()) {
+        html.push(
+          button('approve', 'اعتماد المسير', 'success', calc.stale ? 'disabled title="حدّث المسودة أولاً — البيانات تغيرت منذ حفظها"' : ''),
+        );
+      }
+      if (run?.status === 'approved' && isAdmin()) html.push(button('reopen', 'إعادة فتح', 'neutral'));
+      if (run?.status === 'approved' && canRun()) html.push(button('pay', 'صرف الرواتب وإصدار السندات', 'success'));
+      if (run?.status === 'paid' && canRun()) {
+        const payable = items.filter(i => toMinor(i.netSalary) > 0).length;
+        if ((run.voucherCount ?? 0) < payable) html.push(button('pay-missing', 'إصدار السندات الناقصة', 'warning'));
+      }
+      if (run && run.status !== 'cancelled') {
+        // A stale draft can still be printed (the print carries a red warning),
+        // but the links say so, like the stale banner above the sheet.
+        const warning = isStaleDraft(run) ? STALE_PRINT_WARNING : '';
+        const suffix = warning ? ' (مسودة غير محدّثة)' : '';
+        html.push(link(`/payroll/print/${encodeURIComponent(run.id)}?view=sheet`, `طباعة المسير${suffix}`, true, warning));
+        html.push(link(`/payroll/print/${encodeURIComponent(run.id)}?view=payslips`, `طباعة قسائم الرواتب${suffix}`, true, warning));
+      }
+      if (run?.status === 'paid') {
+        html.push(link(`/vouchers?type=payment&source=payroll&sourceId=${encodeURIComponent(run.id)}&branchId=${encodeURIComponent(run.branchId)}`, 'عرض سندات الصرف', false));
+      }
+      if ((run?.status === 'draft' && canRun()) || (run?.status === 'approved' && isAdmin())) {
+        html.push(button('cancel', 'إلغاء المسير', 'danger'));
+      }
+      byId('action-bar').innerHTML = html.join('');
+    }
+
+    function banner(kind: 'info' | 'warning' | 'error' | 'success', html: string): string {
+      const styles = {
+        info: 'border-blue-200 bg-blue-50 text-blue-900',
+        warning: 'border-amber-300 bg-amber-50 text-amber-900',
+        error: 'border-red-200 bg-red-50 text-red-800',
+        success: 'border-green-200 bg-green-50 text-green-900',
+      }[kind];
+      return `<div class="rounded-lg border p-4 text-sm ${styles}">${html}</div>`;
+    }
+
+    function renderBanners(run: Run | null, items: Item[]) {
+      if (!calc) return;
+      const out: string[] = [];
+      if (calc.items.length === 0 && !stored) {
+        out.push(banner('warning', 'لا يوجد موظفون نشطون في هذا الفرع — أضف الموظفين من صفحة الموظفين أولاً.'));
+      }
+      if (!run && calc.items.length > 0) {
+        out.push(banner('info', 'هذه معاينة محسوبة من البيانات الحالية ولم تُحفظ بعد. احفظها كمسودة ليتمكن المدير من اعتمادها، ثم يمكن طباعتها وصرفها.'));
+      }
+      if (run?.status === 'draft' && calc.stale) {
+        out.push(banner('warning', '<strong>المسودة المحفوظة لا تطابق البيانات الحالية</strong> — أُضيفت أو تغيرت بنود أو رواتب بعد حفظها. الجدول يعرض البيانات الحالية؛ اضغط «تحديث المسودة» قبل الاعتماد أو الطباعة.'));
+      }
+      if (run && (run.status === 'approved' || run.status === 'paid')) {
+        out.push(banner(
+          run.status === 'paid' ? 'success' : 'info',
+          `هذا المسير <strong>${escapeHtml(STATUS_LABELS[run.status])}</strong> — الأرقام المعروضة هي المحفوظة عند الاعتماد، والفترة مقفلة فلا يمكن إضافة بنود عليها${isAdmin() && run.status === 'approved' ? ' (يمكنك إعادة فتحه للتعديل)' : ''}.`,
+        ));
+      }
+      if (calc.changedSinceApproval) {
+        out.push(banner('warning', 'تنبيه: تغيرت بيانات الموظفين أو البنود بعد الاعتماد ولن تظهر في هذا المسير. لإدراجها يجب أن يعيد المدير فتح المسير قبل الصرف.'));
+      }
+
+      const warned = items.filter(i => i.warnings.length > 0);
+      if (warned.length) {
+        out.push(banner('warning', `<strong>ملاحظات على المسير:</strong><ul class="mt-2 list-disc pr-5 space-y-1">${warned
+          .map(i => `<li><strong>${escapeHtml(i.employeeName)}:</strong> ${i.warnings.map(escapeHtml).join('، ')}</li>`)
+          .join('')}</ul>`));
+      }
+      if (calc.orphans.length && !stored) {
+        out.push(banner('error', `<strong>بنود مسجلة لموظفين غير مدرجين في هذا المسير (لن تُحتسب):</strong><ul class="mt-2 list-disc pr-5 space-y-1">${calc.orphans
+          .map(o => `<li>${escapeHtml(o.employeeName)} — ${escapeHtml(o.categoryLabel)} ${escapeHtml(formatAmount(o.amount))}${o.description ? ` (${escapeHtml(o.description)})` : ''} — <span class="text-red-700">${escapeHtml(o.reasonAr)}</span></li>`)
+          .join('')}</ul>`));
+      }
+      if (run?.status === 'paid' && run.voucherCount !== null) {
+        const payable = items.filter(i => toMinor(i.netSalary) > 0).length;
+        if (run.voucherCount < payable) {
+          out.push(banner('warning', `صدر ${run.voucherCount} من ${payable} سند صرف لهذا المسير. استخدم «إصدار السندات الناقصة» لإكمالها.`));
+        }
+      }
+      byId('banners').innerHTML = out.join('');
+    }
+
+    function visibleColumns(items: Item[], activeColumns: string[]): Column[] {
+      const showAll = byId<HTMLInputElement>('show-all-columns').checked;
+      return COLUMNS.filter(c => !c.optional || showAll || activeColumns.includes(c.key) || toMinor(sumOf(items, c.key)) !== 0);
+    }
+
+    function renderTable() {
+      if (!calc) return;
+      const items = currentItems();
+      const activeColumns = stored?.activeColumns ?? calc.activeColumns;
+      const columns = visibleColumns(items, activeColumns);
+      const groupBg = { earn: 'bg-green-50', ded: 'bg-red-50', net: 'bg-blue-50' };
+
+      byId('payroll-thead').innerHTML = `<tr class="border-b">
+        <th class="text-right p-3 font-medium bg-gray-50">الموظف</th>
+        ${columns.map(c => `<th class="text-right p-3 font-medium whitespace-nowrap ${groupBg[c.group]}${c.key === 'overtime' ? ' text-amber-800' : ''}">${escapeHtml(c.label)}</th>`).join('')}
+      </tr>`;
+
+      if (items.length === 0) {
+        byId('payroll-tbody').innerHTML = `<tr><td colspan="${columns.length + 1}" class="text-center p-8 text-muted-foreground">لا يوجد موظفون في هذا المسير</td></tr>`;
+        byId('payroll-tfoot').innerHTML = '';
+        return;
+      }
+
+      byId('payroll-tbody').innerHTML = items
+        .map(item => {
+          const open = expanded.has(item.employeeId);
+          const warn = item.warnings.length
+            ? ` <span class="mr-1 rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-800" title="${escapeHtml(item.warnings.join(' — '))}">⚠ تنبيه</span>`
+            : '';
+          return `<tr class="border-b hover:bg-gray-50">
+            <td class="p-3 font-medium whitespace-nowrap">
+              <button type="button" data-action="toggle-row" data-employee="${escapeHtml(item.employeeId)}" aria-expanded="${open}" class="flex items-center gap-2 text-right hover:text-blue-700">
+                <span class="inline-block w-3 text-gray-500">${open ? '▾' : '◂'}</span>
+                <span>${escapeHtml(item.employeeName)}</span>
+              </button>${warn}
+            </td>
+            ${columns
+              .map(c => `<td class="p-3 whitespace-nowrap${c.strong ? ' font-semibold' : ''}${c.key === 'netSalary' ? ' text-blue-700' : ''}">${amountCell(item[c.key], c.strong)}</td>`)
+              .join('')}
+          </tr>
+          <tr class="${open ? '' : 'hidden '}bg-gray-50 border-b" data-detail="${escapeHtml(item.employeeId)}">
+            <td colspan="${columns.length + 1}" class="p-4">${detailHtml(item)}</td>
+          </tr>`;
+        })
+        .join('');
+
+      byId('payroll-tfoot').innerHTML = `<tr class="border-t-2 font-bold bg-gray-50">
+        <td class="p-3">الإجمالي (${items.length})</td>
+        ${columns.map(c => `<td class="p-3 whitespace-nowrap${c.key === 'netSalary' ? ' text-blue-700' : ''}">${amountCell(sumOf(items, c.key), true)}</td>`).join('')}
+      </tr>`;
+      byId('toggle-all-btn').textContent = expanded.size >= items.length ? 'طي الكل' : 'توسيع الكل';
+    }
+
+    function lineRow(line: Line): string {
+      const qty =
+        line.quantity !== null && line.rate !== null
+          ? `${escapeHtml(line.quantity)}${UNITS[line.category] ? ` ${UNITS[line.category]}` : ''} × ${escapeHtml(formatAmount(line.rate))}`
+          : '—';
+      return `<tr class="border-b border-gray-200">
+        <td class="py-1.5 px-2">${escapeHtml(line.labelAr)}</td>
+        <td class="py-1.5 px-2 text-muted-foreground">${escapeHtml(line.description ?? '')}</td>
+        <td class="py-1.5 px-2 whitespace-nowrap tabular-nums">${qty}</td>
+        <td class="py-1.5 px-2"><span class="rounded bg-white border px-1.5 py-0.5 text-xs">${escapeHtml(SOURCE_LABELS[line.sourceType] ?? line.sourceType)}</span></td>
+        <td class="py-1.5 px-2 whitespace-nowrap tabular-nums text-left">${escapeHtml(formatAmount(line.amount))}</td>
+      </tr>`;
+    }
+
+    function fixedRow(label: string, amount: number): string {
+      return `<tr class="border-b border-gray-200">
+        <td class="py-1.5 px-2">${escapeHtml(label)}</td><td class="py-1.5 px-2 text-muted-foreground">راتب ثابت</td><td class="py-1.5 px-2">—</td><td class="py-1.5 px-2"></td>
+        <td class="py-1.5 px-2 whitespace-nowrap tabular-nums text-left">${escapeHtml(formatAmount(amount))}</td>
+      </tr>`;
+    }
+
+    function detailHtml(item: Item): string {
+      const earnings = item.lines.filter(l => l.kind === 'earning');
+      const deductions = item.lines.filter(l => l.kind === 'deduction');
+      const head = `<thead><tr class="text-xs text-muted-foreground"><th class="text-right px-2 py-1">البند</th><th class="text-right px-2 py-1">البيان</th><th class="text-right px-2 py-1">الكمية × السعر</th><th class="text-right px-2 py-1">المصدر</th><th class="text-left px-2 py-1">المبلغ</th></tr></thead>`;
+      const earnRows = [
+        fixedRow('الراتب الأساسي', item.baseSalary),
+        toMinor(item.supervisorAllowance) ? fixedRow('بدل إشراف', item.supervisorAllowance) : '',
+        toMinor(item.incentives) ? fixedRow('حوافز', item.incentives) : '',
+        ...earnings.map(lineRow),
+      ].join('');
+      const dedRows = deductions.length
+        ? deductions.map(lineRow).join('')
+        : '<tr><td colspan="5" class="py-2 px-2 text-muted-foreground">لا توجد استقطاعات</td></tr>';
+      const warnings = item.warnings.length
+        ? `<p class="mt-3 text-sm text-amber-800">⚠ ${item.warnings.map(escapeHtml).join(' — ')}</p>`
+        : '';
+      return `<div class="grid gap-4 lg:grid-cols-2">
+        <div><div class="mb-1 text-sm font-semibold text-green-800">المستحقات — ${escapeHtml(money(item.totalEarnings))}</div><table class="w-full text-sm">${head}<tbody>${earnRows}</tbody></table></div>
+        <div><div class="mb-1 text-sm font-semibold text-red-800">الاستقطاعات — ${escapeHtml(money(item.totalDeductions))}</div><table class="w-full text-sm">${head}<tbody>${dedRows}</tbody></table></div>
+      </div>
+      <div class="mt-3 text-sm">رقم الهوية: <span class="tabular-nums">${escapeHtml(item.nationalId ?? '—')}</span> · صافي الراتب: <strong class="${toMinor(item.netSalary) < 0 ? 'text-red-600' : 'text-blue-700'}">${escapeHtml(money(item.netSalary))}</strong></div>
+      ${warnings}`;
+    }
+
+    // ------------------------------------------------------------------
+    // Workflow actions
+    // ------------------------------------------------------------------
+    byId('payroll-page').addEventListener('click', event => {
+      const target = (event.target as HTMLElement).closest<HTMLElement>('[data-action]');
+      if (!target || (target as HTMLButtonElement).disabled) return;
+      const action = target.dataset.action;
+      const btn = target instanceof HTMLButtonElement ? target : null;
+      switch (action) {
+        case 'retry':
+          calculate();
+          break;
+        case 'toggle-row':
+          toggleRow(target.dataset.employee ?? '');
+          break;
+        case 'toggle-all': {
+          const items = currentItems();
+          if (expanded.size >= items.length) expanded.clear();
+          else items.forEach(i => expanded.add(i.employeeId));
+          renderTable();
+          break;
+        }
+        case 'save':
+          saveDraft(btn);
+          break;
+        case 'approve':
+          approveRun(btn);
+          break;
+        case 'reopen':
+          reopenRun(btn);
+          break;
+        case 'pay':
+          openPayDialog(false);
+          break;
+        case 'pay-missing':
+          openPayDialog(true);
+          break;
+        case 'cancel':
+          openCancelDialog();
+          break;
+        case 'add-adjustment':
+          openAdjustmentDialog();
+          break;
+        case 'view-period':
+          viewPeriod(target.dataset.period ?? '');
+          break;
+      }
     });
 
-    document.getElementById('close-payroll-dialog-btn')?.addEventListener('click', () => {
-      viewDialog.close();
+    function toggleRow(employeeId: string) {
+      if (expanded.has(employeeId)) expanded.delete(employeeId);
+      else expanded.add(employeeId);
+      renderTable();
+    }
+
+    function reportError(error: unknown, fallback: string) {
+      const message = error instanceof Error && error.message ? error.message : fallback;
+      toast(message, 'error');
+      // Conflicts mean our view is out of date: refresh it.
+      if (error instanceof ApiError && error.status === 409) {
+        calculate();
+        loadHistory();
+      }
+    }
+
+    async function saveDraft(btn: HTMLButtonElement | null) {
+      if (!calc) return;
+      const { branchId, period } = calc;
+      await withBusy(btn, 'جاري الحفظ...', async () => {
+        try {
+          const res = await api<{ message: string }>('/api/payroll/save', { body: { branchId, period } });
+          toast(res.message, 'success');
+          await Promise.all([calculate(), loadHistory()]);
+        } catch (error) {
+          reportError(error, 'تعذر حفظ المسودة');
+        }
+      });
+    }
+
+    async function approveRun(btn: HTMLButtonElement | null) {
+      const run = currentRun();
+      if (!run || !calc) return;
+      const net = money(sumOf(currentItems(), 'netSalary'));
+      if (!confirm(`اعتماد مسير رواتب ${run.periodLabelAr} لـ ${calc.branchName} بصافي ${net}؟\n\nبعد الاعتماد تُقفل الفترة ولا يمكن إضافة بنود عليها، ويظهر توقيعك وختم الشركة على المسير والقسائم.`)) return;
+      await withBusy(btn, 'جاري الاعتماد...', async () => {
+        try {
+          const res = await api<{ message: string }>('/api/payroll/approve', { body: { id: run.id } });
+          toast(res.message, 'success');
+          await Promise.all([calculate(), loadHistory()]);
+        } catch (error) {
+          reportError(error, 'تعذر اعتماد المسير');
+        }
+      });
+    }
+
+    async function reopenRun(btn: HTMLButtonElement | null) {
+      const run = currentRun();
+      if (!run) return;
+      if (!confirm(`إعادة فتح مسير ${run.periodLabelAr}؟\n\nسيعود المسير مسودة وتُفتح الفترة لإضافة البنود، ويجب اعتماده من جديد قبل الصرف.`)) return;
+      await withBusy(btn, 'جاري إعادة الفتح...', async () => {
+        try {
+          const res = await api<{ message: string }>('/api/payroll/reopen', { body: { id: run.id } });
+          toast(res.message, 'success');
+          await Promise.all([calculate(), loadHistory()]);
+        } catch (error) {
+          reportError(error, 'تعذر إعادة فتح المسير');
+        }
+      });
+    }
+
+    // Dialog plumbing --------------------------------------------------
+    for (const dialog of document.querySelectorAll<HTMLDialogElement>('dialog')) {
+      dialog.addEventListener('click', event => {
+        const el = event.target as HTMLElement;
+        if (el === dialog || el.closest('[data-close]')) dialog.close();
+      });
+    }
+
+    function setDialogError(id: string, message: string | null) {
+      const el = byId(id);
+      el.textContent = message ?? '';
+      el.classList.toggle('hidden', !message);
+    }
+
+    // Pay ---------------------------------------------------------------
+    let payMissingOnly = false;
+    function openPayDialog(missingOnly: boolean) {
+      const run = currentRun();
+      if (!run) return;
+      payMissingOnly = missingOnly;
+      const payable = currentItems().filter(i => toMinor(i.netSalary) > 0);
+      const total = fromMinor(payable.reduce((s, i) => s + toMinor(i.netSalary), 0));
+      byId('pay-title').textContent = missingOnly ? 'إصدار سندات الصرف الناقصة' : `صرف رواتب ${run.periodLabelAr}`;
+      byId('pay-summary').textContent = missingOnly
+        ? 'سيتم إصدار سند صرف لكل موظف لم يصدر له سند ساري لهذا المسير.'
+        : `سيتم تسجيل المسير كمدفوع وصرف ${money(total)} لعدد ${payable.length} موظف.`;
+      byId<HTMLInputElement>('pay-vouchers').checked = true;
+      show('pay-vouchers-row', !missingOnly);
+      byId('pay-note').textContent = isAdmin()
+        ? 'تصدر سندات الصرف معتمدة باسمك وتظهر عليها توقيعاتك وختم الشركة.'
+        : 'تصدر سندات الصرف بحالة «بانتظار الاعتماد» حتى يعتمدها المدير.';
+      setDialogError('pay-error', null);
+      byId<HTMLDialogElement>('pay-dialog').showModal();
+    }
+
+    byId<HTMLFormElement>('pay-form').addEventListener('submit', async event => {
+      event.preventDefault();
+      const run = currentRun();
+      if (!run) return;
+      const method = (document.querySelector<HTMLInputElement>('input[name="pay-method"]:checked')?.value ?? 'bank_transfer');
+      const generateVouchers = payMissingOnly || byId<HTMLInputElement>('pay-vouchers').checked;
+      setDialogError('pay-error', null);
+      await withBusy(byId<HTMLButtonElement>('pay-submit'), 'جاري التنفيذ...', async () => {
+        try {
+          const res = await api<{ message: string; created: Array<{ voucherNumber: string }> }>('/api/payroll/pay', {
+            body: { id: run.id, paymentMethod: method, generateVouchers },
+          });
+          byId<HTMLDialogElement>('pay-dialog').close();
+          const numbers = res.created.map(v => v.voucherNumber);
+          toast(numbers.length ? `${res.message}: ${numbers[0]}${numbers.length > 1 ? ` … ${numbers[numbers.length - 1]}` : ''}` : res.message, 'success');
+          await Promise.all([calculate(), loadHistory()]);
+        } catch (error) {
+          setDialogError('pay-error', error instanceof Error ? error.message : 'تعذر صرف الرواتب');
+          if (error instanceof ApiError && error.status === 409) {
+            calculate();
+            loadHistory();
+          }
+        }
+      });
     });
 
-    // Filters
-    document.getElementById('history-month')?.addEventListener('change', loadHistoricalRecords);
-    document.getElementById('history-year')?.addEventListener('change', loadHistoricalRecords);
+    // Cancel ------------------------------------------------------------
+    function openCancelDialog() {
+      const run = currentRun();
+      if (!run) return;
+      byId('cancel-summary').textContent =
+        run.status === 'approved'
+          ? `سيتم إلغاء مسير ${run.periodLabelAr} المعتمد وفتح الفترة من جديد. لا يمكن التراجع عن الإلغاء.`
+          : `سيتم إلغاء مسودة مسير ${run.periodLabelAr}. يمكنك إعداد مسودة جديدة لاحقاً.`;
+      byId<HTMLTextAreaElement>('cancel-reason').value = '';
+      setDialogError('cancel-error', null);
+      byId<HTMLDialogElement>('cancel-dialog').showModal();
+    }
 
-    // Initial load
-    loadHistoricalRecords();
-    document.getElementById('no-results')!.classList.remove('hidden');
+    byId<HTMLFormElement>('cancel-form').addEventListener('submit', async event => {
+      event.preventDefault();
+      const run = currentRun();
+      if (!run) return;
+      const reason = byId<HTMLTextAreaElement>('cancel-reason').value.trim();
+      if (reason.length < 3) {
+        setDialogError('cancel-error', 'يرجى كتابة سبب الإلغاء');
+        return;
+      }
+      await withBusy(byId<HTMLButtonElement>('cancel-submit'), 'جاري الإلغاء...', async () => {
+        try {
+          const res = await api<{ message: string }>('/api/payroll/cancel', { body: { id: run.id, reason } });
+          byId<HTMLDialogElement>('cancel-dialog').close();
+          toast(res.message, 'success');
+          await Promise.all([calculate(), loadHistory()]);
+        } catch (error) {
+          setDialogError('cancel-error', error instanceof Error ? error.message : 'تعذر إلغاء المسير');
+        }
+      });
+    });
+
+    // Quick-add adjustment ---------------------------------------------
+    const adjEmployee = selectById('adj-employee');
+    const adjCategory = selectById('adj-category');
+    const adjQuantity = byId<HTMLInputElement>('adj-quantity');
+    const adjRate = byId<HTMLInputElement>('adj-rate');
+    const adjAmount = byId<HTMLInputElement>('adj-amount');
+
+    function buildCategoryOptions() {
+      const entries = Object.entries(ADJUSTMENT_CATEGORIES) as Array<[AdjustmentCategory, (typeof ADJUSTMENT_CATEGORIES)[AdjustmentCategory]]>;
+      const group = (kind: 'earning' | 'deduction', label: string) =>
+        `<optgroup label="${label}">${entries
+          .filter(([, info]) => info.kind === kind)
+          .map(([key, info]) => `<option value="${key}">${escapeHtml(info.labelAr)}</option>`)
+          .join('')}</optgroup>`;
+      adjCategory.innerHTML = group('earning', 'مستحقات') + group('deduction', 'استقطاعات');
+    }
+    buildCategoryOptions();
+
+    function selectedEmployee(): Item | undefined {
+      return calc?.items.find(i => i.employeeId === adjEmployee.value);
+    }
+
+    function applyCategoryMode(resetRate: boolean) {
+      const mode = QTY_MODES[adjCategory.value as AdjustmentCategory];
+      show('adj-qty-row', Boolean(mode));
+      show('adj-amount-row', !mode);
+      if (mode) {
+        byId('adj-qty-label').textContent = mode.label;
+        byId('adj-rate-label').textContent = UNITS[adjCategory.value] === 'يوم' ? 'أجر اليوم' : 'سعر الساعة';
+        byId('adj-rate-hint').textContent = mode.hint;
+        const emp = selectedEmployee();
+        if (emp && (resetRate || !adjRate.value)) {
+          const rate = mode.rate(emp);
+          adjRate.value = rate > 0 ? rate.toFixed(2) : '';
+        }
+      }
+      updateComputed();
+    }
+
+    function parseInput(input: HTMLInputElement): number | null {
+      const text = input.value.trim();
+      if (!/^\d+(\.\d{1,2})?$/.test(text)) return null;
+      const n = Number(text);
+      return n > 0 ? n : null;
+    }
+
+    function adjustmentAmount(): number | null {
+      const mode = QTY_MODES[adjCategory.value as AdjustmentCategory];
+      if (!mode) return parseInput(adjAmount);
+      const qty = parseInput(adjQuantity);
+      const rate = parseInput(adjRate);
+      if (qty === null || rate === null) return null;
+      return fromMinor(Math.round(qty * toMinor(rate)));
+    }
+
+    function updateComputed() {
+      const amount = adjustmentAmount();
+      const info = ADJUSTMENT_CATEGORIES[adjCategory.value as AdjustmentCategory];
+      const emp = selectedEmployee();
+      const box = byId('adj-computed');
+      if (amount === null || !info) {
+        box.textContent = 'أدخل القيم لحساب المبلغ.';
+        return;
+      }
+      box.innerHTML = `${info.kind === 'earning' ? 'يُضاف إلى' : 'يُخصم من'} راتب ${escapeHtml(emp?.employeeName ?? '')}: <strong>${escapeHtml(money(amount))}</strong>`;
+    }
+
+    function openAdjustmentDialog() {
+      if (!calc || calc.locked) return;
+      byId('adj-period').textContent = calc.periodLabelAr;
+      adjEmployee.innerHTML = calc.items
+        .map(i => `<option value="${escapeHtml(i.employeeId)}">${escapeHtml(i.employeeName)}</option>`)
+        .join('');
+      adjCategory.value = 'overtime';
+      adjQuantity.value = '';
+      adjAmount.value = '';
+      byId<HTMLInputElement>('adj-description').value = '';
+      setDialogError('adj-error', null);
+      applyCategoryMode(true);
+      byId<HTMLDialogElement>('adjustment-dialog').showModal();
+      adjQuantity.focus();
+    }
+
+    adjCategory.addEventListener('change', () => applyCategoryMode(true));
+    adjEmployee.addEventListener('change', () => applyCategoryMode(true));
+    for (const input of [adjQuantity, adjRate, adjAmount]) input.addEventListener('input', updateComputed);
+
+    byId<HTMLFormElement>('adjustment-form').addEventListener('submit', async event => {
+      event.preventDefault();
+      if (!calc) return;
+      const category = adjCategory.value as AdjustmentCategory;
+      const mode = QTY_MODES[category];
+      const amount = adjustmentAmount();
+      if (!adjEmployee.value) return setDialogError('adj-error', 'اختر الموظف');
+      if (amount === null) {
+        return setDialogError('adj-error', mode ? 'أدخل الكمية والسعر بأرقام موجبة (حتى خانتين عشريتين)' : 'أدخل مبلغاً موجباً (حتى خانتين عشريتين)');
+      }
+      const description = byId<HTMLInputElement>('adj-description').value.trim();
+      const body: Record<string, unknown> = {
+        branchId: calc.branchId,
+        employeeId: adjEmployee.value,
+        period: calc.period,
+        category,
+        description: description || undefined,
+      };
+      if (mode) {
+        body.quantity = parseInput(adjQuantity);
+        body.rate = parseInput(adjRate);
+      } else {
+        body.amount = amount;
+      }
+      setDialogError('adj-error', null);
+      await withBusy(byId<HTMLButtonElement>('adj-submit'), 'جاري الحفظ...', async () => {
+        try {
+          const res = await api<{ warnings?: string[] }>('/api/adjustments/create', { body });
+          byId<HTMLDialogElement>('adjustment-dialog').close();
+          toast(`تمت إضافة ${ADJUSTMENT_CATEGORIES[category].labelAr} (${money(amount)})`, 'success');
+          if (Array.isArray(res.warnings) && res.warnings.length) toast(res.warnings.join(' — '), 'info');
+          await calculate();
+        } catch (error) {
+          setDialogError('adj-error', error instanceof Error ? error.message : 'تعذر حفظ البند');
+        }
+      });
+    });
+
+    // ------------------------------------------------------------------
+    // History
+    // ------------------------------------------------------------------
+    async function loadHistory() {
+      const branchId = branchSelect.value;
+      const year = yearSelect.value;
+      const tbody = byId('history-tbody');
+      if (!branchId) return;
+      byId('history-caption').textContent = `سنة ${year}`;
+      tbody.innerHTML = `<tr><td colspan="10" class="text-center p-8 text-muted-foreground">جاري التحميل...</td></tr>`;
+      try {
+        const res = await api<{ runs: Run[] }>(`/api/payroll/list?branchId=${encodeURIComponent(branchId)}&year=${encodeURIComponent(year)}`);
+        if (res.runs.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="10" class="text-center p-8 text-muted-foreground">لا توجد مسيرات رواتب محفوظة لهذا الفرع في سنة ${escapeHtml(year)}</td></tr>`;
+          return;
+        }
+        tbody.innerHTML = res.runs
+          .map(run => {
+            const cancelled = run.status === 'cancelled';
+            const actions = [
+              `<button type="button" data-action="view-period" data-period="${escapeHtml(run.period)}" class="text-blue-700 hover:underline">عرض</button>`,
+              cancelled ? '' : `<a href="/payroll/print/${encodeURIComponent(run.id)}?view=sheet" target="_blank" rel="noopener" class="text-blue-700 hover:underline">طباعة</a>`,
+              cancelled ? '' : `<a href="/payroll/print/${encodeURIComponent(run.id)}?view=payslips" target="_blank" rel="noopener" class="text-blue-700 hover:underline">القسائم</a>`,
+            ].filter(Boolean).join('<span class="text-gray-300 mx-1">|</span>')
+              + (run.status === 'draft'
+                ? `<span data-stale-run="${escapeHtml(run.id)}" title="${escapeHtml(STALE_PRINT_WARNING)}" class="hidden mr-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-800">غير محدّثة</span>`
+                : '');
+            const vouchers = run.status === 'paid'
+              ? `<a href="/vouchers?type=payment&source=payroll&sourceId=${encodeURIComponent(run.id)}&branchId=${encodeURIComponent(run.branchId)}" class="text-blue-700 hover:underline">${escapeHtml(run.voucherCount ?? 0)} سند</a>`
+              : '—';
+            return `<tr class="border-b hover:bg-gray-50${cancelled ? ' opacity-60' : ''}">
+              <td class="p-3 font-medium whitespace-nowrap">${escapeHtml(run.periodLabelAr)}</td>
+              <td class="p-3">
+                <span class="rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_STYLES[run.status]}">${escapeHtml(STATUS_LABELS[run.status])}</span>
+                ${cancelled && run.cancelReason ? `<div class="mt-1 text-xs text-muted-foreground">${escapeHtml(run.cancelReason)}</div>` : ''}
+              </td>
+              <td class="p-3">${escapeHtml(run.employeeCount)}</td>
+              <td class="p-3 whitespace-nowrap tabular-nums">${escapeHtml(formatAmount(run.totalEarnings))}</td>
+              <td class="p-3 whitespace-nowrap tabular-nums">${escapeHtml(formatAmount(run.totalDeductions))}</td>
+              <td class="p-3 whitespace-nowrap tabular-nums font-semibold text-blue-700">${escapeHtml(money(run.totalNet))}</td>
+              <td class="p-3"><div>${escapeHtml(run.createdByName ?? '—')}</div><div class="text-xs text-muted-foreground">${escapeHtml(formatDate(run.createdAt))}</div></td>
+              <td class="p-3"><div>${escapeHtml(run.approvedByName ?? '—')}</div>${run.approvedAt ? `<div class="text-xs text-muted-foreground">${escapeHtml(formatDate(run.approvedAt))}</div>` : ''}</td>
+              <td class="p-3 whitespace-nowrap">${vouchers}</td>
+              <td class="p-3 whitespace-nowrap">${actions}</td>
+            </tr>`;
+          })
+          .join('');
+        markStaleHistoryRuns();
+      } catch (error) {
+        tbody.innerHTML = `<tr><td colspan="10" class="text-center p-8 text-red-600">تعذر تحميل السجل: ${escapeHtml(error instanceof Error ? error.message : '')}</td></tr>`;
+      }
+    }
+
+    function viewPeriod(period: string) {
+      const p = parsePeriod(period);
+      if (!p) return;
+      monthSelect.value = String(p.month);
+      if (![...yearSelect.options].some(o => o.value === String(p.year))) {
+        yearSelect.insertAdjacentHTML('beforeend', `<option value="${p.year}">${p.year}</option>`);
+      }
+      const yearChanged = yearSelect.value !== String(p.year);
+      yearSelect.value = String(p.year);
+      expanded.clear();
+      calculate();
+      if (yearChanged) loadHistory();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    init();
   </script>
 </MainLayout>
