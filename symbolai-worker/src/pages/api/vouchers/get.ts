@@ -266,8 +266,10 @@ export function hasVoucherViewPermission(session: EnhancedSession): boolean {
 /**
  * True when `userId` may read this one request-generated voucher as its
  * beneficiary: (b) they filed the request (employee_requests.user_id), or
- * (a) they are the employee it pays — a request they filed is linked
- * (employee_request_meta.employee_id) to the voucher's employee.
+ * (a) they are the employee it pays — an APPROVED request they filed is
+ * linked (employee_request_meta.employee_id) to the voucher's employee.
+ * Pending or rejected requests never prove identity: a self-service user
+ * could otherwise claim a colleague's record and read their vouchers.
  */
 export async function isOwnRequestVoucher(db: D1Database, userId: string, row: Record<string, unknown>): Promise<boolean> {
   if (row.source_type !== 'request' || typeof row.source_id !== 'string' || !row.source_id || !userId) return false;
@@ -282,7 +284,7 @@ export async function isOwnRequestVoucher(db: D1Database, userId: string, row: R
         .prepare(
           `SELECT 1 AS ok FROM employee_request_meta m
            JOIN employee_requests r ON r.id = m.request_id
-           WHERE m.employee_id = ? AND r.user_id = ? LIMIT 1`,
+           WHERE m.employee_id = ? AND r.user_id = ? AND r.status = 'approved' LIMIT 1`,
         )
         .bind(row.employee_id, userId)
         .first<{ ok: number }>();

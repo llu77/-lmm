@@ -4,6 +4,8 @@ import { financeAuth, ok, fail, readJsonObject, str, canApproveFinance, clientIp
 import { notifyUsers } from '@/lib/finance/notify';
 import { VOUCHER_WRITE_FLAGS, canCreateVoucherType, loadScopedVoucher, loadVoucherRow, mapVoucherRow, voucherActions } from './get';
 import { voucherSummaryText } from './create';
+import { periodLabelAr } from '@/lib/finance/catalog';
+import { formatMoney, type CurrencyCode } from '@/lib/finance/money';
 
 // POST /api/vouchers/cancel {id, reason}
 //  - pending: its creator, or anyone allowed to create that voucher type
@@ -77,7 +79,34 @@ export const POST: APIRoute = async context => {
       });
     }
 
-    return ok({ voucher: saved, actions: voucherActions(session, saved) });
+    // Cancelling an advance voucher does not touch its payroll installments
+    // (the cash may already have been handed over). Tell the user what is
+    // still scheduled so they can cancel it on the adjustments page if the
+    // advance was never paid out.
+    const warnings: string[] = [];
+    if (saved.sourceType === 'request' && saved.sourceId) {
+      try {
+        const pending = await db
+          .prepare(
+            `SELECT period, amount FROM payroll_adjustments
+             WHERE source_type = 'request' AND source_id = ? AND status = 'active' AND payroll_run_id IS NULL
+             ORDER BY period`,
+          )
+          .bind(saved.sourceId)
+          .all<{ period: string; amount: number }>();
+        const rows = pending.results ?? [];
+        if (rows.length > 0) {
+          const list = rows.map(r => `${periodLabelAr(r.period)}: ${formatMoney(Number(r.amount) || 0, saved.currency as CurrencyCode)}`).join('، ');
+          warnings.push(
+            `أقساط هذه السلفة ما زالت مجدولة للخصم من الراتب (${list}). إن لم تُصرف السلفة فعلاً فألغِ الأقساط من صفحة المستحقات والاستقطاعات.`,
+          );
+        }
+      } catch (error) {
+        console.error('Failed to load installments of cancelled request voucher:', error);
+      }
+    }
+
+    return ok({ voucher: saved, actions: voucherActions(session, saved), warnings });
   } catch (error) {
     console.error('Voucher cancel failed:', error);
     return fail('حدث خطأ أثناء إلغاء السند', 500);

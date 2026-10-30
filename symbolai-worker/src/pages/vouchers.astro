@@ -1127,11 +1127,12 @@ const label = 'block text-sm font-medium mb-1';
       return;
     }
     try {
-      await withBusy(byId<HTMLButtonElement>('cancel-submit'), 'جاري الإلغاء...', () =>
-        api('/api/vouchers/cancel', { body: { id: v.id, reason } }),
+      const res = await withBusy(byId<HTMLButtonElement>('cancel-submit'), 'جاري الإلغاء...', () =>
+        api<{ warnings?: string[] }>('/api/vouchers/cancel', { body: { id: v.id, reason } }),
       );
       cancelDialog.close();
       toast(`تم إلغاء السند ${v.number}`);
+      for (const warning of res.warnings ?? []) toast(warning, 'info');
       reload(false);
     } catch (error) {
       errorBox.textContent = errorMessage(error);

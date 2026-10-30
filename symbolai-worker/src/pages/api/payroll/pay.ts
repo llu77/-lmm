@@ -151,7 +151,7 @@ export const POST: APIRoute = async context => {
           severity: 'warning',
           title: 'سندات صرف رواتب بانتظار الاعتماد',
           message: `${run.branch_name ?? ''} — ${periodLabelAr(run.period)}: ${created.length} سند صرف بإجمالي ${formatMoney(total, org.currency)} أصدرها ${actor.displayName}.`,
-          link: `/vouchers?type=payment&source=payroll&sourceId=${encodeURIComponent(run.id)}`,
+          link: `/vouchers?type=payment&source=payroll&sourceId=${encodeURIComponent(run.id)}&branchId=${encodeURIComponent(run.branch_id)}`,
           relatedEntity: `payroll_run:${run.id}:vouchers:${created[0].voucherNumber}`,
         },
         { excludeUserId: actor.id },

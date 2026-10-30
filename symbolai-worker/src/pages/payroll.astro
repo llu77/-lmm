@@ -613,7 +613,7 @@ if (!cookieHeader?.includes('session=')) {
         html.push(link(`/payroll/print/${encodeURIComponent(run.id)}?view=payslips`, 'طباعة قسائم الرواتب'));
       }
       if (run?.status === 'paid') {
-        html.push(link(`/vouchers?type=payment&source=payroll&sourceId=${encodeURIComponent(run.id)}`, 'عرض سندات الصرف', false));
+        html.push(link(`/vouchers?type=payment&source=payroll&sourceId=${encodeURIComponent(run.id)}&branchId=${encodeURIComponent(run.branchId)}`, 'عرض سندات الصرف', false));
       }
       if ((run?.status === 'draft' && canRun()) || (run?.status === 'approved' && isAdmin())) {
         html.push(button('cancel', 'إلغاء المسير', 'danger'));
@@ -1126,7 +1126,7 @@ if (!cookieHeader?.includes('session=')) {
               cancelled ? '' : `<a href="/payroll/print/${encodeURIComponent(run.id)}?view=payslips" target="_blank" rel="noopener" class="text-blue-700 hover:underline">القسائم</a>`,
             ].filter(Boolean).join('<span class="text-gray-300 mx-1">|</span>');
             const vouchers = run.status === 'paid'
-              ? `<a href="/vouchers?type=payment&source=payroll&sourceId=${encodeURIComponent(run.id)}" class="text-blue-700 hover:underline">${escapeHtml(run.voucherCount ?? 0)} سند</a>`
+              ? `<a href="/vouchers?type=payment&source=payroll&sourceId=${encodeURIComponent(run.id)}&branchId=${encodeURIComponent(run.branchId)}" class="text-blue-700 hover:underline">${escapeHtml(run.voucherCount ?? 0)} سند</a>`
               : '—';
             return `<tr class="border-b hover:bg-gray-50${cancelled ? ' opacity-60' : ''}">
               <td class="p-3 font-medium whitespace-nowrap">${escapeHtml(run.periodLabelAr)}</td>

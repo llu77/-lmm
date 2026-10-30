@@ -58,11 +58,15 @@ export const POST: APIRoute = async context => {
         .bind(actor.id, actor.displayName, run.id, run.fingerprint, run.branch_id, run.period, digest),
       db
         .prepare(
+          // Only entries of employees on this sheet are posted. Entries of
+          // inactive or transferred employees (orphans) stay open so they can
+          // still be cancelled or moved instead of silently vanishing.
           `UPDATE payroll_adjustments SET payroll_run_id = ?
            WHERE branch_id = ? AND period = ? AND status = 'active' AND payroll_run_id IS NULL
+             AND employee_id IN (SELECT employee_id FROM payroll_run_items WHERE run_id = ?)
              AND EXISTS (SELECT 1 FROM payroll_runs WHERE id = ? AND status = 'approved')`,
         )
-        .bind(run.id, run.branch_id, run.period, run.id),
+        .bind(run.id, run.branch_id, run.period, run.id, run.id),
     ]);
     if (!results[0]?.meta?.changes) {
       return fail('تغيرت بيانات الرواتب أثناء الاعتماد — حدّث المسودة ثم أعد المحاولة', 409, { stale: true });
