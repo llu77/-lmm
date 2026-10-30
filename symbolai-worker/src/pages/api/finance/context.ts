@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { financeAuth, ok, canApproveFinance } from '@/lib/finance/http';
-import { getOrganizationProfile } from '@/lib/finance/documents';
+import { DEFAULT_PROFILE, getOrganizationProfile } from '@/lib/finance/documents';
 
 // Everything a finance page needs to render for the current user:
 // identity, permission flags, the branches they may pick, and the org profile.
@@ -24,7 +24,12 @@ export const GET: APIRoute = async context => {
     console.error('Failed to load branches for finance context:', error);
   }
 
-  const org = await getOrganizationProfile(db);
+  let org = DEFAULT_PROFILE;
+  try {
+    org = await getOrganizationProfile(db);
+  } catch (error) {
+    console.error('Failed to load organization profile for finance context:', error);
+  }
 
   return ok({
     context: {
