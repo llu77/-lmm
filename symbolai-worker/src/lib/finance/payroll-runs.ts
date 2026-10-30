@@ -8,14 +8,17 @@ import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types'
 import { canAccessBranch, type EnhancedSession } from '@/lib/permissions';
 import {
   ADJUSTMENT_CATEGORIES,
+  monthVariants,
   parseMonth,
   parsePeriod,
   periodLabelAr,
   periodLabelEn,
   toPeriod,
+  todayIso,
   type PayrollColumn,
 } from './catalog';
 import { canApproveFinance, fail, financeAuth, newId, str, type FinanceContext } from './http';
+import { getTableColumns } from './schema';
 import type { PayrollRunRow, PayrollRunStatus } from './payroll-data';
 import type {
   PayrollAdjustmentInput,
@@ -267,6 +270,62 @@ export const LEDGER_DIGEST_SQL = `(SELECT COUNT(*) || ':' || CAST(TOTAL(ROUND(am
 export async function ledgerDigest(db: D1Database, branchId: string, period: string): Promise<string> {
   const row = await db.prepare(`SELECT ${LEDGER_DIGEST_SQL} AS digest`).bind(branchId, period).first<{ digest: unknown }>();
   return String(row?.digest ?? '');
+}
+
+/** A digest subquery, its parameters and the value read before computing. */
+export interface DigestGuard {
+  sql: string;
+  params: unknown[];
+  value: string;
+}
+
+/**
+ * Digest of the month's approved weekly bonus records (same approval rule as
+ * isBonusRecordApproved in payroll-data.ts). Approval reads it BEFORE
+ * recomputing and re-checks it inside the approving UPDATE, like the ledger
+ * digest, so a bonus approved mid-approval makes the approval fail instead of
+ * approving a sheet without it. The SQL is built from the live columns: the
+ * legacy bonus_records has no status column (approval = approved_by set).
+ * Returns null when there is no usable bonus_records table (nothing to guard).
+ */
+export async function bonusDigest(db: D1Database, branchId: string, period: string): Promise<DigestGuard | null> {
+  const p = parsePeriod(period);
+  if (!p) return null;
+  const columns = await getTableColumns(db, 'bonus_records');
+  if (!columns.has('branch_id') || !columns.has('year') || !columns.has('month')) return null;
+
+  const approvedBy = columns.has('approved_by') ? `COALESCE(approved_by, '') != ''` : '0';
+  const approved = columns.has('status')
+    ? `(status = 'approved' OR (COALESCE(status, '') NOT IN ('paid', 'rejected', 'cancelled') AND ${approvedBy}))`
+    : `(${approvedBy})`;
+  const parts = [
+    'COUNT(*)',
+    columns.has('approved_at') ? `IFNULL(MAX(approved_at), '')` : null,
+    'IFNULL(MAX(rowid), 0)',
+    columns.has('employee_bonuses') ? 'CAST(TOTAL(LENGTH(employee_bonuses)) AS INTEGER)' : null,
+  ].filter((part): part is string => part !== null);
+  const variants = monthVariants(p.month);
+  const sql = `(SELECT ${parts.join(` || ':' || `)} FROM bonus_records
+     WHERE branch_id = ? AND year = ? AND month IN (${variants.map(() => '?').join(', ')}) AND ${approved})`;
+  const params: unknown[] = [branchId, p.year, ...variants];
+  const row = await db.prepare(`SELECT ${sql} AS digest`).bind(...params).first<{ digest: unknown }>();
+  return { sql, params, value: String(row?.digest ?? '') };
+}
+
+/**
+ * Calendar day (YYYY-MM-DD) in Riyadh time (UTC+3) of a stored timestamp.
+ * SQLite's datetime('now') is UTC without a zone ('YYYY-MM-DD HH:MM:SS'), so
+ * slicing it would print the previous day for anything stamped after 21:00 UTC.
+ * A plain date (no time part) is returned as is.
+ */
+export function riyadhDate(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  const text = String(value).trim();
+  if (!text) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+  const iso = text.replace(' ', 'T');
+  const parsed = new Date(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(iso) ? iso : `${iso}Z`);
+  return Number.isNaN(parsed.getTime()) ? text.slice(0, 10) : todayIso(parsed);
 }
 
 export function isUniqueViolation(error: unknown): boolean {

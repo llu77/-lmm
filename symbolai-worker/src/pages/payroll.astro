@@ -561,6 +561,16 @@ if (!cookieHeader?.includes('session=')) {
       renderActions(run, items);
       renderBanners(run, items);
       renderTable();
+      markStaleHistoryRuns();
+    }
+
+    /** Flags the open draft's print links in the history table while it is stale. */
+    function markStaleHistoryRuns() {
+      const run = currentRun();
+      const staleId = run && isStaleDraft(run) ? run.id : null;
+      document.querySelectorAll<HTMLElement>('[data-stale-run]').forEach(el => {
+        el.classList.toggle('hidden', el.dataset.staleRun !== staleId);
+      });
     }
 
     function statusMeta(run: Run | null): string {
@@ -584,9 +594,17 @@ if (!cookieHeader?.includes('session=')) {
       return `<button type="button" data-action="${escapeHtml(action)}" class="rounded-md px-4 py-2 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed ${styles}" ${extra}>${escapeHtml(label)}</button>`;
     }
 
-    function link(href: string, label: string, newTab = true): string {
-      return `<a href="${escapeHtml(href)}" ${newTab ? 'target="_blank" rel="noopener"' : ''} class="rounded-md border px-4 py-2 text-sm font-medium hover:bg-gray-50">${escapeHtml(label)}</a>`;
+    function link(href: string, label: string, newTab = true, warning = ''): string {
+      const style = warning
+        ? 'border-amber-400 bg-amber-50 text-amber-900 hover:bg-amber-100'
+        : 'hover:bg-gray-50';
+      return `<a href="${escapeHtml(href)}" ${newTab ? 'target="_blank" rel="noopener"' : ''}${warning ? ` title="${escapeHtml(warning)}"` : ''} class="rounded-md border px-4 py-2 text-sm font-medium ${style}">${escapeHtml(label)}</a>`;
     }
+
+    const STALE_PRINT_WARNING = 'المسودة غير محدّثة — أُضيفت أو تغيّرت بنود بعد حفظها. حدّث المسودة قبل الطباعة';
+
+    /** The open draft no longer matches the live data (its print would miss entries). */
+    const isStaleDraft = (run: Run | null) => run?.status === 'draft' && calc?.stale === true;
 
     function renderActions(run: Run | null, items: Item[]) {
       if (!calc) return;
@@ -609,8 +627,12 @@ if (!cookieHeader?.includes('session=')) {
         if ((run.voucherCount ?? 0) < payable) html.push(button('pay-missing', 'إصدار السندات الناقصة', 'warning'));
       }
       if (run && run.status !== 'cancelled') {
-        html.push(link(`/payroll/print/${encodeURIComponent(run.id)}?view=sheet`, 'طباعة المسير'));
-        html.push(link(`/payroll/print/${encodeURIComponent(run.id)}?view=payslips`, 'طباعة قسائم الرواتب'));
+        // A stale draft can still be printed (the print carries a red warning),
+        // but the links say so, like the stale banner above the sheet.
+        const warning = isStaleDraft(run) ? STALE_PRINT_WARNING : '';
+        const suffix = warning ? ' (مسودة غير محدّثة)' : '';
+        html.push(link(`/payroll/print/${encodeURIComponent(run.id)}?view=sheet`, `طباعة المسير${suffix}`, true, warning));
+        html.push(link(`/payroll/print/${encodeURIComponent(run.id)}?view=payslips`, `طباعة قسائم الرواتب${suffix}`, true, warning));
       }
       if (run?.status === 'paid') {
         html.push(link(`/vouchers?type=payment&source=payroll&sourceId=${encodeURIComponent(run.id)}&branchId=${encodeURIComponent(run.branchId)}`, 'عرض سندات الصرف', false));
@@ -1124,7 +1146,10 @@ if (!cookieHeader?.includes('session=')) {
               `<button type="button" data-action="view-period" data-period="${escapeHtml(run.period)}" class="text-blue-700 hover:underline">عرض</button>`,
               cancelled ? '' : `<a href="/payroll/print/${encodeURIComponent(run.id)}?view=sheet" target="_blank" rel="noopener" class="text-blue-700 hover:underline">طباعة</a>`,
               cancelled ? '' : `<a href="/payroll/print/${encodeURIComponent(run.id)}?view=payslips" target="_blank" rel="noopener" class="text-blue-700 hover:underline">القسائم</a>`,
-            ].filter(Boolean).join('<span class="text-gray-300 mx-1">|</span>');
+            ].filter(Boolean).join('<span class="text-gray-300 mx-1">|</span>')
+              + (run.status === 'draft'
+                ? `<span data-stale-run="${escapeHtml(run.id)}" title="${escapeHtml(STALE_PRINT_WARNING)}" class="hidden mr-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-800">غير محدّثة</span>`
+                : '');
             const vouchers = run.status === 'paid'
               ? `<a href="/vouchers?type=payment&source=payroll&sourceId=${encodeURIComponent(run.id)}&branchId=${encodeURIComponent(run.branchId)}" class="text-blue-700 hover:underline">${escapeHtml(run.voucherCount ?? 0)} سند</a>`
               : '—';
@@ -1145,6 +1170,7 @@ if (!cookieHeader?.includes('session=')) {
             </tr>`;
           })
           .join('');
+        markStaleHistoryRuns();
       } catch (error) {
         tbody.innerHTML = `<tr><td colspan="10" class="text-center p-8 text-red-600">تعذر تحميل السجل: ${escapeHtml(error instanceof Error ? error.message : '')}</td></tr>`;
       }

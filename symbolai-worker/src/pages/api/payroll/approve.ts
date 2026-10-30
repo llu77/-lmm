@@ -7,6 +7,7 @@ import { formatMoney, toMinor } from '@/lib/finance/money';
 import { notifyByPermission, notifyUsers } from '@/lib/finance/notify';
 import {
   LEDGER_DIGEST_SQL,
+  bonusDigest,
   ledgerDigest,
   loadRun,
   loadRunForUser,
@@ -27,14 +28,19 @@ export const POST: APIRoute = async context => {
 
   const body = await readJsonObject(context.request);
   if (!body) return fail('بيانات الطلب غير صالحة', 400);
-  const run = await loadRunForUser(auth, body.id);
-  if (run instanceof Response) return run;
-  if (run.status !== 'draft') return fail(statusMessage(run.status), 409, { run: serializeRun(run) });
 
   try {
-    // Read the ledger digest before recomputing: any entry added or cancelled
-    // after this point makes the guarded UPDATE below a no-op.
-    const digest = await ledgerDigest(db, run.branch_id, run.period);
+    const run = await loadRunForUser(auth, body.id);
+    if (run instanceof Response) return run;
+    if (run.status !== 'draft') return fail(statusMessage(run.status), 409, { run: serializeRun(run) });
+
+    // Read the ledger and bonus digests before recomputing: any ledger entry
+    // added or cancelled, or any weekly bonus approved, after this point makes
+    // the guarded UPDATE below a no-op.
+    const [digest, bonus] = await Promise.all([
+      ledgerDigest(db, run.branch_id, run.period),
+      bonusDigest(db, run.branch_id, run.period),
+    ]);
     const live = await computeBranchPayroll(db, run.branch_id, run.period);
     if (live.fingerprint !== run.fingerprint) return fail(STALE_MESSAGE, 409, { stale: true });
     if (live.employeeCount === 0) return fail('المسير لا يحتوي على موظفين نشطين', 422);
@@ -53,9 +59,18 @@ export const POST: APIRoute = async context => {
         .prepare(
           `UPDATE payroll_runs
            SET status = 'approved', approved_by = ?, approved_by_name = ?, approved_at = datetime('now'), updated_at = datetime('now')
-           WHERE id = ? AND status = 'draft' AND fingerprint = ? AND ${LEDGER_DIGEST_SQL} = ?`,
+           WHERE id = ? AND status = 'draft' AND fingerprint = ? AND ${LEDGER_DIGEST_SQL} = ?${bonus ? ` AND ${bonus.sql} = ?` : ''}`,
         )
-        .bind(actor.id, actor.displayName, run.id, run.fingerprint, run.branch_id, run.period, digest),
+        .bind(
+          actor.id,
+          actor.displayName,
+          run.id,
+          run.fingerprint,
+          run.branch_id,
+          run.period,
+          digest,
+          ...(bonus ? [...bonus.params, bonus.value] : []),
+        ),
       db
         .prepare(
           // Only entries of employees on this sheet are posted. Entries of

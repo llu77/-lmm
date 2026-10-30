@@ -11,10 +11,11 @@ export const GET: APIRoute = async context => {
   const { db } = auth;
 
   const url = new URL(context.request.url);
-  const run = await loadRunForUser(auth, url.searchParams.get('id'));
-  if (run instanceof Response) return run;
 
   try {
+    const run = await loadRunForUser(auth, url.searchParams.get('id'));
+    if (run instanceof Response) return run;
+
     const [items, vouchers] = await Promise.all([loadRunItems(db, run.id), loadRunVouchers(db, run.id)]);
 
     // Does the saved sheet still match the live data? (informational)

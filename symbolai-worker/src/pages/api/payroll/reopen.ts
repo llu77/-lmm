@@ -12,14 +12,15 @@ export const POST: APIRoute = async context => {
 
   const body = await readJsonObject(context.request);
   if (!body) return fail('بيانات الطلب غير صالحة', 400);
-  const run = await loadRunForUser(auth, body.id);
-  if (run instanceof Response) return run;
-
-  if (run.status === 'paid') return fail('لا يمكن إعادة فتح مسير رواتب تم صرفه', 409);
-  if (run.status !== 'approved') return fail('إعادة الفتح متاحة لمسيرات الرواتب المعتمدة فقط', 409);
-  const reason = optStr(body.reason, 500);
 
   try {
+    const run = await loadRunForUser(auth, body.id);
+    if (run instanceof Response) return run;
+
+    if (run.status === 'paid') return fail('لا يمكن إعادة فتح مسير رواتب تم صرفه', 409);
+    if (run.status !== 'approved') return fail('إعادة الفتح متاحة لمسيرات الرواتب المعتمدة فقط', 409);
+    const reason = optStr(body.reason, 500);
+
     const results = await db.batch([
       db
         .prepare(

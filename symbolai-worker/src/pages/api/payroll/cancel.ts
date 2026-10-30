@@ -14,19 +14,20 @@ export const POST: APIRoute = async context => {
 
   const body = await readJsonObject(context.request);
   if (!body) return fail('بيانات الطلب غير صالحة', 400);
-  const run = await loadRunForUser(auth, body.id);
-  if (run instanceof Response) return run;
-
-  const reason = str(body.reason, 500);
-  if (reason.length < 3) return fail('يرجى كتابة سبب الإلغاء', 400);
-
-  if (run.status === 'paid') return fail('لا يمكن إلغاء مسير رواتب تم صرفه', 409);
-  if (run.status === 'cancelled') return fail('مسير الرواتب ملغي بالفعل', 409);
-  if (run.status === 'approved' && !canApproveFinance(session)) {
-    return fail('إلغاء مسير رواتب معتمد من صلاحيات المدير فقط', 403);
-  }
 
   try {
+    const run = await loadRunForUser(auth, body.id);
+    if (run instanceof Response) return run;
+
+    const reason = str(body.reason, 500);
+    if (reason.length < 3) return fail('يرجى كتابة سبب الإلغاء', 400);
+
+    if (run.status === 'paid') return fail('لا يمكن إلغاء مسير رواتب تم صرفه', 409);
+    if (run.status === 'cancelled') return fail('مسير الرواتب ملغي بالفعل', 409);
+    if (run.status === 'approved' && !canApproveFinance(session)) {
+      return fail('إلغاء مسير رواتب معتمد من صلاحيات المدير فقط', 403);
+    }
+
     const statements: D1PreparedStatement[] = [
       db
         .prepare(

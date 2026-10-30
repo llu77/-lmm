@@ -530,3 +530,197 @@ test('quick-add contract: /api/adjustments/create (hours × rate) feeds the shee
   const item = ctx.DB.one<any>(`SELECT overtime FROM payroll_run_items WHERE employee_id = 'emp_2'`)!;
   assert.equal(item.overtime, 1000);
 });
+
+// ---------------------------------------------------------------------------
+// Review fixes: bonus race guard, pay race, D1 errors
+// ---------------------------------------------------------------------------
+
+function bonusRow(id: string, week: number, approved: boolean, amount = 35) {
+  return {
+    id, branch_id: BRANCH, month: '10', year: 2026, week_number: week, start_date: '2026-10-01', end_date: '2026-10-07',
+    employee_bonuses: JSON.stringify([{ employeeId: 'emp_1', employeeName: 'أحمد علي', totalRevenue: 12000, bonusAmount: amount }]),
+    total_paid: amount, total_bonus_paid: amount,
+    status: approved ? 'approved' : 'pending', approved_by: approved ? 'u_admin' : null,
+    approved_at: approved ? '2026-10-08 10:00:00' : null,
+  };
+}
+
+/** Runs `between` right before the next db.batch (i.e. after the handler's checks, before its write). */
+function beforeNextBatch(ctx: Ctx, between: () => Promise<void> | void) {
+  const original = ctx.DB.batch.bind(ctx.DB);
+  (ctx.DB as any).batch = async (statements: any[]) => {
+    (ctx.DB as any).batch = original;
+    await between();
+    return original(statements);
+  };
+}
+
+const auditOperations = (ctx: Ctx) =>
+  ctx.DB.query<any>(`SELECT details FROM audit_logs WHERE entity_type = 'payroll_run' ORDER BY rowid`).map(a => JSON.parse(a.details));
+
+for (const variant of ['008', 'legacy'] as const) {
+  test(`approve fails if a weekly bonus is approved between the check and the approval (${variant})`, async () => {
+    const ctx = await setup(variant);
+    await addAdjustment(ctx.DB);
+    const run = await saveDraft(ctx);
+    beforeNextBatch(ctx, () => insertLegacy(ctx.DB, 'bonus_records', bonusRow('b_mid', 1, true)));
+
+    const res = await call(approve, ctx.env, { token: as(ctx, 'admin'), body: { id: run.id } });
+    assert.equal(res.status, 409, JSON.stringify(res.body));
+    assert.equal(res.body.stale, true);
+    assert.equal(ctx.DB.one<any>('SELECT status FROM payroll_runs')!.status, 'draft');
+    assert.equal(ctx.DB.one<any>('SELECT payroll_run_id FROM payroll_adjustments')!.payroll_run_id, null, 'ledger stays unlocked');
+
+    // Refreshing the draft picks the bonus up; approval then goes through.
+    await saveDraft(ctx);
+    const ok = await call(approve, ctx.env, { token: as(ctx, 'admin'), body: { id: run.id } });
+    assert.equal(ok.status, 200, JSON.stringify(ok.body));
+    assert.equal(ctx.DB.one<any>(`SELECT bonus FROM payroll_run_items WHERE employee_id = 'emp_1'`)!.bonus, 35);
+  });
+
+  test(`approve is not blocked by a bonus saved as pending mid-approval, nor by approved bonuses already on the draft (${variant})`, async () => {
+    const ctx = await setup(variant);
+    await insertLegacy(ctx.DB, 'bonus_records', bonusRow('b_before', 1, true));
+    const run = await saveDraft(ctx);
+    beforeNextBatch(ctx, () => insertLegacy(ctx.DB, 'bonus_records', bonusRow('b_pending', 2, false, 50)));
+    const res = await call(approve, ctx.env, { token: as(ctx, 'admin'), body: { id: run.id } });
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    assert.equal(ctx.DB.one<any>(`SELECT bonus FROM payroll_run_items WHERE employee_id = 'emp_1'`)!.bonus, 35);
+  });
+}
+
+test('pay race: another request pays the run mid-pay → the vouchers are issued, audited and notified (200)', async () => {
+  const ctx = await setup('008');
+  const run = await approvedRun(ctx);
+  beforeNextBatch(ctx, () => {
+    // The other tab's "pay without vouchers" commits first.
+    ctx.DB.raw
+      .prepare(`UPDATE payroll_runs SET status = 'paid', paid_by = 'u_admin', paid_by_name = 'المدير العام', paid_at = datetime('now') WHERE id = ?`)
+      .run(run.id);
+  });
+  const res = await call(pay, ctx.env, { token: as(ctx, 'supervisor'), body: { id: run.id, generateVouchers: true } });
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  assert.equal(res.body.run.status, 'paid');
+  assert.equal(res.body.run.paidByName, 'المدير العام', 'the other request paid it');
+  assert.equal(res.body.created.length, 2);
+  assert.equal(res.body.run.voucherCount, 2);
+  assert.match(res.body.message, /سند صرف ناقص/);
+  assert.equal(ctx.DB.query('SELECT * FROM financial_vouchers').length, 2);
+
+  const last = auditOperations(ctx).at(-1);
+  assert.equal(last.operation, 'generate_missing_vouchers');
+  assert.equal(last.vouchers.length, 2);
+  const pending = ctx.DB.query<any>(`SELECT user_id FROM user_notifications WHERE type = 'payroll_vouchers_pending'`).map(n => n.user_id);
+  assert.ok(pending.includes('u_admin'));
+
+  // Idempotent afterwards.
+  const again = await call(pay, ctx.env, { token: as(ctx, 'supervisor'), body: { id: run.id } });
+  assert.equal(again.status, 200);
+  assert.equal(again.body.created.length, 0);
+  assert.equal(ctx.DB.query('SELECT * FROM financial_vouchers').length, 2);
+});
+
+test('pay race without vouchers: the run was paid meanwhile → 200 "already paid", nothing issued', async () => {
+  const ctx = await setup('008');
+  const run = await approvedRun(ctx);
+  const auditsBefore = auditOperations(ctx).length;
+  beforeNextBatch(ctx, () => {
+    ctx.DB.raw.prepare(`UPDATE payroll_runs SET status = 'paid', paid_by = 'u_admin' WHERE id = ?`).run(run.id);
+  });
+  const res = await call(pay, ctx.env, { token: as(ctx, 'supervisor'), body: { id: run.id, generateVouchers: false } });
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  assert.equal(res.body.run.status, 'paid');
+  assert.equal(res.body.created.length, 0);
+  assert.equal(res.body.message, 'المسير مصروف مسبقاً');
+  assert.equal(ctx.DB.query('SELECT * FROM financial_vouchers').length, 0);
+  assert.equal(auditOperations(ctx).length, auditsBefore);
+});
+
+test('pay race: the run was cancelled meanwhile → 409 and no vouchers', async () => {
+  const ctx = await setup('008');
+  const run = await approvedRun(ctx);
+  beforeNextBatch(ctx, () => {
+    ctx.DB.raw.prepare(`UPDATE payroll_runs SET status = 'cancelled' WHERE id = ?`).run(run.id);
+  });
+  const res = await call(pay, ctx.env, { token: as(ctx, 'admin'), body: { id: run.id } });
+  assert.equal(res.status, 409);
+  assert.equal(ctx.DB.query('SELECT * FROM financial_vouchers').length, 0);
+});
+
+test('pay without vouchers, then with vouchers on the paid run: issued, audited, 200, idempotent', async () => {
+  const ctx = await setup('008');
+  const run = await approvedRun(ctx);
+  const first = await call(pay, ctx.env, { token: as(ctx, 'supervisor'), body: { id: run.id, generateVouchers: false } });
+  assert.equal(first.status, 200, JSON.stringify(first.body));
+  assert.equal(first.body.run.status, 'paid');
+  assert.equal(first.body.created.length, 0);
+
+  const second = await call(pay, ctx.env, { token: as(ctx, 'supervisor'), body: { id: run.id, generateVouchers: true } });
+  assert.equal(second.status, 200, JSON.stringify(second.body));
+  assert.equal(second.body.created.length, 2);
+  assert.equal(second.body.run.paidByName, 'محمد أحمد', 'paid stamp unchanged');
+  const ops = auditOperations(ctx).map(a => a.operation);
+  assert.deepEqual(ops.slice(-2), ['pay', 'generate_missing_vouchers']);
+  assert.equal(auditOperations(ctx).at(-1).vouchers.length, 2);
+  assert.ok(ctx.DB.query<any>(`SELECT user_id FROM user_notifications WHERE type = 'payroll_vouchers_pending'`).some(n => n.user_id === 'u_admin'));
+
+  const third = await call(pay, ctx.env, { token: as(ctx, 'supervisor'), body: { id: run.id, generateVouchers: true } });
+  assert.equal(third.status, 200);
+  assert.equal(third.body.created.length, 0);
+  assert.equal(third.body.message, 'جميع سندات الصرف صادرة مسبقاً');
+  assert.equal(ctx.DB.query('SELECT * FROM financial_vouchers').length, 2);
+  const noVouchers = await call(pay, ctx.env, { token: as(ctx, 'supervisor'), body: { id: run.id, generateVouchers: false } });
+  assert.equal(noVouchers.status, 200);
+  assert.equal(noVouchers.body.vouchers.length, 2);
+});
+
+test('D1 errors while loading the run return a JSON 500, not an exception', async () => {
+  const ctx = await setup('008');
+  const draft = await saveDraft(ctx);
+  const paid = await call(save, ctx.env, { token: as(ctx, 'supervisor'), body: { branchId: BRANCH, period: '2026-09' } });
+  await call(approve, ctx.env, { token: as(ctx, 'admin'), body: { id: paid.body.run.id } });
+  await call(pay, ctx.env, { token: as(ctx, 'admin'), body: { id: paid.body.run.id } });
+
+  const original = ctx.DB.prepare.bind(ctx.DB);
+  const failing = (pattern: RegExp) => {
+    (ctx.DB as any).prepare = (sql: string) => {
+      if (!pattern.test(sql)) return original(sql);
+      const broken: any = {
+        bind: () => broken,
+        first: async () => { throw new Error('D1_ERROR: network connection lost'); },
+        all: async () => { throw new Error('D1_ERROR: network connection lost'); },
+        run: async () => { throw new Error('D1_ERROR: network connection lost'); },
+      };
+      return broken;
+    };
+  };
+  const quiet = console.error;
+  console.error = () => {};
+  try {
+    failing(/^SELECT \* FROM payroll_runs WHERE id = \?$/);
+    const cases: Array<[string, any, any]> = [
+      ['approve', approve, { token: as(ctx, 'admin'), body: { id: draft.id } }],
+      ['reopen', reopen, { token: as(ctx, 'admin'), body: { id: draft.id } }],
+      ['pay', pay, { token: as(ctx, 'admin'), body: { id: draft.id } }],
+      ['cancel', cancel, { token: as(ctx, 'admin'), body: { id: draft.id, reason: 'خطأ في المسير' } }],
+      ['get', get, { token: as(ctx, 'admin'), query: { id: draft.id } }],
+    ];
+    for (const [name, handler, options] of cases) {
+      const res = await call(handler, ctx.env, options);
+      assert.equal(res.status, 500, `${name}: ${JSON.stringify(res.body)}`);
+      assert.equal(res.body.success, false, name);
+      assert.ok(typeof res.body.error === 'string' && res.body.error.length > 0, name);
+    }
+
+    // Already-paid run without vouchers: the voucher lookup fails.
+    (ctx.DB as any).prepare = original;
+    failing(/FROM financial_vouchers WHERE/);
+    const res = await call(pay, ctx.env, { token: as(ctx, 'admin'), body: { id: paid.body.run.id, generateVouchers: false } });
+    assert.equal(res.status, 500, JSON.stringify(res.body));
+    assert.equal(res.body.success, false);
+  } finally {
+    (ctx.DB as any).prepare = original;
+    console.error = quiet;
+  }
+  assert.equal(ctx.DB.one<any>('SELECT status FROM payroll_runs WHERE id = ?', draft.id)!.status, 'draft');
+});

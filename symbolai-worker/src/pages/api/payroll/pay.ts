@@ -7,6 +7,7 @@ import { formatAmount, formatMoney, toMinor } from '@/lib/finance/money';
 import { getOrganizationProfile } from '@/lib/finance/documents';
 import { normalizePaymentSplit, voucherInsertStatements, type NewVoucher } from '@/lib/finance/vouchers';
 import { notifyByPermission, notifyUsers } from '@/lib/finance/notify';
+import type { PayrollRunRow } from '@/lib/finance/payroll-data';
 import {
   loadRun,
   loadRunForUser,
@@ -42,15 +43,15 @@ export const POST: APIRoute = async context => {
   }
   const generateVouchers = body.generateVouchers !== false;
 
-  const run = await loadRunForUser(auth, body.id);
-  if (run instanceof Response) return run;
-  if (run.status === 'draft') return fail('يجب أن يعتمد المدير مسير الرواتب قبل الصرف', 409);
-  if (run.status === 'cancelled') return fail('مسير الرواتب ملغي', 409);
-  if (run.status === 'paid' && !generateVouchers) {
-    return ok({ run: serializeRun(run), created: [], vouchers: await loadRunVouchers(db, run.id), message: 'المسير مصروف مسبقاً' });
-  }
-
   try {
+    const run = await loadRunForUser(auth, body.id);
+    if (run instanceof Response) return run;
+    if (run.status === 'draft') return fail('يجب أن يعتمد المدير مسير الرواتب قبل الصرف', 409);
+    if (run.status === 'cancelled') return fail('مسير الرواتب ملغي', 409);
+    const alreadyPaid = async (current: PayrollRunRow) =>
+      ok({ run: serializeRun(current), created: [], vouchers: await loadRunVouchers(db, run.id), message: 'المسير مصروف مسبقاً' });
+    if (run.status === 'paid' && !generateVouchers) return await alreadyPaid(run);
+
     const [items, org] = await Promise.all([loadRunItems(db, run.id), getOrganizationProfile(db)]);
     const approver = canApproveFinance(session);
     const statements: D1PreparedStatement[] = [];
@@ -109,11 +110,20 @@ export const POST: APIRoute = async context => {
       }
     }
 
+    // true when this request moved the run approved → paid; false when it only
+    // issues the missing vouchers of a run that is already paid.
+    let markedPaid = false;
     if (statements.length > 0) {
       const results = await db.batch(statements);
-      if (run.status === 'approved' && !results[0]?.meta?.changes) {
-        return fail('تغيرت حالة مسير الرواتب — أعد تحميل الصفحة', 409);
-      }
+      markedPaid = run.status === 'approved' && Number(results[0]?.meta?.changes ?? 0) > 0;
+    }
+    if (run.status === 'approved' && !markedPaid) {
+      // Another request changed the run between our read and the batch. If it
+      // paid the run, the vouchers of this batch were still issued (their guard
+      // only needs the run to be paid): carry on as "issue missing vouchers".
+      const current = await loadRun(db, run.id);
+      if (current?.status !== 'paid') return fail('تغيرت حالة مسير الرواتب — أعد تحميل الصفحة', 409);
+      if (!generateVouchers) return await alreadyPaid(current);
     }
 
     const [updated, vouchers] = await Promise.all([loadRun(db, run.id), loadRunVouchers(db, run.id)]);
@@ -130,7 +140,7 @@ export const POST: APIRoute = async context => {
       'payroll_run',
       run.id,
       {
-        operation: run.status === 'approved' ? 'pay' : 'generate_missing_vouchers',
+        operation: markedPaid ? 'pay' : 'generate_missing_vouchers',
         branchId: run.branch_id,
         period: run.period,
         paymentMethod,
@@ -157,7 +167,7 @@ export const POST: APIRoute = async context => {
         { excludeUserId: actor.id },
       );
     }
-    if (run.status === 'approved' && run.created_by && run.created_by !== actor.id) {
+    if (markedPaid && run.created_by && run.created_by !== actor.id) {
       await notifyUsers(db, [run.created_by], {
         type: 'payroll_paid',
         severity: 'success',
@@ -175,7 +185,7 @@ export const POST: APIRoute = async context => {
       vouchers,
       skipped,
       message:
-        run.status === 'approved'
+        markedPaid
           ? created.length
             ? `تم صرف الرواتب وإصدار ${created.length} سند صرف`
             : 'تم تسجيل صرف الرواتب'

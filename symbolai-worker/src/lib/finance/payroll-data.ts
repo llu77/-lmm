@@ -123,6 +123,12 @@ interface BonusEntry {
   totalRevenue?: unknown;
 }
 
+function bonusEntryEmployeeId(value: unknown): string {
+  if (typeof value === 'string') return value.trim();
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  return '';
+}
+
 export function isBonusRecordApproved(row: Record<string, unknown>): boolean {
   const status = typeof row.status === 'string' ? row.status : null;
   if (status === 'approved') return true;
@@ -132,7 +138,9 @@ export function isBonusRecordApproved(row: Record<string, unknown>): boolean {
 
 /**
  * Approved weekly bonus records of the month, turned into one 'bonus' line per
- * employee per week. Matched by employee id, falling back to the exact name.
+ * employee per week. Matched by employee id; only entries without an id fall
+ * back to the (normalized) name. Unmatched entries keep their id so they
+ * surface as orphans.
  */
 export async function loadApprovedBonuses(
   db: D1Database,
@@ -182,13 +190,17 @@ export async function loadApprovedBonuses(
     for (const entry of entries) {
       const amount = Number(entry.bonusAmount) || 0;
       if (toMinor(amount) <= 0) continue;
-      const employee =
-        (typeof entry.employeeId === 'string' && byId.get(entry.employeeId)) ||
-        (typeof entry.employeeName === 'string' && byName.get(normalizeName(entry.employeeName))) ||
-        null;
+      const entryId = bonusEntryEmployeeId(entry.employeeId);
+      // An entry that carries an employee id is matched by that id only: an id
+      // that is not among the active employees (left or transferred) stays an
+      // orphan instead of being credited to a namesake. Only id-less entries
+      // (very old rows) fall back to the name.
+      const employee = entryId
+        ? byId.get(entryId) ?? null
+        : (typeof entry.employeeName === 'string' && byName.get(normalizeName(entry.employeeName))) || null;
       out.push({
-        id: `bonus:${row.id}:${employee?.id ?? String(entry.employeeId ?? entry.employeeName ?? '')}`,
-        employeeId: employee?.id ?? String(entry.employeeId ?? ''),
+        id: `bonus:${row.id}:${employee?.id ?? (entryId || String(entry.employeeName ?? ''))}`,
+        employeeId: employee?.id ?? entryId,
         category: 'bonus',
         amount,
         description: `بونص الأسبوع ${row.week_number ?? ''}`.trim(),
