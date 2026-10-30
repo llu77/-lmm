@@ -40,6 +40,9 @@ export const MAX_DESCRIPTION_LENGTH = 300;
 
 export const LOCKED_PERIOD_MESSAGE = 'مسير رواتب هذا الشهر معتمد — لا يمكن إضافة بنود';
 
+/** An explicit amount that quantity × rate does not explain: the amount is kept, the breakdown dropped. */
+export const AMOUNT_MISMATCH_WARNING = 'المبلغ المُدخل يختلف عن الكمية × السعر — حُفظ المبلغ دون الكمية والسعر';
+
 /** Salary data is visible to payroll/HR roles and the manager — never to partners. */
 export function canViewAdjustments(session: EnhancedSession): boolean {
   const p = session.permissions;
@@ -232,11 +235,20 @@ export async function createAdjustment(
     if (rate === null) return reject('السعر يجب أن يكون مبلغاً أكبر من صفر (منزلتان عشريتان كحد أقصى)');
   }
 
+  const warnings: string[] = [];
   let amount: number;
   if (hasAmount) {
     const parsed = parsePositiveAmount(input.amount);
     if (parsed === null) return reject('المبلغ يجب أن يكون رقماً أكبر من صفر (منزلتان عشريتان كحد أقصى)');
     amount = parsed;
+    // The stored quantity and rate must explain the amount, or the printed
+    // sheet would show e.g. "2 ساعة × 50.00" next to 5,000.00. The amount the
+    // user typed wins; the breakdown that contradicts it is not stored.
+    if (quantity !== null && rate !== null && toMinor(multiplyToAmount(quantity, rate)) !== toMinor(amount)) {
+      quantity = null;
+      rate = null;
+      warnings.push(AMOUNT_MISMATCH_WARNING);
+    }
   } else if (quantity !== null && rate !== null) {
     amount = multiplyToAmount(quantity, rate);
     if (toMinor(amount) <= 0) return reject('ناتج الكمية × السعر يساوي صفراً');
@@ -278,49 +290,66 @@ export async function createAdjustment(
   // The payroll was approved between the check above and the insert.
   if (!result || Number(result.meta?.changes ?? 0) === 0) return reject(LOCKED_PERIOD_MESSAGE, 409);
 
-  const row = await loadAdjustment(db, id);
-  const adjustment = row
-    ? mapAdjustmentRow(row)
-    : mapAdjustmentRow({
-        id, branch_id: branchId, employee_id: employee.id, employee_name: employee.name, period: periodKey,
-        kind: info.kind, category, amount, quantity, rate, description, source_type: 'manual', status: 'active',
-        created_by: actor.id, created_by_name: actor.displayName, created_at: new Date().toISOString(),
-      });
+  // The entry is committed. Nothing below may turn this into an error: a 500
+  // now would make the user retry and record the entry (and deduct) twice. A
+  // failing step falls back to the in-memory row and adds no warnings.
+  let adjustment = mapAdjustmentRow({
+    id, branch_id: branchId, employee_id: employee.id, employee_name: employee.name, period: periodKey,
+    kind: info.kind, category, amount, quantity, rate, description, source_type: 'manual', status: 'active',
+    created_by: actor.id, created_by_name: actor.displayName, created_at: new Date().toISOString(),
+  });
+  const afterCommit = async (step: string, task: () => Promise<void>): Promise<void> => {
+    try {
+      await task();
+    } catch (error) {
+      console.error(`Payroll adjustment ${id} saved, but "${step}" failed:`, error);
+    }
+  };
+
+  await afterCommit('reload', async () => {
+    const row = await loadAdjustment(db, id);
+    if (row) adjustment = mapAdjustmentRow(row);
+  });
 
   // Saudi Labour Law art. 92/93: deductions may not exceed half of the wage. Warn, don't block.
-  const warnings: string[] = [];
   if (info.kind === 'deduction') {
-    const fixedMinor = toMinor(employee.baseSalary) + toMinor(employee.supervisorAllowance) + toMinor(employee.incentives);
-    const deductionsMinor = await employeeDeductionsMinor(db, branchId, periodKey, employee.id);
-    if (fixedMinor > 0 && deductionsMinor * 2 > fixedMinor) {
-      warnings.push(
-        `تنبيه: إجمالي استقطاعات ${employee.name} في ${periodLabelAr(periodKey)} (${formatMoney(fromMinor(deductionsMinor))}) ` +
-          `يتجاوز 50% من راتبه الثابت (${formatMoney(fromMinor(fixedMinor))}) — المادتان 92 و93 من نظام العمل`,
-      );
-    }
-    if (deductionsMinor > fixedMinor) {
-      warnings.push('الاستقطاعات تتجاوز الراتب الثابت — سيظهر صافي الراتب بالسالب ما لم تُضف مستحقات');
-    }
+    await afterCommit('deduction warnings', async () => {
+      const fixedMinor = toMinor(employee.baseSalary) + toMinor(employee.supervisorAllowance) + toMinor(employee.incentives);
+      const deductionsMinor = await employeeDeductionsMinor(db, branchId, periodKey, employee.id);
+      const found: string[] = [];
+      if (fixedMinor > 0 && deductionsMinor * 2 > fixedMinor) {
+        found.push(
+          `تنبيه: إجمالي استقطاعات ${employee.name} في ${periodLabelAr(periodKey)} (${formatMoney(fromMinor(deductionsMinor))}) ` +
+            `يتجاوز 50% من راتبه الثابت (${formatMoney(fromMinor(fixedMinor))}) — المادتان 92 و93 من نظام العمل`,
+        );
+      }
+      if (deductionsMinor > fixedMinor) {
+        found.push('الاستقطاعات تتجاوز الراتب الثابت — سيظهر صافي الراتب بالسالب ما لم تُضف مستحقات');
+      }
+      warnings.push(...found);
+    });
   }
 
-  await logAudit(
-    db,
-    session,
-    'create',
-    'payroll_adjustment',
-    id,
-    {
-      origin,
-      branchId,
-      employeeId: employee.id,
-      period: periodKey,
-      category,
-      amount,
-      quantity,
-      rate,
-    },
-    clientIp(request),
-    request.headers.get('User-Agent') || undefined,
+  await afterCommit('audit log', () =>
+    logAudit(
+      db,
+      session,
+      'create',
+      'payroll_adjustment',
+      id,
+      {
+        origin,
+        branchId,
+        employeeId: employee.id,
+        period: periodKey,
+        category,
+        amount,
+        quantity,
+        rate,
+      },
+      clientIp(request),
+      request.headers.get('User-Agent') || undefined,
+    ),
   );
 
   return { ok: true, adjustment, warnings, employee: { id: employee.id, name: employee.name, branchId } };

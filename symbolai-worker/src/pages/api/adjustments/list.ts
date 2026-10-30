@@ -61,7 +61,15 @@ export const GET: APIRoute = async context => {
     const all = (result.results ?? []).map(mapAdjustmentRow);
     const adjustments = status === 'all' ? all : all.filter(a => a.status === status);
 
-    // Legacy rows are always deductions and always count toward payroll.
+    // Legacy rows are always deductions, cannot be cancelled and always count
+    // toward payroll: they feed the summary whatever the status filter, and are
+    // listed for every filter except "cancelled".
+    const legacyRows =
+      kind === 'earning'
+        ? []
+        : (await loadLegacyAdvancesAndDeductions(db, branchId, period)).filter(
+            row => (!employeeId || row.employeeId === employeeId) && (!category || row.category === category),
+          );
     let legacy: Array<{
       id: string;
       employeeId: string;
@@ -72,30 +80,27 @@ export const GET: APIRoute = async context => {
       description: string | null;
       table: 'advances' | 'deductions';
     }> = [];
-    if (status !== 'cancelled' && kind !== 'earning') {
-      const legacyRows = (await loadLegacyAdvancesAndDeductions(db, branchId, period)).filter(
-        row => (!employeeId || row.employeeId === employeeId) && (!category || row.category === category),
-      );
-      if (legacyRows.length > 0) {
-        const names = await db
-          .prepare('SELECT id, employee_name FROM employees WHERE branch_id = ?')
-          .bind(branchId)
-          .all<{ id: string; employee_name: string }>();
-        const nameById = new Map((names.results ?? []).map(r => [String(r.id), String(r.employee_name ?? '')]));
-        legacy = legacyRows.map(row => ({
-          id: row.id,
-          employeeId: row.employeeId,
-          employeeName: nameById.get(row.employeeId) ?? '',
-          category: row.category,
-          categoryLabel: ADJUSTMENT_CATEGORIES[row.category]?.labelAr ?? row.category,
-          amount: round2(row.amount),
-          description: row.description ?? null,
-          table: row.sourceType === 'legacy_advance' ? 'advances' : 'deductions',
-        }));
-      }
+    if (status !== 'cancelled' && legacyRows.length > 0) {
+      const names = await db
+        .prepare('SELECT id, employee_name FROM employees WHERE branch_id = ?')
+        .bind(branchId)
+        .all<{ id: string; employee_name: string }>();
+      const nameById = new Map((names.results ?? []).map(r => [String(r.id), String(r.employee_name ?? '')]));
+      legacy = legacyRows.map(row => ({
+        id: row.id,
+        employeeId: row.employeeId,
+        employeeName: nameById.get(row.employeeId) ?? '',
+        category: row.category,
+        categoryLabel: ADJUSTMENT_CATEGORIES[row.category]?.labelAr ?? row.category,
+        amount: round2(row.amount),
+        description: row.description ?? null,
+        table: row.sourceType === 'legacy_advance' ? 'advances' : 'deductions',
+      }));
     }
 
-    // Summary of what payroll will pick up for these filters (active ledger + legacy), in halalas.
+    // Summary of what payroll will pick up for the employee/category/kind
+    // filters (active ledger + legacy), in halalas. Independent of the status
+    // filter: it always describes what payroll will deduct, not what is listed.
     let earningsMinor = 0;
     let deductionsMinor = 0;
     let count = 0;
@@ -108,7 +113,7 @@ export const GET: APIRoute = async context => {
       count++;
     };
     for (const a of all) if (a.status === 'active') add(a.category, a.kind === 'earning', a.amount);
-    for (const l of legacy) add(l.category, false, l.amount);
+    for (const l of legacyRows) add(l.category, false, l.amount);
 
     const run = await getOpenRun(db, branchId, period);
     const locked = run !== null && (run.status === 'approved' || run.status === 'paid');

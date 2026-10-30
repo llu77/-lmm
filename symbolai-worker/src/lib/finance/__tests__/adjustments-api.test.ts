@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { setup, call } from './harness';
 import { computeBranchPayroll } from '../payroll-data';
-import { POST as createAdjustment } from '../../../pages/api/adjustments/create';
+import { POST as createAdjustment, AMOUNT_MISMATCH_WARNING } from '../../../pages/api/adjustments/create';
 import { GET as listAdjustments } from '../../../pages/api/adjustments/list';
 import { POST as cancelAdjustment } from '../../../pages/api/adjustments/cancel';
 import { POST as createAdvance } from '../../../pages/api/advances/create';
@@ -84,10 +84,13 @@ test('amount validation: explicit amount wins, halala rounding, bad input reject
   assert.equal(rounded.status, 201);
   assert.equal(rounded.body.adjustment.amount, 12.5); // 1.5 × 8.33 = 12.495 → 12.50
 
+  // An explicit amount that 10 × 20 does not explain is kept, without the breakdown.
   const explicit = await call(createAdjustment, env, { token: admin, body: { ...base, category: 'overtime', quantity: 10, rate: 20, amount: '250.75' } });
   assert.equal(explicit.status, 201);
   assert.equal(explicit.body.adjustment.amount, 250.75);
-  assert.equal(explicit.body.adjustment.quantity, 10);
+  assert.equal(explicit.body.adjustment.quantity, null);
+  assert.equal(explicit.body.adjustment.rate, null);
+  assert.deepEqual(explicit.body.warnings, [AMOUNT_MISMATCH_WARNING]);
 
   for (const body of [
     { ...base, category: 'overtime' },
@@ -354,3 +357,58 @@ test('deduction type mapping', () => {
   assert.equal(mapDeductionType('unpaid_leave'), 'unpaid_leave');
   assert.equal(mapDeductionType('advance'), 'other_deduction');
 });
+
+test('a failure after the insert commits still answers 201 and records the entry once', async () => {
+  const { env, DB, data } = await setup('008');
+  const originalPrepare = DB.prepare.bind(DB);
+  let committed = false;
+  const originalBatch = DB.batch.bind(DB);
+  (DB as any).batch = async (statements: any[]) => {
+    const result = await originalBatch(statements);
+    if (statements.some(s => /INSERT INTO payroll_adjustments/.test(s.sql))) committed = true;
+    return result;
+  };
+  (DB as any).prepare = (sql: string) => {
+    if (committed && !/^\s*INSERT/i.test(sql)) throw new Error('D1 unavailable');
+    return originalPrepare(sql);
+  };
+  const res = await call(createAdjustment, env, {
+    token: data.users.supervisor.token,
+    body: { employeeId: 'emp_2', period: PERIOD, category: 'advance', amount: 1500 },
+  });
+  assert.equal(res.status, 201, JSON.stringify(res.body));
+  assert.equal(res.body.adjustment.amount, 1500);
+  assert.equal(res.body.adjustment.employeeName, 'محمد إسماعيل');
+  assert.deepEqual(res.body.warnings, []);
+  (DB as any).prepare = originalPrepare;
+  assert.equal(DB.query('SELECT * FROM payroll_adjustments').length, 1);
+});
+
+for (const variant of ['008', 'legacy'] as const) {
+  test(`summary describes what payroll deducts whatever the status filter (${variant})`, async () => {
+    const { env, DB, data } = await setup(variant);
+    const sup = data.users.supervisor.token;
+    if (variant === 'legacy') {
+      DB.raw.exec(`INSERT INTO advances (id, employee_id, employee_name, amount, month, year, description, recorded_by)
+                   VALUES ('old_adv_1', 'emp_1', 'أحمد علي', 400, '10', 2026, 'سلفة قديمة', 'sup')`);
+    }
+    const kept = await call(createAdjustment, env, { token: sup, body: { employeeId: 'emp_1', period: PERIOD, category: 'violation', amount: 100 } });
+    const dropped = await call(createAdjustment, env, { token: sup, body: { employeeId: 'emp_1', period: PERIOD, category: 'late', amount: 30 } });
+    assert.equal(kept.status, 201);
+    await call(cancelAdjustment, env, { token: sup, body: { id: dropped.body.adjustment.id, reason: 'خطأ' } });
+
+    const legacyTotal = variant === 'legacy' ? 400 : 0;
+    const summaries = [];
+    for (const status of ['active', 'cancelled', 'all']) {
+      const res = await call(listAdjustments, env, { token: sup, query: { period: PERIOD, status } });
+      assert.equal(res.status, 200, JSON.stringify(res.body));
+      summaries.push(res.body.summary);
+      // Legacy rows cannot be cancelled: never listed under "cancelled".
+      assert.equal(res.body.legacy.length, status === 'cancelled' ? 0 : legacyTotal ? 1 : 0, status);
+    }
+    for (const s of summaries) {
+      assert.deepEqual(s, summaries[0]);
+      assert.equal(s.deductions, 100 + legacyTotal);
+    }
+  });
+}

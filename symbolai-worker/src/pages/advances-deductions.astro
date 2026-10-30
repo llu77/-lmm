@@ -713,6 +713,7 @@ if (!cookieHeader?.includes('session=')) {
       byId('rate-label').textContent = spec.rateLabel;
       byId('rate-hint').textContent = spec.hint;
       if (rateIsAuto || !addRate.value) suggestRate(false);
+      updateAmountHint();
     }
 
     function suggestRate(explicit: boolean): void {
@@ -742,17 +743,40 @@ if (!cookieHeader?.includes('session=')) {
     const QUANTITY_RE = /^\d+(\.\d{1,2})?$/;
     const AMOUNT_RE = /^\d+(\.\d{1,2})?$/;
 
+    const AMOUNT_HINT = 'يُحسب تلقائياً من الكمية × السعر، ويمكن تعديله.';
+    const AMOUNT_HINT_EDITED = 'المبلغ يختلف عن الكمية × السعر — سيُحفظ المبلغ وحده دون الكمية والسعر.';
+
+    /** quantity × rate in halalas (same rounding as the server), or null while either input is invalid. */
+    function breakdownMinor(q: string, r: string): number | null {
+      if (!QUANTITY_RE.test(q) || !AMOUNT_RE.test(r)) return null;
+      return Math.round((toMinor(q) * toMinor(r)) / 100);
+    }
+
+    /** True when the amount was edited by hand away from quantity × rate. */
+    function amountDiverges(): boolean {
+      const amount = addAmount.value.trim();
+      const minor = breakdownMinor(addQuantity.value.trim(), addRate.value.trim());
+      return minor !== null && AMOUNT_RE.test(amount) && toMinor(amount) !== minor;
+    }
+
+    function updateAmountHint(): void {
+      const edited = amountDiverges();
+      const hint = byId('amount-hint');
+      hint.textContent = edited ? AMOUNT_HINT_EDITED : AMOUNT_HINT;
+      hint.classList.toggle('text-amber-700', edited);
+      hint.classList.toggle('text-muted-foreground', !edited);
+    }
+
     function recomputeAmount(): void {
-      const q = addQuantity.value.trim();
-      const r = addRate.value.trim();
-      if (!QUANTITY_RE.test(q) || !AMOUNT_RE.test(r)) return;
-      const minor = Math.round((toMinor(q) * toMinor(r)) / 100);
-      if (minor > 0) addAmount.value = fromMinor(minor).toFixed(2);
+      const minor = breakdownMinor(addQuantity.value.trim(), addRate.value.trim());
+      if (minor !== null && minor > 0) addAmount.value = fromMinor(minor).toFixed(2);
+      updateAmountHint();
     }
 
     async function openAddDialog(): Promise<void> {
       if (!data || data.locked) return;
       addForm.reset();
+      updateAmountHint();
       byId('desc-count').textContent = '0';
       byId('add-period').textContent = periodLabelAr(currentPeriodValue());
       byId('add-branch').textContent = branchName();
@@ -824,9 +848,12 @@ if (!cookieHeader?.includes('session=')) {
         category,
         description: description || undefined,
       };
+      // An amount edited away from quantity × rate is sent alone, so the printed
+      // payroll never shows a breakdown that contradicts the amount.
+      const sendBreakdown = calc && !amountDiverges();
       if (amount) body.amount = amount;
-      if (calc && quantity) body.quantity = quantity;
-      if (calc && rate) body.rate = rate;
+      if (sendBreakdown && quantity) body.quantity = quantity;
+      if (sendBreakdown && rate) body.rate = rate;
 
       try {
         const res = await withBusy(addSubmit, 'جاري الحفظ...', () =>
@@ -929,6 +956,7 @@ if (!cookieHeader?.includes('session=')) {
         if (rateIsAuto || !addRate.value) suggestRate(false);
       });
       addQuantity.addEventListener('input', recomputeAmount);
+      addAmount.addEventListener('input', updateAmountHint);
       addRate.addEventListener('input', () => {
         rateIsAuto = false;
         recomputeAmount();
