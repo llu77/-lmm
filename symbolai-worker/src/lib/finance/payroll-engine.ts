@@ -197,11 +197,12 @@ export function payrollFingerprint(
   employees: PayrollEmployeeInput[],
   adjustments: PayrollAdjustmentInput[],
 ): string {
+  // Names and descriptions are printed on the sheet, so editing them makes a draft stale too.
   const emp = employees
-    .map(e => [e.id, toMinor(e.baseSalary), toMinor(e.supervisorAllowance), toMinor(e.incentives)].join(':'))
+    .map(e => [e.id, e.name, e.nationalId ?? '', toMinor(e.baseSalary), toMinor(e.supervisorAllowance), toMinor(e.incentives)].join(':'))
     .sort();
   const adj = adjustments
-    .map(a => [a.sourceType, a.id, a.employeeId, a.category, toMinor(a.amount)].join(':'))
+    .map(a => [a.sourceType, a.id, a.employeeId, a.category, toMinor(a.amount), a.quantity ?? '', a.rate ?? '', a.description ?? ''].join(':'))
     .sort();
   return fnv1a([...emp, '|', ...adj].join(';'));
 }

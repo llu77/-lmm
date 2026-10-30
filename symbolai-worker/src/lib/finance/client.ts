@@ -208,7 +208,7 @@ export async function withBusy<T>(button: HTMLButtonElement | null, busyLabel: s
   }
 }
 
-export function byId<T extends HTMLElement = HTMLElement>(id: string): T {
+export function byId<T extends Element = HTMLElement>(id: string): T {
   const el = document.getElementById(id);
   if (!el) throw new Error(`Missing element #${id}`);
   return el as T;

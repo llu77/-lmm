@@ -95,3 +95,11 @@ test('period helpers', () => {
   // 22:30 UTC on Oct 31 is already Nov 1 in Riyadh
   assert.equal(currentPeriod(new Date('2026-10-31T22:30:00Z')), '2026-11');
 });
+
+test('fingerprint changes when a printed name or description changes', () => {
+  const a = [adj({ id: '1', employeeId: 'e1', category: 'overtime', amount: 10, description: 'أسبوع 1' })];
+  const base = payrollFingerprint(employees, a);
+  assert.notEqual(base, payrollFingerprint([{ ...employees[0], name: 'اسم جديد' }, employees[1]], a));
+  assert.notEqual(base, payrollFingerprint(employees, [{ ...a[0], description: 'أسبوع 2' }]));
+  assert.equal(base, payrollFingerprint(employees, [{ ...a[0] }]));
+});
