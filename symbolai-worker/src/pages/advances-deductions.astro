@@ -1,771 +1,991 @@
 ---
 import MainLayout from '@/layouts/MainLayout.astro';
 
-// Check authentication
+// Check authentication (middleware enforces it; this keeps the redirect fast)
 const cookieHeader = Astro.request.headers.get('Cookie');
 if (!cookieHeader?.includes('session=')) {
   return Astro.redirect('/auth/login');
 }
 ---
 
-<MainLayout title="السلف والخصومات - SymbolAI">
+<MainLayout title="المستحقات والاستقطاعات - SymbolAI">
   <div class="space-y-6">
-    <div>
-      <h1 class="text-3xl font-bold">السلف والخصومات</h1>
-      <p class="text-muted-foreground mt-2">إدارة السلف والخصومات الشهرية للموظفين</p>
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div class="max-w-3xl">
+        <h1 class="text-3xl font-bold">المستحقات والاستقطاعات</h1>
+        <p class="text-muted-foreground mt-2">
+          سجل شهري لبنود الرواتب المتغيرة: الساعات الإضافية والبدلات والمكافآت، والسلف والجزاءات والغياب والتأخير.
+          كل بند يُضاف هنا يدخل <strong>تلقائياً</strong> في مسير رواتب الشهر المحدد ويظهر في المسير المطبوع وقسيمة الراتب.
+          السلف المعتمدة من طلبات الموظفين تظهر هنا أيضاً.
+        </p>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <a id="payroll-link" href="/payroll" class="rounded-md border px-4 py-2 text-sm font-medium hover:bg-gray-50">
+          فتح مسير الرواتب
+        </a>
+        <button
+          id="add-btn"
+          type="button"
+          class="hidden rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          + إضافة بند
+        </button>
+      </div>
     </div>
 
-    <!-- Tabs -->
-    <div class="border-b">
-      <nav class="flex space-x-8 space-x-reverse" aria-label="Tabs">
-        <button
-          id="tab-advances"
-          class="tab-button border-b-2 border-primary px-1 py-4 text-sm font-medium"
-          data-tab="advances"
-        >
-          السلف
-        </button>
-        <button
-          id="tab-deductions"
-          class="tab-button border-b-2 border-transparent px-1 py-4 text-sm font-medium text-muted-foreground hover:border-gray-300 hover:text-gray-700"
-          data-tab="deductions"
-        >
-          الخصومات
-        </button>
-      </nav>
-    </div>
+    <div id="page-error" class="hidden rounded-lg border border-red-200 bg-red-50 p-6 text-red-800" role="alert"></div>
 
-    <!-- Advances Tab Content -->
-    <div id="content-advances" class="tab-content">
-      <!-- Stats Cards -->
-      <div class="grid gap-4 md:grid-cols-3 mb-6">
-        <div class="rounded-lg border bg-card p-4">
-          <h3 class="text-sm font-medium text-muted-foreground">إجمالي السلف</h3>
-          <p class="text-2xl font-bold mt-2" id="advances-count">0</p>
-        </div>
-        <div class="rounded-lg border bg-card p-4">
-          <h3 class="text-sm font-medium text-muted-foreground">المبلغ الإجمالي</h3>
-          <p class="text-2xl font-bold mt-2 text-blue-600" id="advances-total">0 ج.م</p>
-        </div>
-        <div class="rounded-lg border bg-card p-4">
-          <h3 class="text-sm font-medium text-muted-foreground">متوسط السلفة</h3>
-          <p class="text-2xl font-bold mt-2 text-gray-600" id="advances-avg">0 ج.م</p>
+    <div id="page-body" class="space-y-6">
+      <!-- Filters -->
+      <div class="rounded-lg border bg-card p-4 md:p-6">
+        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+          <label class="block text-sm">
+            <span class="mb-1 block font-medium">الفرع</span>
+            <select id="f-branch" class="w-full rounded-md border bg-background px-3 py-2 text-sm"></select>
+          </label>
+          <label class="block text-sm">
+            <span class="mb-1 block font-medium">الشهر</span>
+            <select id="f-month" class="w-full rounded-md border bg-background px-3 py-2 text-sm"></select>
+          </label>
+          <label class="block text-sm">
+            <span class="mb-1 block font-medium">السنة</span>
+            <select id="f-year" class="w-full rounded-md border bg-background px-3 py-2 text-sm"></select>
+          </label>
+          <label class="block text-sm">
+            <span class="mb-1 block font-medium">الموظف</span>
+            <select id="f-employee" class="w-full rounded-md border bg-background px-3 py-2 text-sm">
+              <option value="">جميع الموظفين</option>
+            </select>
+          </label>
+          <label class="block text-sm">
+            <span class="mb-1 block font-medium">النوع</span>
+            <select id="f-kind" class="w-full rounded-md border bg-background px-3 py-2 text-sm">
+              <option value="">الكل</option>
+              <option value="earning">مستحقات</option>
+              <option value="deduction">استقطاعات</option>
+            </select>
+          </label>
+          <label class="block text-sm">
+            <span class="mb-1 block font-medium">البند</span>
+            <select id="f-category" class="w-full rounded-md border bg-background px-3 py-2 text-sm"></select>
+          </label>
+          <label class="block text-sm">
+            <span class="mb-1 block font-medium">الحالة</span>
+            <select id="f-status" class="w-full rounded-md border bg-background px-3 py-2 text-sm">
+              <option value="active">نشطة</option>
+              <option value="cancelled">ملغاة</option>
+              <option value="all">الكل</option>
+            </select>
+          </label>
         </div>
       </div>
 
-      <!-- Filters and Add Button -->
-      <div class="rounded-lg border bg-card p-6">
-        <div class="flex items-center justify-between mb-4 flex-wrap gap-4">
-          <div class="flex gap-3 flex-wrap">
-            <select id="advances-employee-filter" class="rounded-md border px-3 py-2 text-sm">
-              <option value="">جميع الموظفين</option>
-            </select>
-            <select id="advances-month-filter" class="rounded-md border px-3 py-2 text-sm">
-              <option value="">جميع الأشهر</option>
-              <option value="1">يناير</option>
-              <option value="2">فبراير</option>
-              <option value="3">مارس</option>
-              <option value="4">أبريل</option>
-              <option value="5">مايو</option>
-              <option value="6">يونيو</option>
-              <option value="7">يوليو</option>
-              <option value="8">أغسطس</option>
-              <option value="9">سبتمبر</option>
-              <option value="10">أكتوبر</option>
-              <option value="11">نوفمبر</option>
-              <option value="12">ديسمبر</option>
-            </select>
-            <select id="advances-year-filter" class="rounded-md border px-3 py-2 text-sm">
-              <option value="">جميع السنوات</option>
-              <option value="2024">2024</option>
-              <option value="2025">2025</option>
-            </select>
-          </div>
-          <button
-            id="add-advance-btn"
-            class="bg-primary text-white px-4 py-2 rounded-md hover:bg-primary/90 text-sm font-medium"
-          >
-            + إضافة سلفة
-          </button>
-        </div>
+      <!-- Payroll state banners -->
+      <div id="locked-banner" class="hidden rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-900" role="status"></div>
+      <div id="draft-banner" class="hidden rounded-lg border border-sky-200 bg-sky-50 p-4 text-sky-900" role="status"></div>
 
-        <!-- Advances Table -->
+      <!-- Summary -->
+      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <div class="rounded-lg border bg-card p-4">
+          <h3 class="text-sm font-medium text-muted-foreground">إجمالي المستحقات</h3>
+          <p class="mt-2 text-2xl font-bold text-green-700" id="s-earnings">—</p>
+        </div>
+        <div class="rounded-lg border bg-card p-4">
+          <h3 class="text-sm font-medium text-muted-foreground">إجمالي الاستقطاعات</h3>
+          <p class="mt-2 text-2xl font-bold text-red-700" id="s-deductions">—</p>
+        </div>
+        <div class="rounded-lg border bg-card p-4">
+          <h3 class="text-sm font-medium text-muted-foreground">الساعات الإضافية</h3>
+          <p class="mt-2 text-2xl font-bold" id="s-overtime">—</p>
+        </div>
+        <div class="rounded-lg border bg-card p-4">
+          <h3 class="text-sm font-medium text-muted-foreground">السلف</h3>
+          <p class="mt-2 text-2xl font-bold" id="s-advances">—</p>
+        </div>
+        <div class="rounded-lg border bg-card p-4">
+          <h3 class="text-sm font-medium text-muted-foreground">عدد البنود</h3>
+          <p class="mt-2 text-2xl font-bold" id="s-count">—</p>
+        </div>
+      </div>
+
+      <!-- Ledger -->
+      <div class="rounded-lg border bg-card p-4 md:p-6">
+        <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <h2 class="text-xl font-semibold" id="table-title">البنود</h2>
+          <p class="text-sm text-muted-foreground" id="table-note"></p>
+        </div>
         <div class="overflow-x-auto">
-          <table class="w-full">
+          <table class="w-full min-w-[1100px] text-sm">
             <thead>
-              <tr class="border-b">
-                <th class="text-right p-3 font-medium">اسم الموظف</th>
-                <th class="text-right p-3 font-medium">المبلغ</th>
-                <th class="text-right p-3 font-medium">الشهر</th>
-                <th class="text-right p-3 font-medium">السنة</th>
-                <th class="text-right p-3 font-medium">الملاحظات</th>
-                <th class="text-right p-3 font-medium">تاريخ التسجيل</th>
+              <tr class="border-b bg-gray-50 text-right">
+                <th class="p-3 font-medium">الموظف</th>
+                <th class="p-3 font-medium">النوع</th>
+                <th class="p-3 font-medium">البند</th>
+                <th class="p-3 font-medium">الكمية × السعر</th>
+                <th class="p-3 font-medium">المبلغ</th>
+                <th class="p-3 font-medium">الوصف</th>
+                <th class="p-3 font-medium">المصدر</th>
+                <th class="p-3 font-medium">أضيف بواسطة</th>
+                <th class="p-3 font-medium">الحالة</th>
+                <th class="p-3 font-medium">إجراء</th>
               </tr>
             </thead>
-            <tbody id="advances-table-body">
-              <tr>
-                <td colspan="6" class="text-center p-8 text-muted-foreground">
-                  جاري التحميل...
-                </td>
-              </tr>
+            <tbody id="rows">
+              <tr><td colspan="10" class="p-8 text-center text-muted-foreground">جاري التحميل...</td></tr>
             </tbody>
           </table>
         </div>
       </div>
-    </div>
 
-    <!-- Deductions Tab Content -->
-    <div id="content-deductions" class="tab-content hidden">
-      <!-- Stats Cards -->
-      <div class="grid gap-4 md:grid-cols-4 mb-6">
-        <div class="rounded-lg border bg-card p-4">
-          <h3 class="text-sm font-medium text-muted-foreground">إجمالي الخصومات</h3>
-          <p class="text-2xl font-bold mt-2" id="deductions-count">0</p>
-        </div>
-        <div class="rounded-lg border bg-card p-4">
-          <h3 class="text-sm font-medium text-muted-foreground">المبلغ الإجمالي</h3>
-          <p class="text-2xl font-bold mt-2 text-red-600" id="deductions-total">0 ج.م</p>
-        </div>
-        <div class="rounded-lg border bg-card p-4">
-          <h3 class="text-sm font-medium text-muted-foreground">متوسط الخصم</h3>
-          <p class="text-2xl font-bold mt-2 text-gray-600" id="deductions-avg">0 ج.م</p>
-        </div>
-        <div class="rounded-lg border bg-card p-4">
-          <h3 class="text-sm font-medium text-muted-foreground">أكثر نوع</h3>
-          <p class="text-lg font-bold mt-2 text-gray-600" id="deductions-top-type">-</p>
-        </div>
-      </div>
-
-      <!-- Filters and Add Button -->
-      <div class="rounded-lg border bg-card p-6">
-        <div class="flex items-center justify-between mb-4 flex-wrap gap-4">
-          <div class="flex gap-3 flex-wrap">
-            <select id="deductions-employee-filter" class="rounded-md border px-3 py-2 text-sm">
-              <option value="">جميع الموظفين</option>
-            </select>
-            <select id="deductions-month-filter" class="rounded-md border px-3 py-2 text-sm">
-              <option value="">جميع الأشهر</option>
-              <option value="1">يناير</option>
-              <option value="2">فبراير</option>
-              <option value="3">مارس</option>
-              <option value="4">أبريل</option>
-              <option value="5">مايو</option>
-              <option value="6">يونيو</option>
-              <option value="7">يوليو</option>
-              <option value="8">أغسطس</option>
-              <option value="9">سبتمبر</option>
-              <option value="10">أكتوبر</option>
-              <option value="11">نوفمبر</option>
-              <option value="12">ديسمبر</option>
-            </select>
-            <select id="deductions-year-filter" class="rounded-md border px-3 py-2 text-sm">
-              <option value="">جميع السنوات</option>
-              <option value="2024">2024</option>
-              <option value="2025">2025</option>
-            </select>
-            <select id="deductions-type-filter" class="rounded-md border px-3 py-2 text-sm">
-              <option value="">جميع الأنواع</option>
-              <option value="تأخير">تأخير</option>
-              <option value="غياب">غياب</option>
-              <option value="تأمينات">تأمينات</option>
-              <option value="ضرائب">ضرائب</option>
-              <option value="مخالفة">مخالفة</option>
-              <option value="أخرى">أخرى</option>
-            </select>
-          </div>
-          <button
-            id="add-deduction-btn"
-            class="bg-primary text-white px-4 py-2 rounded-md hover:bg-primary/90 text-sm font-medium"
-          >
-            + إضافة خصم
-          </button>
-        </div>
-
-        <!-- Deductions Table -->
-        <div class="overflow-x-auto">
-          <table class="w-full">
+      <!-- Legacy rows (read-only) -->
+      <div id="legacy-section" class="hidden rounded-lg border border-amber-200 bg-card p-4 md:p-6">
+        <h2 class="text-lg font-semibold">بنود مسجلة في النظام القديم (للعرض فقط)</h2>
+        <p class="mt-1 text-sm text-muted-foreground">
+          هذه البنود مسجلة في جداول السلف والخصومات القديمة، وتُحتسب في مسير رواتب هذا الشهر كما هي. لا يمكن تعديلها أو إلغاؤها من هذه الصفحة.
+        </p>
+        <div class="mt-4 overflow-x-auto">
+          <table class="w-full min-w-[640px] text-sm">
             <thead>
-              <tr class="border-b">
-                <th class="text-right p-3 font-medium">اسم الموظف</th>
-                <th class="text-right p-3 font-medium">المبلغ</th>
-                <th class="text-right p-3 font-medium">النوع</th>
-                <th class="text-right p-3 font-medium">الشهر</th>
-                <th class="text-right p-3 font-medium">السنة</th>
-                <th class="text-right p-3 font-medium">السبب</th>
-                <th class="text-right p-3 font-medium">تاريخ التسجيل</th>
+              <tr class="border-b bg-gray-50 text-right">
+                <th class="p-3 font-medium">الموظف</th>
+                <th class="p-3 font-medium">البند</th>
+                <th class="p-3 font-medium">المبلغ</th>
+                <th class="p-3 font-medium">الوصف</th>
+                <th class="p-3 font-medium">المصدر</th>
               </tr>
             </thead>
-            <tbody id="deductions-table-body">
-              <tr>
-                <td colspan="7" class="text-center p-8 text-muted-foreground">
-                  جاري التحميل...
-                </td>
-              </tr>
-            </tbody>
+            <tbody id="legacy-rows"></tbody>
           </table>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Add Advance Dialog -->
-  <dialog id="add-advance-dialog" class="rounded-lg p-6 shadow-lg max-w-md w-full">
-    <div class="flex items-center justify-between mb-4">
-      <h3 class="text-xl font-semibold">إضافة سلفة جديدة</h3>
-      <button id="close-advance-dialog" class="text-gray-500 hover:text-gray-700">✕</button>
-    </div>
-
-    <form id="add-advance-form" class="space-y-4">
-      <div>
-        <label class="block text-sm font-medium mb-2">الموظف *</label>
-        <select id="advance-employee" required class="w-full rounded-md border px-3 py-2">
-          <option value="">اختر موظف</option>
-        </select>
+  <!-- Add entry dialog -->
+  <dialog id="add-dialog" class="w-full max-w-xl rounded-lg p-0 shadow-xl backdrop:bg-black/50">
+    <form id="add-form" class="space-y-4 p-6" novalidate>
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <h3 class="text-xl font-semibold">إضافة بند</h3>
+          <p class="mt-1 text-sm text-muted-foreground">
+            الشهر: <strong id="add-period"></strong> — الفرع: <strong id="add-branch"></strong>
+          </p>
+        </div>
+        <button type="button" data-close class="text-gray-500 hover:text-gray-700" aria-label="إغلاق">✕</button>
       </div>
 
-      <div class="grid grid-cols-2 gap-3">
-        <div>
-          <label class="block text-sm font-medium mb-2">الشهر *</label>
-          <select id="advance-month" required class="w-full rounded-md border px-3 py-2">
-            <option value="1">يناير</option>
-            <option value="2">فبراير</option>
-            <option value="3">مارس</option>
-            <option value="4">أبريل</option>
-            <option value="5">مايو</option>
-            <option value="6">يونيو</option>
-            <option value="7">يوليو</option>
-            <option value="8">أغسطس</option>
-            <option value="9">سبتمبر</option>
-            <option value="10">أكتوبر</option>
-            <option value="11">نوفمبر</option>
-            <option value="12">ديسمبر</option>
-          </select>
-        </div>
-        <div>
-          <label class="block text-sm font-medium mb-2">السنة *</label>
-          <select id="advance-year" required class="w-full rounded-md border px-3 py-2">
-            <option value="2024">2024</option>
-            <option value="2025">2025</option>
-          </select>
+      <label class="block text-sm">
+        <span class="mb-1 block font-medium">الموظف *</span>
+        <select id="add-employee" required class="w-full rounded-md border bg-background px-3 py-2"></select>
+        <span id="add-employee-info" class="mt-1 block text-xs text-muted-foreground"></span>
+      </label>
+
+      <div>
+        <span class="mb-1 block text-sm font-medium">النوع *</span>
+        <div class="grid grid-cols-2 gap-2" role="group" aria-label="نوع البند">
+          <button type="button" data-kind="earning" class="kind-btn rounded-md border px-3 py-2 text-sm font-medium">مستحقات (تُضاف للراتب)</button>
+          <button type="button" data-kind="deduction" class="kind-btn rounded-md border px-3 py-2 text-sm font-medium">استقطاعات (تُخصم من الراتب)</button>
         </div>
       </div>
 
-      <div>
-        <label class="block text-sm font-medium mb-2">المبلغ (ج.م) *</label>
-        <input
-          type="number"
-          id="advance-amount"
-          required
-          min="1"
-          step="0.01"
-          class="w-full rounded-md border px-3 py-2"
-          placeholder="0.00"
-        />
+      <label class="block text-sm">
+        <span class="mb-1 block font-medium">البند *</span>
+        <select id="add-category" required class="w-full rounded-md border bg-background px-3 py-2"></select>
+      </label>
+
+      <div id="calc-section" class="hidden space-y-3 rounded-lg border bg-gray-50 p-4">
+        <div class="grid gap-3 sm:grid-cols-2">
+          <label class="block text-sm">
+            <span class="mb-1 block font-medium" id="qty-label">الكمية</span>
+            <input id="add-quantity" type="number" inputmode="decimal" min="0.01" max="744" step="0.01" class="w-full rounded-md border bg-background px-3 py-2" />
+          </label>
+          <label class="block text-sm">
+            <span class="mb-1 block font-medium" id="rate-label">السعر (ر.س)</span>
+            <input id="add-rate" type="number" inputmode="decimal" min="0.01" step="0.01" class="w-full rounded-md border bg-background px-3 py-2" />
+          </label>
+        </div>
+        <div class="flex flex-wrap items-center gap-3">
+          <button type="button" id="rate-suggest" class="rounded-md border border-primary px-3 py-1.5 text-sm font-medium text-primary hover:bg-primary/10">
+            السعر حسب نظام العمل
+          </button>
+          <span id="rate-hint" class="text-xs text-muted-foreground"></span>
+        </div>
       </div>
 
-      <div>
-        <label class="block text-sm font-medium mb-2">ملاحظات</label>
-        <textarea
-          id="advance-notes"
-          rows="3"
-          class="w-full rounded-md border px-3 py-2"
-          placeholder="ملاحظات إضافية..."
-        ></textarea>
-      </div>
+      <label class="block text-sm">
+        <span class="mb-1 block font-medium">المبلغ (ر.س) *</span>
+        <input id="add-amount" type="number" inputmode="decimal" min="0.01" step="0.01" required class="w-full rounded-md border bg-background px-3 py-2" placeholder="0.00" />
+        <span id="amount-hint" class="mt-1 hidden text-xs text-muted-foreground">يُحسب تلقائياً من الكمية × السعر، ويمكن تعديله.</span>
+      </label>
 
-      <div class="flex gap-3 pt-4">
-        <button
-          type="submit"
-          class="flex-1 bg-primary text-white px-4 py-2 rounded-md hover:bg-primary/90"
-        >
-          حفظ
-        </button>
-        <button
-          type="button"
-          id="cancel-advance"
-          class="flex-1 border px-4 py-2 rounded-md hover:bg-gray-50"
-        >
-          إلغاء
-        </button>
+      <label class="block text-sm">
+        <span class="mb-1 block font-medium">الوصف</span>
+        <textarea id="add-description" rows="2" maxlength="300" class="w-full rounded-md border bg-background px-3 py-2" placeholder="مثال: ساعات إضافية خلال موسم الجرد"></textarea>
+        <span class="mt-1 block text-left text-xs text-muted-foreground"><span id="desc-count">0</span>/300</span>
+      </label>
+
+      <div class="flex gap-3 pt-2">
+        <button type="submit" id="add-submit" class="flex-1 rounded-md bg-primary px-4 py-2 font-medium text-white hover:bg-primary/90 disabled:opacity-50">حفظ البند</button>
+        <button type="button" data-close class="flex-1 rounded-md border px-4 py-2 hover:bg-gray-50">إلغاء</button>
       </div>
     </form>
   </dialog>
 
-  <!-- Add Deduction Dialog -->
-  <dialog id="add-deduction-dialog" class="rounded-lg p-6 shadow-lg max-w-md w-full">
-    <div class="flex items-center justify-between mb-4">
-      <h3 class="text-xl font-semibold">إضافة خصم جديد</h3>
-      <button id="close-deduction-dialog" class="text-gray-500 hover:text-gray-700">✕</button>
-    </div>
-
-    <form id="add-deduction-form" class="space-y-4">
-      <div>
-        <label class="block text-sm font-medium mb-2">الموظف *</label>
-        <select id="deduction-employee" required class="w-full rounded-md border px-3 py-2">
-          <option value="">اختر موظف</option>
-        </select>
-      </div>
-
-      <div class="grid grid-cols-2 gap-3">
-        <div>
-          <label class="block text-sm font-medium mb-2">الشهر *</label>
-          <select id="deduction-month" required class="w-full rounded-md border px-3 py-2">
-            <option value="1">يناير</option>
-            <option value="2">فبراير</option>
-            <option value="3">مارس</option>
-            <option value="4">أبريل</option>
-            <option value="5">مايو</option>
-            <option value="6">يونيو</option>
-            <option value="7">يوليو</option>
-            <option value="8">أغسطس</option>
-            <option value="9">سبتمبر</option>
-            <option value="10">أكتوبر</option>
-            <option value="11">نوفمبر</option>
-            <option value="12">ديسمبر</option>
-          </select>
-        </div>
-        <div>
-          <label class="block text-sm font-medium mb-2">السنة *</label>
-          <select id="deduction-year" required class="w-full rounded-md border px-3 py-2">
-            <option value="2024">2024</option>
-            <option value="2025">2025</option>
-          </select>
-        </div>
-      </div>
-
-      <div>
-        <label class="block text-sm font-medium mb-2">نوع الخصم *</label>
-        <select id="deduction-type" required class="w-full rounded-md border px-3 py-2">
-          <option value="">اختر النوع</option>
-          <option value="تأخير">تأخير</option>
-          <option value="غياب">غياب</option>
-          <option value="تأمينات">تأمينات</option>
-          <option value="ضرائب">ضرائب</option>
-          <option value="مخالفة">مخالفة</option>
-          <option value="أخرى">أخرى</option>
-        </select>
-      </div>
-
-      <div>
-        <label class="block text-sm font-medium mb-2">المبلغ (ج.م) *</label>
-        <input
-          type="number"
-          id="deduction-amount"
-          required
-          min="1"
-          step="0.01"
-          class="w-full rounded-md border px-3 py-2"
-          placeholder="0.00"
-        />
-      </div>
-
-      <div>
-        <label class="block text-sm font-medium mb-2">السبب</label>
-        <textarea
-          id="deduction-reason"
-          rows="3"
-          class="w-full rounded-md border px-3 py-2"
-          placeholder="سبب الخصم..."
-        ></textarea>
-      </div>
-
-      <div class="flex gap-3 pt-4">
-        <button
-          type="submit"
-          class="flex-1 bg-primary text-white px-4 py-2 rounded-md hover:bg-primary/90"
-        >
-          حفظ
-        </button>
-        <button
-          type="button"
-          id="cancel-deduction"
-          class="flex-1 border px-4 py-2 rounded-md hover:bg-gray-50"
-        >
-          إلغاء
-        </button>
+  <!-- Cancel entry dialog -->
+  <dialog id="cancel-dialog" class="w-full max-w-md rounded-lg p-0 shadow-xl backdrop:bg-black/50">
+    <form id="cancel-form" class="space-y-4 p-6" novalidate>
+      <h3 class="text-xl font-semibold">إلغاء بند</h3>
+      <p class="text-sm" id="cancel-summary"></p>
+      <label class="block text-sm">
+        <span class="mb-1 block font-medium">سبب الإلغاء *</span>
+        <textarea id="cancel-reason" rows="3" maxlength="300" required class="w-full rounded-md border bg-background px-3 py-2"></textarea>
+      </label>
+      <p class="text-xs text-muted-foreground">يبقى البند الملغى في السجل للمراجعة ولا يدخل في مسير الرواتب.</p>
+      <div class="flex gap-3">
+        <button type="submit" id="cancel-submit" class="flex-1 rounded-md bg-red-600 px-4 py-2 font-medium text-white hover:bg-red-700 disabled:opacity-50">تأكيد الإلغاء</button>
+        <button type="button" data-close class="flex-1 rounded-md border px-4 py-2 hover:bg-gray-50">رجوع</button>
       </div>
     </form>
   </dialog>
 
   <script>
-    interface Advance {
+    import {
+      api,
+      byId,
+      escapeHtml,
+      fillBranchSelect,
+      fillPeriodSelects,
+      formatDate,
+      loadFinanceContext,
+      money,
+      readPeriod,
+      toast,
+      withBusy,
+      type FinanceContextPayload,
+    } from '@/lib/finance/client';
+    import {
+      ADJUSTMENT_CATEGORIES,
+      isAdjustmentCategory,
+      parsePeriod,
+      periodLabelAr,
+      type AdjustmentCategory,
+      type AdjustmentKind,
+    } from '@/lib/finance/catalog';
+    import { fromMinor, toMinor } from '@/lib/finance/money';
+    import { dailyRate, overtimeHourlyRate } from '@/lib/finance/payroll-engine';
+
+    interface Adjustment {
       id: string;
-      employee_id: string;
-      employee_name: string;
+      employeeId: string;
+      employeeName: string;
+      period: string;
+      kind: AdjustmentKind;
+      category: string;
+      categoryLabel: string;
       amount: number;
-      month: string;
-      year: number;
-      description?: string;
-      created_at: string;
+      quantity: number | null;
+      rate: number | null;
+      description: string | null;
+      sourceType: string;
+      sourceId: string | null;
+      installmentNo: number | null;
+      installmentCount: number | null;
+      status: 'active' | 'cancelled';
+      payrollRunId: string | null;
+      createdByName: string | null;
+      createdAt: string;
+      cancelledByName: string | null;
+      cancelledAt: string | null;
+      cancelReason: string | null;
     }
 
-    interface Deduction {
+    interface LegacyRow {
       id: string;
-      employee_id: string;
-      employee_name: string;
+      employeeId: string;
+      employeeName: string;
+      category: string;
+      categoryLabel: string;
       amount: number;
-      month: string;
-      year: number;
-      reason?: string;
-      created_at: string;
+      description: string | null;
+      table: 'advances' | 'deductions';
     }
 
-    interface Employee {
+    interface ListResponse {
+      adjustments: Adjustment[];
+      legacy: LegacyRow[];
+      locked: boolean;
+      payrollRun: { id: string; status: string } | null;
+      summary: { earnings: number; deductions: number; net: number; count: number; byCategory: Record<string, number> };
+    }
+
+    interface EmployeeRow {
       id: string;
       employee_name: string;
+      is_active: number;
+      base_salary?: number;
+      supervisor_allowance?: number;
+      incentives?: number;
     }
 
-    let employees: Employee[] = [];
-    let currentTab = 'advances';
-
-    // Helper functions
-    function formatCurrency(amount: number): string {
-      return `${amount.toFixed(2)} ج.م`;
+    interface CalcSpec {
+      qtyLabel: string;
+      rateLabel: string;
+      unit: string;
+      hint: string;
+      suggest: (salary: { baseSalary: number; supervisorAllowance: number; incentives: number }) => number;
     }
 
-    function formatDate(dateStr: string): string {
-      if (!dateStr) return '-';
-      return new Date(dateStr).toLocaleDateString('ar-EG');
+    const CALC: Partial<Record<AdjustmentCategory, CalcSpec>> = {
+      overtime: {
+        qtyLabel: 'عدد الساعات الإضافية',
+        rateLabel: 'سعر الساعة الإضافية (ر.س)',
+        unit: 'ساعة',
+        hint: 'المادة 107: أجر الساعة + 50% من أجر الساعة الأساسي (30 يوماً × 8 ساعات).',
+        suggest: s => overtimeHourlyRate(s),
+      },
+      absence: {
+        qtyLabel: 'عدد أيام الغياب',
+        rateLabel: 'الأجر اليومي (ر.س)',
+        unit: 'يوم',
+        hint: 'الأجر اليومي = الراتب الثابت ÷ 30.',
+        suggest: s => dailyRate(s),
+      },
+      unpaid_leave: {
+        qtyLabel: 'عدد أيام الإجازة بدون راتب',
+        rateLabel: 'الأجر اليومي (ر.س)',
+        unit: 'يوم',
+        hint: 'الأجر اليومي = الراتب الثابت ÷ 30.',
+        suggest: s => dailyRate(s),
+      },
+      late: {
+        qtyLabel: 'ساعات التأخير',
+        rateLabel: 'أجر الساعة (ر.س)',
+        unit: 'ساعة',
+        hint: 'أجر الساعة = الأجر اليومي ÷ 8.',
+        suggest: s => fromMinor(Math.round(toMinor(dailyRate(s)) / 8)),
+      },
+    };
+
+    const UNIT_BY_CATEGORY: Record<string, string> = { overtime: 'ساعة', late: 'ساعة', absence: 'يوم', unpaid_leave: 'يوم' };
+
+    const RUN_STATUS_AR: Record<string, string> = { draft: 'مسودة', approved: 'معتمد', paid: 'مصروف', cancelled: 'ملغى' };
+
+    const branchSel = byId<HTMLSelectElement>('f-branch');
+    const monthSel = byId<HTMLSelectElement>('f-month');
+    const yearSel = byId<HTMLSelectElement>('f-year');
+    const employeeSel = byId<HTMLSelectElement>('f-employee');
+    const kindSel = byId<HTMLSelectElement>('f-kind');
+    const categorySel = byId<HTMLSelectElement>('f-category');
+    const statusSel = byId<HTMLSelectElement>('f-status');
+    const rowsBody = byId<HTMLTableSectionElement>('rows');
+    const addBtn = byId<HTMLButtonElement>('add-btn');
+
+    const addDialog = byId<HTMLDialogElement>('add-dialog');
+    const addForm = byId<HTMLFormElement>('add-form');
+    const addEmployee = byId<HTMLSelectElement>('add-employee');
+    const addCategory = byId<HTMLSelectElement>('add-category');
+    const addQuantity = byId<HTMLInputElement>('add-quantity');
+    const addRate = byId<HTMLInputElement>('add-rate');
+    const addAmount = byId<HTMLInputElement>('add-amount');
+    const addDescription = byId<HTMLTextAreaElement>('add-description');
+    const addSubmit = byId<HTMLButtonElement>('add-submit');
+
+    const cancelDialog = byId<HTMLDialogElement>('cancel-dialog');
+    const cancelForm = byId<HTMLFormElement>('cancel-form');
+    const cancelReason = byId<HTMLTextAreaElement>('cancel-reason');
+    const cancelSubmit = byId<HTMLButtonElement>('cancel-submit');
+
+    let ctx: FinanceContextPayload | null = null;
+    let canEdit = false;
+    let data: ListResponse | null = null;
+    let loadSeq = 0;
+    let employeesSeq = 0;
+    let addKind: AdjustmentKind = 'earning';
+    let dialogEmployees: EmployeeRow[] = [];
+    let rateIsAuto = true;
+    let cancellingId: string | null = null;
+
+    // ---------------------------------------------------------------- helpers
+
+    function message(error: unknown): string {
+      return error instanceof Error && error.message ? error.message : 'حدث خطأ غير متوقع';
     }
 
-    const monthNames = [
-      '', 'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
-      'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'
-    ];
+    function currentPeriodValue(): string {
+      return readPeriod(monthSel, yearSel);
+    }
 
-    // Tab switching
-    document.querySelectorAll('.tab-button').forEach(button => {
-      button.addEventListener('click', (e) => {
-        const target = e.target as HTMLButtonElement;
-        const tab = target.dataset.tab!;
-        switchTab(tab);
-      });
-    });
+    function branchName(): string {
+      return branchSel.selectedOptions[0]?.textContent ?? branchSel.value;
+    }
 
-    function switchTab(tab: string) {
-      currentTab = tab;
+    function formatQuantity(value: number): string {
+      return String(Math.round(value * 100) / 100);
+    }
 
-      // Update button styles
-      document.querySelectorAll('.tab-button').forEach(btn => {
-        if (btn.getAttribute('data-tab') === tab) {
-          btn.classList.remove('border-transparent', 'text-muted-foreground');
-          btn.classList.add('border-primary');
-        } else {
-          btn.classList.add('border-transparent', 'text-muted-foreground');
-          btn.classList.remove('border-primary');
-        }
-      });
+    function salaryOf(e: EmployeeRow) {
+      return {
+        baseSalary: Number(e.base_salary) || 0,
+        supervisorAllowance: Number(e.supervisor_allowance) || 0,
+        incentives: Number(e.incentives) || 0,
+      };
+    }
 
-      // Show/hide content
-      document.querySelectorAll('.tab-content').forEach(content => {
-        content.classList.add('hidden');
-      });
-      document.getElementById(`content-${tab}`)?.classList.remove('hidden');
+    function categoryOptions(kind: AdjustmentKind | ''): string {
+      const entries = Object.entries(ADJUSTMENT_CATEGORIES) as Array<[AdjustmentCategory, (typeof ADJUSTMENT_CATEGORIES)[AdjustmentCategory]]>;
+      const group = (k: AdjustmentKind, label: string) =>
+        `<optgroup label="${escapeHtml(label)}">${entries
+          .filter(([, info]) => info.kind === k)
+          .map(([key, info]) => `<option value="${escapeHtml(key)}">${escapeHtml(info.labelAr)}</option>`)
+          .join('')}</optgroup>`;
+      if (kind === 'earning') return group('earning', 'مستحقات');
+      if (kind === 'deduction') return group('deduction', 'استقطاعات');
+      return group('earning', 'مستحقات') + group('deduction', 'استقطاعات');
+    }
 
-      // Load data for the active tab
-      if (tab === 'advances') {
-        loadAdvances();
+    function fillCategoryFilter(): void {
+      const previous = categorySel.value;
+      categorySel.innerHTML = `<option value="">جميع البنود</option>${categoryOptions(kindSel.value as AdjustmentKind | '')}`;
+      if ([...categorySel.options].some(o => o.value === previous)) categorySel.value = previous;
+    }
+
+    function updateUrl(): void {
+      const params = new URLSearchParams();
+      params.set('branchId', branchSel.value);
+      params.set('period', currentPeriodValue());
+      if (employeeSel.value) params.set('employeeId', employeeSel.value);
+      if (kindSel.value) params.set('kind', kindSel.value);
+      if (categorySel.value) params.set('category', categorySel.value);
+      if (statusSel.value !== 'active') params.set('status', statusSel.value);
+      try {
+        history.replaceState(null, '', `${location.pathname}?${params}`);
+      } catch {
+        // history unavailable: the filters still work
+      }
+      const payrollLink = byId<HTMLAnchorElement>('payroll-link');
+      payrollLink.href = `/payroll?${new URLSearchParams({ branchId: branchSel.value, period: currentPeriodValue() })}`;
+    }
+
+    function showPageError(text: string, retry = false): void {
+      const box = byId('page-error');
+      box.innerHTML = `<p class="font-medium">${escapeHtml(text)}</p>${
+        retry ? '<button type="button" id="page-retry" class="mt-3 rounded-md border border-red-300 bg-white px-4 py-2 text-sm hover:bg-red-100">إعادة المحاولة</button>' : ''
+      }`;
+      box.classList.remove('hidden');
+      byId('page-body').classList.add('hidden');
+      document.getElementById('page-retry')?.addEventListener('click', () => window.location.reload());
+    }
+
+    // ---------------------------------------------------------------- loading
+
+    async function loadFilterEmployees(): Promise<void> {
+      const seq = ++employeesSeq;
+      const wanted = employeeSel.value;
+      employeeSel.innerHTML = '<option value="">جميع الموظفين</option>';
+      try {
+        const res = await api<{ employees: EmployeeRow[] }>(
+          `/api/employees/list?${new URLSearchParams({ branchId: branchSel.value, includeInactive: '1' })}`,
+        );
+        if (seq !== employeesSeq) return;
+        employeeSel.innerHTML =
+          '<option value="">جميع الموظفين</option>' +
+          res.employees
+            .map(
+              e =>
+                `<option value="${escapeHtml(e.id)}">${escapeHtml(e.employee_name)}${Number(e.is_active) === 1 ? '' : ' (غير نشط)'}</option>`,
+            )
+            .join('');
+        if ([...employeeSel.options].some(o => o.value === wanted)) employeeSel.value = wanted;
+      } catch (error) {
+        if (seq !== employeesSeq) return;
+        toast(`تعذر تحميل قائمة الموظفين: ${message(error)}`, 'error');
+      }
+    }
+
+    function setLoading(): void {
+      rowsBody.innerHTML = '<tr><td colspan="10" class="p-8 text-center text-muted-foreground">جاري التحميل...</td></tr>';
+      for (const id of ['s-earnings', 's-deductions', 's-overtime', 's-advances', 's-count']) byId(id).textContent = '…';
+    }
+
+    async function loadData(): Promise<void> {
+      const seq = ++loadSeq;
+      const period = currentPeriodValue();
+      updateUrl();
+      setLoading();
+      byId('table-title').textContent = `بنود ${periodLabelAr(period)} — ${branchName()}`;
+      const params = new URLSearchParams({ branchId: branchSel.value, period, status: statusSel.value });
+      if (employeeSel.value) params.set('employeeId', employeeSel.value);
+      if (kindSel.value) params.set('kind', kindSel.value);
+      if (categorySel.value) params.set('category', categorySel.value);
+      try {
+        const res = await api<ListResponse>(`/api/adjustments/list?${params}`);
+        if (seq !== loadSeq) return;
+        data = res;
+        render();
+      } catch (error) {
+        if (seq !== loadSeq) return;
+        data = null;
+        rowsBody.innerHTML = `<tr><td colspan="10" class="p-8 text-center">
+            <p class="text-red-700">${escapeHtml(message(error))}</p>
+            <button type="button" data-retry class="mt-3 rounded-md border px-4 py-2 text-sm hover:bg-gray-50">إعادة المحاولة</button>
+          </td></tr>`;
+        for (const id of ['s-earnings', 's-deductions', 's-overtime', 's-advances', 's-count']) byId(id).textContent = '—';
+        byId('legacy-section').classList.add('hidden');
+        byId('locked-banner').classList.add('hidden');
+        byId('draft-banner').classList.add('hidden');
+        addBtn.disabled = true;
+      }
+    }
+
+    // ---------------------------------------------------------------- rendering
+
+    function sourceLabel(a: Adjustment): string {
+      let label = a.sourceType === 'manual' ? 'يدوي' : a.sourceType === 'request' ? 'طلب موظف' : a.sourceType;
+      if (a.installmentCount && a.installmentCount > 1 && a.installmentNo) {
+        label += ` — قسط ${a.installmentNo} من ${a.installmentCount}`;
+      }
+      return escapeHtml(label);
+    }
+
+    function statusCell(a: Adjustment): string {
+      if (a.status === 'cancelled') {
+        const details = [
+          a.cancelReason ? `السبب: ${a.cancelReason}` : '',
+          a.cancelledByName ? `بواسطة ${a.cancelledByName}` : '',
+          a.cancelledAt ? formatDate(a.cancelledAt, true) : '',
+        ].filter(Boolean);
+        return `<span class="inline-block rounded bg-gray-200 px-2 py-0.5 text-xs font-medium text-gray-700">ملغى</span>${
+          details.length ? `<div class="mt-1 max-w-[14rem] text-xs text-muted-foreground">${escapeHtml(details.join(' — '))}</div>` : ''
+        }`;
+      }
+      if (a.payrollRunId) {
+        return '<span class="inline-block rounded bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-800">مرحّل للمسير</span>';
+      }
+      return '<span class="inline-block rounded bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">نشط</span>';
+    }
+
+    function rowHtml(a: Adjustment, locked: boolean): string {
+      const earning = a.kind === 'earning';
+      const unit = UNIT_BY_CATEGORY[a.category] ?? '';
+      let calc = '—';
+      if (a.quantity !== null && a.rate !== null) {
+        calc = `${escapeHtml(formatQuantity(a.quantity))} ${escapeHtml(unit)} × ${escapeHtml(money(a.rate))}`;
+      } else if (a.quantity !== null) {
+        calc = `${escapeHtml(formatQuantity(a.quantity))} ${escapeHtml(unit)}`;
+      }
+      const canCancel = canEdit && a.status === 'active' && !locked && !a.payrollRunId;
+      const muted = a.status === 'cancelled' ? 'opacity-60' : '';
+      return `<tr class="border-b align-top hover:bg-gray-50 ${muted}">
+        <td class="p-3 font-medium">${escapeHtml(a.employeeName)}</td>
+        <td class="p-3">${
+          earning
+            ? '<span class="inline-block rounded bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">مستحق</span>'
+            : '<span class="inline-block rounded bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">استقطاع</span>'
+        }</td>
+        <td class="p-3">${escapeHtml(a.categoryLabel)}</td>
+        <td class="p-3 whitespace-nowrap">${calc}</td>
+        <td class="p-3 whitespace-nowrap font-semibold ${earning ? 'text-green-700' : 'text-red-700'}">${escapeHtml(money(a.amount))}</td>
+        <td class="p-3 max-w-[16rem] break-words">${a.description ? escapeHtml(a.description) : '<span class="text-muted-foreground">—</span>'}</td>
+        <td class="p-3 whitespace-nowrap">${sourceLabel(a)}</td>
+        <td class="p-3">${escapeHtml(a.createdByName ?? '—')}<div class="text-xs text-muted-foreground">${escapeHtml(formatDate(a.createdAt, true))}</div></td>
+        <td class="p-3">${statusCell(a)}</td>
+        <td class="p-3">${
+          canCancel
+            ? `<button type="button" data-cancel="${escapeHtml(a.id)}" class="text-sm font-medium text-red-600 hover:underline">إلغاء</button>`
+            : '<span class="text-muted-foreground">—</span>'
+        }</td>
+      </tr>`;
+    }
+
+    function render(): void {
+      if (!data) return;
+      const period = currentPeriodValue();
+      const label = periodLabelAr(period);
+      const run = data.payrollRun;
+
+      const lockedBanner = byId('locked-banner');
+      if (data.locked) {
+        lockedBanner.innerHTML = `<p class="font-semibold">مسير رواتب ${escapeHtml(label)} ${escapeHtml(RUN_STATUS_AR[run?.status ?? 'approved'] ?? '')} — لا يمكن إضافة بنود أو إلغاؤها لهذا الشهر.</p>
+          <p class="mt-1 text-sm">لإجراء تعديل يجب على المدير إعادة فتح المسير من صفحة الرواتب، أو أضف البند على الشهر التالي.</p>`;
+        lockedBanner.classList.remove('hidden');
       } else {
-        loadDeductions();
+        lockedBanner.classList.add('hidden');
+      }
+
+      const draftBanner = byId('draft-banner');
+      if (!data.locked && run && run.status === 'draft') {
+        draftBanner.innerHTML = `<p>يوجد مسير رواتب <strong>مسودة</strong> لشهر ${escapeHtml(label)}. البنود المضافة أو الملغاة تنعكس على المسير عند إعادة حسابه وحفظه من صفحة الرواتب.</p>`;
+        draftBanner.classList.remove('hidden');
+      } else {
+        draftBanner.classList.add('hidden');
+      }
+
+      if (canEdit) {
+        addBtn.classList.remove('hidden');
+        addBtn.disabled = data.locked;
+        addBtn.title = data.locked ? 'مسير رواتب هذا الشهر معتمد' : '';
+      }
+
+      const s = data.summary;
+      byId('s-earnings').textContent = money(s.earnings);
+      byId('s-deductions').textContent = money(s.deductions);
+      byId('s-overtime').textContent = money(s.byCategory.overtime ?? 0);
+      byId('s-advances').textContent = money(s.byCategory.advance ?? 0);
+      byId('s-count').textContent = String(s.count);
+      byId('table-note').textContent = `صافي أثر البنود على الرواتب: ${money(s.net)}`;
+
+      if (data.adjustments.length === 0) {
+        const filtered = employeeSel.value || kindSel.value || categorySel.value || statusSel.value !== 'active';
+        rowsBody.innerHTML = `<tr><td colspan="10" class="p-8 text-center text-muted-foreground">${
+          filtered ? 'لا توجد بنود مطابقة للفلاتر المحددة' : `لا توجد بنود مسجلة لشهر ${escapeHtml(label)}`
+        }</td></tr>`;
+      } else {
+        rowsBody.innerHTML = data.adjustments.map(a => rowHtml(a, data!.locked)).join('');
+      }
+
+      const legacySection = byId('legacy-section');
+      if (data.legacy.length > 0) {
+        byId('legacy-rows').innerHTML = data.legacy
+          .map(
+            l => `<tr class="border-b">
+              <td class="p-3 font-medium">${escapeHtml(l.employeeName || l.employeeId)}</td>
+              <td class="p-3">${escapeHtml(l.categoryLabel)}</td>
+              <td class="p-3 whitespace-nowrap font-semibold text-red-700">${escapeHtml(money(l.amount))}</td>
+              <td class="p-3">${l.description ? escapeHtml(l.description) : '<span class="text-muted-foreground">—</span>'}</td>
+              <td class="p-3 whitespace-nowrap">${l.table === 'advances' ? 'جدول السلف القديم' : 'جدول الخصومات القديم'}</td>
+            </tr>`,
+          )
+          .join('');
+        legacySection.classList.remove('hidden');
+      } else {
+        legacySection.classList.add('hidden');
       }
     }
 
-    // Load employees for dropdowns
-    async function loadEmployees() {
-      try {
-        const response = await fetch('/api/employees/list?branchId=BR001');
-        const data = await response.json();
+    // ---------------------------------------------------------------- add dialog
 
-        if (data.success) {
-          employees = data.employees;
-
-          // Populate filter dropdowns
-          const advancesFilter = document.getElementById('advances-employee-filter') as HTMLSelectElement;
-          const deductionsFilter = document.getElementById('deductions-employee-filter') as HTMLSelectElement;
-          const advanceSelect = document.getElementById('advance-employee') as HTMLSelectElement;
-          const deductionSelect = document.getElementById('deduction-employee') as HTMLSelectElement;
-
-          employees.forEach(emp => {
-            const option1 = new Option(emp.employee_name, emp.id);
-            const option2 = new Option(emp.employee_name, emp.id);
-            const option3 = new Option(emp.employee_name, emp.id);
-            const option4 = new Option(emp.employee_name, emp.id);
-
-            advancesFilter.add(option1);
-            deductionsFilter.add(option2);
-            advanceSelect.add(option3);
-            deductionSelect.add(option4);
-          });
-        }
-      } catch (error) {
-        console.error('Error loading employees:', error);
-      }
+    function selectedDialogEmployee(): EmployeeRow | null {
+      return dialogEmployees.find(e => e.id === addEmployee.value) ?? null;
     }
 
-    // Load advances
-    async function loadAdvances() {
-      const employeeId = (document.getElementById('advances-employee-filter') as HTMLSelectElement).value;
-      const month = (document.getElementById('advances-month-filter') as HTMLSelectElement).value;
-      const year = (document.getElementById('advances-year-filter') as HTMLSelectElement).value;
-
-      try {
-        let url = '/api/advances/list?';
-        if (employeeId) url += `employeeId=${employeeId}&`;
-        if (month) url += `month=${month}&`;
-        if (year) url += `year=${year}&`;
-
-        const response = await fetch(url);
-        const data = await response.json();
-
-        if (data.success) {
-          const advances: Advance[] = data.advances;
-          updateAdvancesStats(advances, data.total);
-          renderAdvances(advances);
-        }
-      } catch (error) {
-        console.error('Error loading advances:', error);
-      }
+    function setKind(kind: AdjustmentKind): void {
+      addKind = kind;
+      document.querySelectorAll<HTMLButtonElement>('.kind-btn').forEach(btn => {
+        const active = btn.dataset.kind === kind;
+        btn.setAttribute('aria-pressed', String(active));
+        btn.classList.toggle('bg-green-600', active && kind === 'earning');
+        btn.classList.toggle('bg-red-600', active && kind === 'deduction');
+        btn.classList.toggle('text-white', active);
+        btn.classList.toggle('border-transparent', active);
+      });
+      const previous = addCategory.value;
+      addCategory.innerHTML = `<option value="">اختر البند</option>${categoryOptions(kind)}`;
+      if ([...addCategory.options].some(o => o.value === previous)) addCategory.value = previous;
+      onCategoryChange();
     }
 
-    function updateAdvancesStats(advances: Advance[], total: number) {
-      document.getElementById('advances-count')!.textContent = advances.length.toString();
-      document.getElementById('advances-total')!.textContent = formatCurrency(total);
-
-      const avg = advances.length > 0 ? total / advances.length : 0;
-      document.getElementById('advances-avg')!.textContent = formatCurrency(avg);
-    }
-
-    function renderAdvances(advances: Advance[]) {
-      const tbody = document.getElementById('advances-table-body')!;
-
-      if (advances.length === 0) {
-        tbody.innerHTML = `
-          <tr>
-            <td colspan="6" class="text-center p-8 text-muted-foreground">
-              لا توجد سلف
-            </td>
-          </tr>
-        `;
+    function updateEmployeeInfo(): void {
+      const info = byId('add-employee-info');
+      const emp = selectedDialogEmployee();
+      if (!emp || emp.base_salary === undefined) {
+        info.textContent = '';
         return;
       }
-
-      tbody.innerHTML = advances.map(adv => `
-        <tr class="border-b hover:bg-gray-50">
-          <td class="p-3 font-medium">${adv.employee_name || 'غير معروف'}</td>
-          <td class="p-3 text-blue-600 font-semibold">${formatCurrency(adv.amount)}</td>
-          <td class="p-3">${monthNames[parseInt(adv.month)]}</td>
-          <td class="p-3">${adv.year}</td>
-          <td class="p-3 text-sm text-gray-600">${adv.description || '-'}</td>
-          <td class="p-3 text-sm text-gray-500">${formatDate(adv.created_at)}</td>
-        </tr>
-      `).join('');
+      const s = salaryOf(emp);
+      const fixed = fromMinor(toMinor(s.baseSalary) + toMinor(s.supervisorAllowance) + toMinor(s.incentives));
+      info.textContent = `الراتب الثابت: ${money(fixed)} — الأجر اليومي: ${money(dailyRate(s))} — سعر الساعة الإضافية: ${money(overtimeHourlyRate(s))}`;
     }
 
-    // Load deductions
-    async function loadDeductions() {
-      const employeeId = (document.getElementById('deductions-employee-filter') as HTMLSelectElement).value;
-      const month = (document.getElementById('deductions-month-filter') as HTMLSelectElement).value;
-      const year = (document.getElementById('deductions-year-filter') as HTMLSelectElement).value;
-
-      try {
-        let url = '/api/deductions/list?';
-        if (employeeId) url += `employeeId=${employeeId}&`;
-        if (month) url += `month=${month}&`;
-        if (year) url += `year=${year}&`;
-
-        const response = await fetch(url);
-        const data = await response.json();
-
-        if (data.success) {
-          const deductions: Deduction[] = data.deductions;
-          updateDeductionsStats(deductions, data.total, data.byType);
-          renderDeductions(deductions);
-        }
-      } catch (error) {
-        console.error('Error loading deductions:', error);
-      }
-    }
-
-    function updateDeductionsStats(deductions: Deduction[], total: number, byType: any) {
-      document.getElementById('deductions-count')!.textContent = deductions.length.toString();
-      document.getElementById('deductions-total')!.textContent = formatCurrency(total);
-
-      const avg = deductions.length > 0 ? total / deductions.length : 0;
-      document.getElementById('deductions-avg')!.textContent = formatCurrency(avg);
-
-      // Find top type
-      let topType = '-';
-      let maxCount = 0;
-      for (const [type, stats] of Object.entries(byType)) {
-        if ((stats as any).count > maxCount) {
-          maxCount = (stats as any).count;
-          topType = type;
-        }
-      }
-      document.getElementById('deductions-top-type')!.textContent = topType;
-    }
-
-    function renderDeductions(deductions: Deduction[]) {
-      const tbody = document.getElementById('deductions-table-body')!;
-
-      if (deductions.length === 0) {
-        tbody.innerHTML = `
-          <tr>
-            <td colspan="7" class="text-center p-8 text-muted-foreground">
-              لا توجد خصومات
-            </td>
-          </tr>
-        `;
+    function onCategoryChange(): void {
+      const category = addCategory.value;
+      const spec = isAdjustmentCategory(category) ? CALC[category] : undefined;
+      const section = byId('calc-section');
+      if (!spec) {
+        section.classList.add('hidden');
+        byId('amount-hint').classList.add('hidden');
+        addQuantity.value = '';
+        addRate.value = '';
         return;
       }
-
-      tbody.innerHTML = deductions.map(ded => {
-        // Extract type from reason (format: "type: reason")
-        const reasonParts = (ded.reason || '').split(':');
-        const deductionType = reasonParts.length > 1 ? reasonParts[0].trim() : 'أخرى';
-        const reasonText = reasonParts.length > 1 ? reasonParts.slice(1).join(':').trim() : ded.reason || '-';
-
-        return `
-          <tr class="border-b hover:bg-gray-50">
-            <td class="p-3 font-medium">${ded.employee_name || 'غير معروف'}</td>
-            <td class="p-3 text-red-600 font-semibold">${formatCurrency(ded.amount)}</td>
-            <td class="p-3">
-              <span class="px-2 py-1 rounded text-xs bg-gray-100">${deductionType}</span>
-            </td>
-            <td class="p-3">${monthNames[parseInt(ded.month)]}</td>
-            <td class="p-3">${ded.year}</td>
-            <td class="p-3 text-sm text-gray-600">${reasonText}</td>
-            <td class="p-3 text-sm text-gray-500">${formatDate(ded.created_at)}</td>
-          </tr>
-        `;
-      }).join('');
+      section.classList.remove('hidden');
+      byId('amount-hint').classList.remove('hidden');
+      byId('qty-label').textContent = spec.qtyLabel;
+      byId('rate-label').textContent = spec.rateLabel;
+      byId('rate-hint').textContent = spec.hint;
+      if (rateIsAuto || !addRate.value) suggestRate(false);
     }
 
-    // Filters
-    document.getElementById('advances-employee-filter')?.addEventListener('change', loadAdvances);
-    document.getElementById('advances-month-filter')?.addEventListener('change', loadAdvances);
-    document.getElementById('advances-year-filter')?.addEventListener('change', loadAdvances);
+    function suggestRate(explicit: boolean): void {
+      const category = addCategory.value;
+      const spec = isAdjustmentCategory(category) ? CALC[category] : undefined;
+      if (!spec) return;
+      const emp = selectedDialogEmployee();
+      if (!emp) {
+        if (explicit) toast('اختر الموظف أولاً لحساب السعر من راتبه', 'info');
+        return;
+      }
+      if (emp.base_salary === undefined) {
+        if (explicit) toast('بيانات راتب الموظف غير متاحة', 'error');
+        return;
+      }
+      const rate = spec.suggest(salaryOf(emp));
+      if (toMinor(rate) <= 0) {
+        if (explicit) toast('لا يوجد راتب مسجل لهذا الموظف — أدخل السعر يدوياً', 'error');
+        addRate.value = '';
+        return;
+      }
+      addRate.value = rate.toFixed(2);
+      rateIsAuto = true;
+      recomputeAmount();
+    }
 
-    document.getElementById('deductions-employee-filter')?.addEventListener('change', loadDeductions);
-    document.getElementById('deductions-month-filter')?.addEventListener('change', loadDeductions);
-    document.getElementById('deductions-year-filter')?.addEventListener('change', loadDeductions);
+    const QUANTITY_RE = /^\d+(\.\d{1,2})?$/;
+    const AMOUNT_RE = /^\d+(\.\d{1,2})?$/;
 
-    // Advance dialog
-    const advanceDialog = document.getElementById('add-advance-dialog') as HTMLDialogElement;
-    const advanceForm = document.getElementById('add-advance-form') as HTMLFormElement;
+    function recomputeAmount(): void {
+      const q = addQuantity.value.trim();
+      const r = addRate.value.trim();
+      if (!QUANTITY_RE.test(q) || !AMOUNT_RE.test(r)) return;
+      const minor = Math.round((toMinor(q) * toMinor(r)) / 100);
+      if (minor > 0) addAmount.value = fromMinor(minor).toFixed(2);
+    }
 
-    document.getElementById('add-advance-btn')?.addEventListener('click', () => {
-      advanceDialog.showModal();
-      // Set current month/year
-      const now = new Date();
-      (document.getElementById('advance-month') as HTMLSelectElement).value = (now.getMonth() + 1).toString();
-      (document.getElementById('advance-year') as HTMLSelectElement).value = now.getFullYear().toString();
-    });
+    async function openAddDialog(): Promise<void> {
+      if (!data || data.locked) return;
+      addForm.reset();
+      byId('desc-count').textContent = '0';
+      byId('add-period').textContent = periodLabelAr(currentPeriodValue());
+      byId('add-branch').textContent = branchName();
+      rateIsAuto = true;
+      dialogEmployees = [];
+      addEmployee.innerHTML = '<option value="">جاري تحميل الموظفين...</option>';
+      addEmployee.disabled = true;
+      const filterCategory = categorySel.value;
+      setKind(
+        isAdjustmentCategory(filterCategory)
+          ? ADJUSTMENT_CATEGORIES[filterCategory].kind
+          : kindSel.value === 'deduction'
+            ? 'deduction'
+            : 'earning',
+      );
+      if (filterCategory && [...addCategory.options].some(o => o.value === filterCategory)) {
+        addCategory.value = filterCategory;
+        onCategoryChange();
+      }
+      addDialog.showModal();
+      try {
+        const res = await api<{ employees: EmployeeRow[] }>(
+          `/api/employees/list?${new URLSearchParams({ branchId: branchSel.value, activeOnly: '1' })}`,
+        );
+        dialogEmployees = res.employees;
+        addEmployee.innerHTML =
+          `<option value="">${dialogEmployees.length ? 'اختر الموظف' : 'لا يوجد موظفون نشطون في هذا الفرع'}</option>` +
+          dialogEmployees.map(e => `<option value="${escapeHtml(e.id)}">${escapeHtml(e.employee_name)}</option>`).join('');
+        if (employeeSel.value && dialogEmployees.some(e => e.id === employeeSel.value)) addEmployee.value = employeeSel.value;
+        addEmployee.disabled = false;
+        updateEmployeeInfo();
+        if (rateIsAuto) suggestRate(false);
+      } catch (error) {
+        addEmployee.innerHTML = '<option value="">تعذر تحميل الموظفين</option>';
+        toast(`تعذر تحميل الموظفين: ${message(error)}`, 'error');
+      }
+    }
 
-    document.getElementById('close-advance-dialog')?.addEventListener('click', () => {
-      advanceDialog.close();
-      advanceForm.reset();
-    });
+    async function submitAdd(event: SubmitEvent): Promise<void> {
+      event.preventDefault();
+      if (addSubmit.disabled) return;
+      const employeeId = addEmployee.value;
+      const category = addCategory.value;
+      const amount = addAmount.value.trim();
+      const quantity = addQuantity.value.trim();
+      const rate = addRate.value.trim();
+      const description = addDescription.value.trim();
+      const calc = isAdjustmentCategory(category) && CALC[category] !== undefined;
 
-    document.getElementById('cancel-advance')?.addEventListener('click', () => {
-      advanceDialog.close();
-      advanceForm.reset();
-    });
+      if (!employeeId) return toast('يرجى اختيار الموظف', 'error');
+      if (!isAdjustmentCategory(category)) return toast('يرجى اختيار البند', 'error');
+      if (calc && (quantity || rate)) {
+        if (quantity && (!QUANTITY_RE.test(quantity) || Number(quantity) <= 0 || Number(quantity) > 744)) {
+          return toast('الكمية يجب أن تكون رقماً أكبر من صفر ولا تتجاوز 744 (منزلتان عشريتان كحد أقصى)', 'error');
+        }
+        if (rate && (!AMOUNT_RE.test(rate) || Number(rate) <= 0)) {
+          return toast('السعر يجب أن يكون مبلغاً أكبر من صفر (منزلتان عشريتان كحد أقصى)', 'error');
+        }
+      }
+      if (!amount && !(calc && quantity && rate)) return toast('يرجى إدخال المبلغ', 'error');
+      if (amount && (!AMOUNT_RE.test(amount) || Number(amount) <= 0)) {
+        return toast('المبلغ يجب أن يكون رقماً أكبر من صفر (منزلتان عشريتان كحد أقصى)', 'error');
+      }
 
-    advanceForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-
-      const formData = {
-        employeeId: (document.getElementById('advance-employee') as HTMLSelectElement).value,
-        amount: parseFloat((document.getElementById('advance-amount') as HTMLInputElement).value),
-        month: (document.getElementById('advance-month') as HTMLSelectElement).value,
-        year: (document.getElementById('advance-year') as HTMLSelectElement).value,
-        notes: (document.getElementById('advance-notes') as HTMLTextAreaElement).value
+      const body: Record<string, unknown> = {
+        branchId: branchSel.value,
+        period: currentPeriodValue(),
+        employeeId,
+        category,
+        description: description || undefined,
       };
+      if (amount) body.amount = amount;
+      if (calc && quantity) body.quantity = quantity;
+      if (calc && rate) body.rate = rate;
 
       try {
-        const response = await fetch('/api/advances/create', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(formData)
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-          advanceDialog.close();
-          advanceForm.reset();
-          loadAdvances();
-          alert('تم إضافة السلفة بنجاح');
-        } else {
-          alert(data.error || 'حدث خطأ أثناء الإضافة');
-        }
+        const res = await withBusy(addSubmit, 'جاري الحفظ...', () =>
+          api<{ adjustment: Adjustment; warnings?: string[] }>('/api/adjustments/create', { method: 'POST', body }),
+        );
+        addDialog.close();
+        toast(`تمت إضافة «${res.adjustment.categoryLabel}» بمبلغ ${money(res.adjustment.amount)} لـ ${res.adjustment.employeeName} — سيدخل في مسير ${periodLabelAr(res.adjustment.period)}`, 'success');
+        for (const warning of res.warnings ?? []) toast(warning, 'info');
+        await loadData();
       } catch (error) {
-        console.error('Error creating advance:', error);
-        alert('حدث خطأ أثناء الإضافة');
+        toast(message(error), 'error');
+        if ((error as { status?: number }).status === 409) {
+          addDialog.close();
+          await loadData();
+        }
       }
-    });
+    }
 
-    // Deduction dialog
-    const deductionDialog = document.getElementById('add-deduction-dialog') as HTMLDialogElement;
-    const deductionForm = document.getElementById('add-deduction-form') as HTMLFormElement;
+    // ---------------------------------------------------------------- cancel dialog
 
-    document.getElementById('add-deduction-btn')?.addEventListener('click', () => {
-      deductionDialog.showModal();
-      // Set current month/year
-      const now = new Date();
-      (document.getElementById('deduction-month') as HTMLSelectElement).value = (now.getMonth() + 1).toString();
-      (document.getElementById('deduction-year') as HTMLSelectElement).value = now.getFullYear().toString();
-    });
+    function openCancelDialog(id: string): void {
+      const adj = data?.adjustments.find(a => a.id === id);
+      if (!adj) return;
+      cancellingId = id;
+      cancelForm.reset();
+      const source = adj.sourceType === 'request' ? ' (من طلب موظف)' : '';
+      byId('cancel-summary').innerHTML = `هل تريد إلغاء بند <strong>${escapeHtml(adj.categoryLabel)}</strong> بمبلغ <strong>${escapeHtml(
+        money(adj.amount),
+      )}</strong> للموظف <strong>${escapeHtml(adj.employeeName)}</strong>${escapeHtml(source)}؟`;
+      cancelDialog.showModal();
+      cancelReason.focus();
+    }
 
-    document.getElementById('close-deduction-dialog')?.addEventListener('click', () => {
-      deductionDialog.close();
-      deductionForm.reset();
-    });
-
-    document.getElementById('cancel-deduction')?.addEventListener('click', () => {
-      deductionDialog.close();
-      deductionForm.reset();
-    });
-
-    deductionForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-
-      const formData = {
-        employeeId: (document.getElementById('deduction-employee') as HTMLSelectElement).value,
-        amount: parseFloat((document.getElementById('deduction-amount') as HTMLInputElement).value),
-        month: (document.getElementById('deduction-month') as HTMLSelectElement).value,
-        year: (document.getElementById('deduction-year') as HTMLSelectElement).value,
-        deductionType: (document.getElementById('deduction-type') as HTMLSelectElement).value,
-        reason: (document.getElementById('deduction-reason') as HTMLTextAreaElement).value
-      };
-
+    async function submitCancel(event: SubmitEvent): Promise<void> {
+      event.preventDefault();
+      if (!cancellingId || cancelSubmit.disabled) return;
+      const reason = cancelReason.value.trim();
+      if (!reason) {
+        toast('يرجى كتابة سبب الإلغاء', 'error');
+        cancelReason.focus();
+        return;
+      }
       try {
-        const response = await fetch('/api/deductions/create', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(formData)
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-          deductionDialog.close();
-          deductionForm.reset();
-          loadDeductions();
-          alert('تم إضافة الخصم بنجاح');
-        } else {
-          alert(data.error || 'حدث خطأ أثناء الإضافة');
-        }
+        await withBusy(cancelSubmit, 'جاري الإلغاء...', () =>
+          api('/api/adjustments/cancel', { method: 'POST', body: { id: cancellingId, reason } }),
+        );
+        cancelDialog.close();
+        toast('تم إلغاء البند', 'success');
+        await loadData();
       } catch (error) {
-        console.error('Error creating deduction:', error);
-        alert('حدث خطأ أثناء الإضافة');
+        toast(message(error), 'error');
+        if ((error as { status?: number }).status === 409) {
+          cancelDialog.close();
+          await loadData();
+        }
       }
-    });
+    }
 
-    // Initial load
-    loadEmployees().then(() => {
-      loadAdvances();
-    });
+    // ---------------------------------------------------------------- wiring
+
+    function wireDialog(dialog: HTMLDialogElement, busyButton: HTMLButtonElement): void {
+      dialog.querySelectorAll<HTMLButtonElement>('[data-close]').forEach(btn =>
+        btn.addEventListener('click', () => {
+          if (!busyButton.disabled) dialog.close();
+        }),
+      );
+      dialog.addEventListener('click', event => {
+        if (event.target === dialog && !busyButton.disabled) dialog.close();
+      });
+      dialog.addEventListener('cancel', event => {
+        if (busyButton.disabled) event.preventDefault();
+      });
+    }
+
+    function wire(): void {
+      branchSel.addEventListener('change', async () => {
+        employeeSel.value = '';
+        await loadFilterEmployees();
+        await loadData();
+      });
+      for (const sel of [monthSel, yearSel, employeeSel, categorySel, statusSel]) sel.addEventListener('change', () => void loadData());
+      kindSel.addEventListener('change', () => {
+        fillCategoryFilter();
+        void loadData();
+      });
+      rowsBody.addEventListener('click', event => {
+        const target = event.target as HTMLElement;
+        const cancelBtn = target.closest<HTMLButtonElement>('[data-cancel]');
+        if (cancelBtn?.dataset.cancel) openCancelDialog(cancelBtn.dataset.cancel);
+        if (target.closest('[data-retry]')) void loadData();
+      });
+
+      addBtn.addEventListener('click', () => void openAddDialog());
+      document.querySelectorAll<HTMLButtonElement>('.kind-btn').forEach(btn =>
+        btn.addEventListener('click', () => setKind(btn.dataset.kind === 'deduction' ? 'deduction' : 'earning')),
+      );
+      addCategory.addEventListener('change', onCategoryChange);
+      addEmployee.addEventListener('change', () => {
+        updateEmployeeInfo();
+        if (rateIsAuto || !addRate.value) suggestRate(false);
+      });
+      addQuantity.addEventListener('input', recomputeAmount);
+      addRate.addEventListener('input', () => {
+        rateIsAuto = false;
+        recomputeAmount();
+      });
+      byId('rate-suggest').addEventListener('click', () => suggestRate(true));
+      addDescription.addEventListener('input', () => {
+        byId('desc-count').textContent = String(addDescription.value.length);
+      });
+      addForm.addEventListener('submit', event => void submitAdd(event as SubmitEvent));
+      cancelForm.addEventListener('submit', event => void submitCancel(event as SubmitEvent));
+      wireDialog(addDialog, addSubmit);
+      wireDialog(cancelDialog, cancelSubmit);
+    }
+
+    async function init(): Promise<void> {
+      try {
+        ctx = await loadFinanceContext();
+      } catch (error) {
+        showPageError(`تعذر تحميل بيانات الصفحة: ${message(error)}`, true);
+        return;
+      }
+      const p = ctx.permissions;
+      if (!(p.canGeneratePayroll || p.canManageEmployees || p.canApproveFinance)) {
+        showPageError('لا تملك صلاحية عرض بنود الرواتب.');
+        return;
+      }
+      canEdit = p.canGeneratePayroll || p.canManageEmployees;
+
+      const params = new URLSearchParams(window.location.search);
+      fillBranchSelect(branchSel, ctx);
+      const wantedBranch = params.get('branchId');
+      if (wantedBranch && !branchSel.disabled && [...branchSel.options].some(o => o.value === wantedBranch)) {
+        branchSel.value = wantedBranch;
+      }
+      if (!branchSel.value) {
+        showPageError('لا يوجد فرع مرتبط بحسابك — تواصل مع مدير النظام.');
+        return;
+      }
+      const wantedPeriod = params.get('period');
+      fillPeriodSelects(monthSel, yearSel, wantedPeriod && parsePeriod(wantedPeriod) ? wantedPeriod : undefined);
+
+      const wantedKind = params.get('kind');
+      if (wantedKind === 'earning' || wantedKind === 'deduction') kindSel.value = wantedKind;
+      fillCategoryFilter();
+      const wantedCategory = params.get('category');
+      if (wantedCategory && [...categorySel.options].some(o => o.value === wantedCategory)) categorySel.value = wantedCategory;
+      const wantedStatus = params.get('status');
+      if (wantedStatus === 'cancelled' || wantedStatus === 'all') statusSel.value = wantedStatus;
+
+      wire();
+      const wantedEmployee = params.get('employeeId');
+      if (wantedEmployee) employeeSel.innerHTML += `<option value="${escapeHtml(wantedEmployee)}"></option>`;
+      if (wantedEmployee) employeeSel.value = wantedEmployee;
+      await loadFilterEmployees();
+      await loadData();
+    }
+
+    void init();
   </script>
 </MainLayout>

@@ -1,7 +1,7 @@
 ---
 import MainLayout from '@/layouts/MainLayout.astro';
 
-// Check authentication
+// Check authentication (middleware enforces it; this keeps the redirect fast)
 const cookieHeader = Astro.request.headers.get('Cookie');
 if (!cookieHeader?.includes('session=')) {
   return Astro.redirect('/auth/login');
@@ -10,363 +10,522 @@ if (!cookieHeader?.includes('session=')) {
 
 <MainLayout title="الموظفين - SymbolAI">
   <div class="space-y-6">
-    <div class="flex items-center justify-between">
+    <div class="flex flex-wrap items-start justify-between gap-4">
       <div>
         <h1 class="text-3xl font-bold">إدارة الموظفين</h1>
-        <p class="text-muted-foreground mt-2">إدارة بيانات الموظفين والرواتب</p>
+        <p class="text-muted-foreground mt-2">بيانات الموظفين ورواتبهم الثابتة (الراتب الأساسي + بدل الإشراف + الحوافز) التي يُبنى عليها مسير الرواتب.</p>
       </div>
       <button
-        id="add-employee-btn"
-        class="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors font-medium"
+        id="add-btn"
+        type="button"
+        class="hidden rounded-md bg-primary px-5 py-2 font-medium text-white hover:bg-primary/90"
       >
         + إضافة موظف
       </button>
     </div>
 
-    <!-- Stats Cards -->
-    <div class="grid gap-4 md:grid-cols-3">
-      <div class="rounded-lg border bg-card p-4">
-        <h3 class="text-sm font-medium text-muted-foreground">عدد الموظفين النشطين</h3>
-        <p class="text-2xl font-bold mt-2" id="employee-count">0</p>
+    <div id="page-error" class="hidden rounded-lg border border-red-200 bg-red-50 p-6 text-red-800" role="alert"></div>
+
+    <div id="page-body" class="space-y-6">
+      <div class="rounded-lg border bg-card p-4 md:p-6">
+        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 lg:items-end">
+          <label class="block text-sm">
+            <span class="mb-1 block font-medium">الفرع</span>
+            <select id="f-branch" class="w-full rounded-md border bg-background px-3 py-2 text-sm"></select>
+          </label>
+          <label class="block text-sm lg:col-span-2">
+            <span class="mb-1 block font-medium">بحث</span>
+            <input id="f-search" type="search" class="w-full rounded-md border bg-background px-3 py-2 text-sm" placeholder="الاسم أو رقم الهوية / الإقامة" />
+          </label>
+          <label class="flex items-center gap-2 py-2 text-sm">
+            <input type="checkbox" id="f-inactive" class="rounded" />
+            <span>عرض الموظفين غير النشطين</span>
+          </label>
+        </div>
       </div>
-      <div class="rounded-lg border bg-card p-4">
-        <h3 class="text-sm font-medium text-muted-foreground">إجمالي تكلفة الرواتب</h3>
-        <p class="text-2xl font-bold mt-2 text-blue-600" id="total-salary">0 ج.م</p>
+
+      <div class="grid gap-4 md:grid-cols-3">
+        <div class="rounded-lg border bg-card p-4">
+          <h3 class="text-sm font-medium text-muted-foreground">عدد الموظفين النشطين</h3>
+          <p class="mt-2 text-2xl font-bold" id="s-count">—</p>
+        </div>
+        <div class="salary-only rounded-lg border bg-card p-4">
+          <h3 class="text-sm font-medium text-muted-foreground">إجمالي الرواتب الثابتة الشهرية</h3>
+          <p class="mt-2 text-2xl font-bold text-primary-700" id="s-total">—</p>
+        </div>
+        <div class="salary-only rounded-lg border bg-card p-4">
+          <h3 class="text-sm font-medium text-muted-foreground">متوسط الراتب</h3>
+          <p class="mt-2 text-2xl font-bold" id="s-avg">—</p>
+        </div>
       </div>
-      <div class="rounded-lg border bg-card p-4">
-        <h3 class="text-sm font-medium text-muted-foreground">متوسط الراتب</h3>
-        <p class="text-2xl font-bold mt-2" id="avg-salary">0 ج.م</p>
+
+      <div class="rounded-lg border bg-card p-4 md:p-6">
+        <h2 class="mb-4 text-xl font-semibold" id="table-title">قائمة الموظفين</h2>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead id="thead"></thead>
+            <tbody id="rows">
+              <tr><td colspan="9" class="p-8 text-center text-muted-foreground">جاري التحميل...</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
+  </div>
 
-    <!-- Employee Table -->
-    <div class="rounded-lg border bg-card p-6">
-      <div class="flex items-center justify-between mb-4">
-        <h3 class="text-xl font-semibold">قائمة الموظفين</h3>
-        <label class="flex items-center gap-2">
-          <input type="checkbox" id="show-inactive" class="rounded" />
-          <span class="text-sm">عرض الموظفين غير النشطين</span>
+  <dialog id="employee-dialog" class="w-full max-w-2xl rounded-lg p-0 shadow-xl backdrop:bg-black/50">
+    <form id="employee-form" class="space-y-4 p-6" novalidate>
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <h3 class="text-2xl font-bold" id="dialog-title">إضافة موظف جديد</h3>
+          <p class="mt-1 text-sm text-muted-foreground">الفرع: <strong id="dialog-branch"></strong></p>
+        </div>
+        <button type="button" data-close class="text-gray-500 hover:text-gray-700" aria-label="إغلاق">✕</button>
+      </div>
+
+      <div class="grid gap-4 md:grid-cols-2">
+        <label class="block text-sm">
+          <span class="mb-1 block font-medium">اسم الموظف *</span>
+          <input type="text" id="e-name" required maxlength="100" class="w-full rounded-md border bg-background px-3 py-2" placeholder="محمد أحمد" />
+        </label>
+        <label class="block text-sm">
+          <span class="mb-1 block font-medium">رقم الهوية / الإقامة</span>
+          <input type="text" id="e-national-id" inputmode="numeric" maxlength="10" dir="ltr" autocomplete="off" class="w-full rounded-md border bg-background px-3 py-2 text-left" placeholder="1XXXXXXXXX" />
+          <span class="mt-1 block text-xs text-muted-foreground">10 أرقام — اختياري</span>
         </label>
       </div>
-      <div class="overflow-x-auto">
-        <table class="w-full">
-          <thead>
-            <tr class="border-b">
-              <th class="text-right p-3 font-medium">الاسم</th>
-              <th class="text-right p-3 font-medium">الرقم القومي</th>
-              <th class="text-right p-3 font-medium">الراتب الأساسي</th>
-              <th class="text-right p-3 font-medium">بدل إشراف</th>
-              <th class="text-right p-3 font-medium">حوافز</th>
-              <th class="text-right p-3 font-medium">الإجمالي</th>
-              <th class="text-right p-3 font-medium">الحالة</th>
-              <th class="text-right p-3 font-medium">إجراءات</th>
-            </tr>
-          </thead>
-          <tbody id="employee-table-body">
-            <tr>
-              <td colspan="8" class="text-center p-8 text-muted-foreground">
-                جاري التحميل...
-              </td>
-            </tr>
-          </tbody>
-        </table>
+
+      <div class="grid gap-4 md:grid-cols-3">
+        <label class="block text-sm">
+          <span class="mb-1 block font-medium">الراتب الأساسي (ر.س) *</span>
+          <input type="number" id="e-base" step="0.01" min="0" required inputmode="decimal" class="w-full rounded-md border bg-background px-3 py-2" />
+        </label>
+        <label class="block text-sm">
+          <span class="mb-1 block font-medium">بدل إشراف (ر.س)</span>
+          <input type="number" id="e-allowance" step="0.01" min="0" value="0" inputmode="decimal" class="w-full rounded-md border bg-background px-3 py-2" />
+        </label>
+        <label class="block text-sm">
+          <span class="mb-1 block font-medium">حوافز (ر.س)</span>
+          <input type="number" id="e-incentives" step="0.01" min="0" value="0" inputmode="decimal" class="w-full rounded-md border bg-background px-3 py-2" />
+        </label>
       </div>
-    </div>
-  </div>
 
-  <!-- Add/Edit Employee Dialog -->
-  <div id="employee-dialog" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
-    <div class="bg-white rounded-lg p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
-      <h2 class="text-2xl font-bold mb-4" id="dialog-title">إضافة موظف جديد</h2>
+      <label id="active-row" class="hidden items-center gap-2 text-sm">
+        <input type="checkbox" id="e-active" class="rounded" />
+        <span>موظف نشط (يظهر في مسير الرواتب)</span>
+      </label>
 
-      <form id="employee-form" class="space-y-4">
-        <input type="hidden" id="employee-id" />
+      <div class="rounded-lg border border-primary-200 bg-primary-50 p-4">
+        <p class="text-sm font-medium">الراتب الثابت الشهري: <span id="e-gross" class="font-bold">—</span></p>
+        <p class="mt-1 text-xs text-muted-foreground">الراتب الأساسي + بدل الإشراف + الحوافز. الساعات الإضافية والسلف والجزاءات تُسجل من صفحة «المستحقات والاستقطاعات».</p>
+      </div>
 
-        <div class="grid gap-4 md:grid-cols-2">
-          <div>
-            <label class="block text-sm font-medium mb-2">اسم الموظف *</label>
-            <input type="text" id="employee-name" required class="w-full rounded-md border px-3 py-2" placeholder="محمد أحمد" />
-          </div>
-          <div>
-            <label class="block text-sm font-medium mb-2">الرقم القومي</label>
-            <input type="text" id="national-id" class="w-full rounded-md border px-3 py-2" placeholder="29501011234567" />
-          </div>
-        </div>
-
-        <div class="grid gap-4 md:grid-cols-3">
-          <div>
-            <label class="block text-sm font-medium mb-2">الراتب الأساسي * (ج.م)</label>
-            <input type="number" id="base-salary" step="0.01" min="0" required class="w-full rounded-md border px-3 py-2" />
-          </div>
-          <div>
-            <label class="block text-sm font-medium mb-2">بدل إشراف (ج.م)</label>
-            <input type="number" id="supervisor-allowance" step="0.01" min="0" value="0" class="w-full rounded-md border px-3 py-2" />
-          </div>
-          <div>
-            <label class="block text-sm font-medium mb-2">حوافز (ج.م)</label>
-            <input type="number" id="incentives" step="0.01" min="0" value="0" class="w-full rounded-md border px-3 py-2" />
-          </div>
-        </div>
-
-        <div class="rounded-lg bg-blue-50 border border-blue-200 p-4">
-          <p class="text-sm font-medium text-blue-900">الراتب الإجمالي: <span id="total-gross" class="font-bold">0 ج.م</span></p>
-          <p class="text-xs text-blue-700 mt-1">الراتب الأساسي + بدل إشراف + حوافز</p>
-        </div>
-
-        <div class="flex gap-3 justify-end pt-4">
-          <button
-            type="button"
-            id="cancel-btn"
-            class="px-4 py-2 border rounded-md hover:bg-gray-50"
-          >
-            إلغاء
-          </button>
-          <button
-            type="submit"
-            id="submit-btn"
-            class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-          >
-            حفظ
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
+      <div class="flex justify-end gap-3 pt-2">
+        <button type="button" data-close class="rounded-md border px-4 py-2 hover:bg-gray-50">إلغاء</button>
+        <button type="submit" id="e-submit" class="rounded-md bg-primary px-6 py-2 font-medium text-white hover:bg-primary/90 disabled:opacity-50">حفظ</button>
+      </div>
+    </form>
+  </dialog>
 
   <script>
+    import {
+      api,
+      byId,
+      escapeHtml,
+      fillBranchSelect,
+      loadFinanceContext,
+      money,
+      toast,
+      withBusy,
+      type FinanceContextPayload,
+    } from '@/lib/finance/client';
+    import { fromMinor, toMinor } from '@/lib/finance/money';
+
     interface Employee {
       id: string;
+      branch_id: string;
       employee_name: string;
-      national_id?: string;
-      base_salary: number;
-      supervisor_allowance: number;
-      incentives: number;
       is_active: number;
+      national_id?: string | null;
+      base_salary?: number;
+      supervisor_allowance?: number;
+      incentives?: number;
     }
 
+    interface ListResponse {
+      employees: Employee[];
+      count: number;
+      activeCount: number;
+      totalSalaryCost: number | null;
+    }
+
+    const branchSel = byId<HTMLSelectElement>('f-branch');
+    const searchInput = byId<HTMLInputElement>('f-search');
+    const inactiveBox = byId<HTMLInputElement>('f-inactive');
+    const rowsBody = byId<HTMLTableSectionElement>('rows');
+    const addBtn = byId<HTMLButtonElement>('add-btn');
+
+    const dialog = byId<HTMLDialogElement>('employee-dialog');
+    const form = byId<HTMLFormElement>('employee-form');
+    const nameInput = byId<HTMLInputElement>('e-name');
+    const idInput = byId<HTMLInputElement>('e-national-id');
+    const baseInput = byId<HTMLInputElement>('e-base');
+    const allowanceInput = byId<HTMLInputElement>('e-allowance');
+    const incentivesInput = byId<HTMLInputElement>('e-incentives');
+    const activeInput = byId<HTMLInputElement>('e-active');
+    const submitBtn = byId<HTMLButtonElement>('e-submit');
+
+    let ctx: FinanceContextPayload | null = null;
     let employees: Employee[] = [];
-    let editingId: string | null = null;
+    let showSalary = false;
+    let canManage = false;
+    let canViewAdjustments = false;
+    let editing: Employee | null = null;
+    let loadSeq = 0;
 
-    function formatCurrency(amount: number): string {
-      return new Intl.NumberFormat('ar-EG', {
-        minimumFractionDigits: 2
-      }).format(amount) + ' ج.م';
+    const AMOUNT_RE = /^\d+(\.\d{1,2})?$/;
+
+    function message(error: unknown): string {
+      return error instanceof Error && error.message ? error.message : 'حدث خطأ غير متوقع';
     }
 
-    async function loadEmployees() {
-      const includeInactive = (document.getElementById('show-inactive') as HTMLInputElement).checked;
+    function normalizeDigits(value: string): string {
+      return value
+        .replace(/[٠-٩]/g, d => String(d.charCodeAt(0) - 0x0660))
+        .replace(/[۰-۹]/g, d => String(d.charCodeAt(0) - 0x06f0))
+        .replace(/[\s-]/g, '');
+    }
 
-      try {
-        const response = await fetch(`/api/employees/list?includeInactive=${includeInactive}`);
-        const data = await response.json();
+    function grossOf(e: Pick<Employee, 'base_salary' | 'supervisor_allowance' | 'incentives'>): number {
+      return fromMinor(toMinor(e.base_salary ?? 0) + toMinor(e.supervisor_allowance ?? 0) + toMinor(e.incentives ?? 0));
+    }
 
-        if (!data.success) {
-          throw new Error(data.error);
-        }
+    function branchName(): string {
+      return branchSel.selectedOptions[0]?.textContent ?? branchSel.value;
+    }
 
-        employees = data.employees;
-        renderEmployees(employees);
-        updateStats(employees, data.totalSalaryCost);
-      } catch (error) {
-        console.error('Error loading employees:', error);
-        alert('حدث خطأ أثناء تحميل الموظفين');
+    function showPageError(text: string, retry = false): void {
+      const box = byId('page-error');
+      box.innerHTML = `<p class="font-medium">${escapeHtml(text)}</p>${
+        retry ? '<button type="button" id="page-retry" class="mt-3 rounded-md border border-red-300 bg-white px-4 py-2 text-sm hover:bg-red-100">إعادة المحاولة</button>' : ''
+      }`;
+      box.classList.remove('hidden');
+      byId('page-body').classList.add('hidden');
+      document.getElementById('page-retry')?.addEventListener('click', () => window.location.reload());
+    }
+
+    function columnCount(): number {
+      return (showSalary ? 8 : 2) + (canManage || canViewAdjustments ? 1 : 0);
+    }
+
+    function renderHead(): void {
+      const cols = showSalary
+        ? ['الاسم', 'رقم الهوية / الإقامة', 'الراتب الأساسي', 'بدل إشراف', 'حوافز', 'الإجمالي', 'الحالة']
+        : ['الاسم', 'الحالة'];
+      if (canManage || canViewAdjustments) cols.push('إجراءات');
+      byId('thead').innerHTML = `<tr class="border-b bg-gray-50 text-right">${cols
+        .map(c => `<th class="p-3 font-medium">${escapeHtml(c)}</th>`)
+        .join('')}</tr>`;
+      document.querySelectorAll<HTMLElement>('.salary-only').forEach(el => el.classList.toggle('hidden', !showSalary));
+    }
+
+    function statusBadge(active: boolean): string {
+      return active
+        ? '<span class="inline-block rounded bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">نشط</span>'
+        : '<span class="inline-block rounded bg-gray-200 px-2 py-0.5 text-xs font-medium text-gray-700">غير نشط</span>';
+    }
+
+    function actionsCell(e: Employee, active: boolean): string {
+      const parts: string[] = [];
+      if (canManage) {
+        parts.push(`<button type="button" data-edit="${escapeHtml(e.id)}" class="text-sm font-medium text-primary-700 hover:underline">تعديل</button>`);
+        parts.push(
+          `<button type="button" data-toggle="${escapeHtml(e.id)}" class="text-sm ${active ? 'text-red-600' : 'text-green-700'} hover:underline">${
+            active ? 'إيقاف' : 'تفعيل'
+          }</button>`,
+        );
       }
+      if (canViewAdjustments) {
+        const href = `/advances-deductions?${new URLSearchParams({ branchId: e.branch_id, employeeId: e.id })}`;
+        parts.push(`<a href="${escapeHtml(href)}" class="text-sm text-gray-700 hover:underline">البنود</a>`);
+      }
+      return `<td class="p-3"><div class="flex flex-wrap gap-3">${parts.join('')}</div></td>`;
     }
 
-    function renderEmployees(employees: Employee[]) {
-      const tbody = document.getElementById('employee-table-body')!;
+    function render(): void {
+      const query = normalizeDigits(searchInput.value.trim()).toLowerCase();
+      const rawQuery = searchInput.value.trim().toLowerCase();
+      const visible = employees.filter(e => {
+        if (!inactiveBox.checked && Number(e.is_active) !== 1) return false;
+        if (!rawQuery) return true;
+        return (
+          e.employee_name.toLowerCase().includes(rawQuery) ||
+          (query !== '' && String(e.national_id ?? '').includes(query))
+        );
+      });
 
-      if (employees.length === 0) {
-        tbody.innerHTML = `
-          <tr>
-            <td colspan="8" class="text-center p-8 text-muted-foreground">
-              لا يوجد موظفين
-            </td>
-          </tr>
-        `;
+      if (visible.length === 0) {
+        rowsBody.innerHTML = `<tr><td colspan="${columnCount()}" class="p-8 text-center text-muted-foreground">${
+          employees.length === 0 ? 'لا يوجد موظفون في هذا الفرع' : 'لا يوجد موظفون مطابقون'
+        }</td></tr>`;
         return;
       }
 
-      tbody.innerHTML = employees.map(e => {
-        const grossSalary = e.base_salary + (e.supervisor_allowance || 0) + (e.incentives || 0);
-        const isActive = e.is_active === 1;
-
-        return `
-          <tr class="border-b hover:bg-gray-50 ${!isActive ? 'opacity-60' : ''}">
-            <td class="p-3 font-medium">${e.employee_name}</td>
-            <td class="p-3 text-sm">${e.national_id || '-'}</td>
-            <td class="p-3">${formatCurrency(e.base_salary)}</td>
-            <td class="p-3">${formatCurrency(e.supervisor_allowance || 0)}</td>
-            <td class="p-3">${formatCurrency(e.incentives || 0)}</td>
-            <td class="p-3 font-bold text-blue-600">${formatCurrency(grossSalary)}</td>
-            <td class="p-3">
-              <span class="px-2 py-1 rounded text-sm ${isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}">
-                ${isActive ? 'نشط' : 'غير نشط'}
-              </span>
-            </td>
-            <td class="p-3">
-              <div class="flex gap-2">
-                <button onclick="editEmployee('${e.id}')" class="text-blue-600 hover:text-blue-800 text-sm">
-                  تعديل
-                </button>
-                <button onclick="toggleActive('${e.id}', ${!isActive})" class="text-gray-600 hover:text-gray-800 text-sm">
-                  ${isActive ? 'إيقاف' : 'تفعيل'}
-                </button>
-              </div>
-            </td>
-          </tr>
-        `;
-      }).join('');
+      rowsBody.innerHTML = visible
+        .map(e => {
+          const active = Number(e.is_active) === 1;
+          const cells = [`<td class="p-3 font-medium">${escapeHtml(e.employee_name)}</td>`];
+          if (showSalary) {
+            cells.push(
+              `<td class="p-3" dir="ltr" style="text-align:right">${e.national_id ? escapeHtml(e.national_id) : '<span class="text-muted-foreground">—</span>'}</td>`,
+              `<td class="p-3 whitespace-nowrap">${escapeHtml(money(e.base_salary ?? 0))}</td>`,
+              `<td class="p-3 whitespace-nowrap">${escapeHtml(money(e.supervisor_allowance ?? 0))}</td>`,
+              `<td class="p-3 whitespace-nowrap">${escapeHtml(money(e.incentives ?? 0))}</td>`,
+              `<td class="p-3 whitespace-nowrap font-bold text-primary-700">${escapeHtml(money(grossOf(e)))}</td>`,
+            );
+          }
+          cells.push(`<td class="p-3">${statusBadge(active)}</td>`);
+          if (canManage || canViewAdjustments) cells.push(actionsCell(e, active));
+          return `<tr class="border-b hover:bg-gray-50 ${active ? '' : 'opacity-60'}">${cells.join('')}</tr>`;
+        })
+        .join('');
     }
 
-    function updateStats(employees: Employee[], totalCost: number) {
-      const activeEmployees = employees.filter(e => e.is_active === 1);
-      const avgSalary = activeEmployees.length > 0 ? totalCost / activeEmployees.length : 0;
-
-      document.getElementById('employee-count')!.textContent = activeEmployees.length.toString();
-      document.getElementById('total-salary')!.textContent = formatCurrency(totalCost);
-      document.getElementById('avg-salary')!.textContent = formatCurrency(avgSalary);
-    }
-
-    // Dialog controls
-    const dialog = document.getElementById('employee-dialog')!;
-    const form = document.getElementById('employee-form') as HTMLFormElement;
-    const addBtn = document.getElementById('add-employee-btn')!;
-    const cancelBtn = document.getElementById('cancel-btn')!;
-
-    addBtn.addEventListener('click', () => {
-      editingId = null;
-      form.reset();
-      document.getElementById('dialog-title')!.textContent = 'إضافة موظف جديد';
-      dialog.classList.remove('hidden');
-      updateGrossTotal();
-    });
-
-    cancelBtn.addEventListener('click', () => {
-      dialog.classList.add('hidden');
-      editingId = null;
-      form.reset();
-    });
-
-    // Update gross total on input
-    const baseSalaryInput = document.getElementById('base-salary') as HTMLInputElement;
-    const supervisorAllowanceInput = document.getElementById('supervisor-allowance') as HTMLInputElement;
-    const incentivesInput = document.getElementById('incentives') as HTMLInputElement;
-
-    function updateGrossTotal() {
-      const base = parseFloat(baseSalaryInput.value) || 0;
-      const allowance = parseFloat(supervisorAllowanceInput.value) || 0;
-      const incentives = parseFloat(incentivesInput.value) || 0;
-      const total = base + allowance + incentives;
-      document.getElementById('total-gross')!.textContent = formatCurrency(total);
-    }
-
-    baseSalaryInput.addEventListener('input', updateGrossTotal);
-    supervisorAllowanceInput.addEventListener('input', updateGrossTotal);
-    incentivesInput.addEventListener('input', updateGrossTotal);
-
-    // Submit form
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-
-      const submitBtn = document.getElementById('submit-btn') as HTMLButtonElement;
-      submitBtn.disabled = true;
-      submitBtn.textContent = 'جاري الحفظ...';
-
-      const data = {
-        branchId: 'BR001',
-        employeeName: (document.getElementById('employee-name') as HTMLInputElement).value,
-        nationalId: (document.getElementById('national-id') as HTMLInputElement).value,
-        baseSalary: parseFloat(baseSalaryInput.value),
-        supervisorAllowance: parseFloat(supervisorAllowanceInput.value) || 0,
-        incentives: parseFloat(incentivesInput.value) || 0
-      };
-
-      try {
-        let response;
-        if (editingId) {
-          // Update
-          response = await fetch('/api/employees/update', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: editingId, updates: data })
-          });
-        } else {
-          // Create
-          response = await fetch('/api/employees/create', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-          });
-        }
-
-        const result = await response.json();
-
-        if (result.success) {
-          alert(editingId ? 'تم تحديث بيانات الموظف بنجاح' : 'تم إضافة الموظف بنجاح');
-          dialog.classList.add('hidden');
-          form.reset();
-          editingId = null;
-          loadEmployees();
-        } else {
-          alert(result.error || 'حدث خطأ');
-        }
-      } catch (error) {
-        alert('حدث خطأ في الاتصال');
-      } finally {
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'حفظ';
+    function renderStats(res: ListResponse): void {
+      byId('s-count').textContent = String(res.activeCount);
+      if (res.totalSalaryCost === null) {
+        byId('s-total').textContent = '—';
+        byId('s-avg').textContent = '—';
+        return;
       }
-    });
+      byId('s-total').textContent = money(res.totalSalaryCost);
+      byId('s-avg').textContent = money(res.activeCount > 0 ? fromMinor(Math.round(toMinor(res.totalSalaryCost) / res.activeCount)) : 0);
+    }
 
-    // Edit employee
-    (window as any).editEmployee = (id: string) => {
-      const employee = employees.find(e => e.id === id);
-      if (!employee) return;
-
-      editingId = id;
-      document.getElementById('dialog-title')!.textContent = 'تعديل بيانات الموظف';
-      (document.getElementById('employee-name') as HTMLInputElement).value = employee.employee_name;
-      (document.getElementById('national-id') as HTMLInputElement).value = employee.national_id || '';
-      baseSalaryInput.value = employee.base_salary.toString();
-      supervisorAllowanceInput.value = (employee.supervisor_allowance || 0).toString();
-      incentivesInput.value = (employee.incentives || 0).toString();
-
-      updateGrossTotal();
-      dialog.classList.remove('hidden');
-    };
-
-    // Toggle active status
-    (window as any).toggleActive = async (id: string, newStatus: boolean) => {
-      if (!confirm(`هل أنت متأكد من ${newStatus ? 'تفعيل' : 'إيقاف'} هذا الموظف؟`)) return;
-
+    async function load(): Promise<void> {
+      const seq = ++loadSeq;
+      byId('table-title').textContent = `قائمة الموظفين — ${branchName()}`;
+      rowsBody.innerHTML = `<tr><td colspan="${columnCount()}" class="p-8 text-center text-muted-foreground">جاري التحميل...</td></tr>`;
       try {
-        const response = await fetch('/api/employees/update', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id,
-            updates: { isActive: newStatus }
-          })
-        });
-
-        const result = await response.json();
-
-        if (result.success) {
-          alert(newStatus ? 'تم تفعيل الموظف' : 'تم إيقاف الموظف');
-          loadEmployees();
-        } else {
-          alert(result.error || 'حدث خطأ');
-        }
+        const res = await api<ListResponse>(`/api/employees/list?${new URLSearchParams({ branchId: branchSel.value, includeInactive: '1' })}`);
+        if (seq !== loadSeq) return;
+        employees = res.employees;
+        showSalary = res.totalSalaryCost !== null;
+        renderHead();
+        renderStats(res);
+        render();
       } catch (error) {
-        alert('حدث خطأ في الاتصال');
+        if (seq !== loadSeq) return;
+        employees = [];
+        rowsBody.innerHTML = `<tr><td colspan="${columnCount()}" class="p-8 text-center">
+            <p class="text-red-700">${escapeHtml(message(error))}</p>
+            <button type="button" data-retry class="mt-3 rounded-md border px-4 py-2 text-sm hover:bg-gray-50">إعادة المحاولة</button>
+          </td></tr>`;
+        for (const id of ['s-count', 's-total', 's-avg']) byId(id).textContent = '—';
       }
-    };
+    }
 
-    // Show inactive toggle
-    document.getElementById('show-inactive')?.addEventListener('change', loadEmployees);
+    // ---------------------------------------------------------------- dialog
 
-    // Initial load
-    loadEmployees();
+    function updateGross(): void {
+      const values = [baseInput.value, allowanceInput.value, incentivesInput.value].map(v => (AMOUNT_RE.test(v.trim()) ? v.trim() : '0'));
+      byId('e-gross').textContent = money(grossOf({ base_salary: Number(values[0]), supervisor_allowance: Number(values[1]), incentives: Number(values[2]) }));
+    }
+
+    function openDialog(employee: Employee | null): void {
+      editing = employee;
+      form.reset();
+      byId('dialog-title').textContent = employee ? 'تعديل بيانات الموظف' : 'إضافة موظف جديد';
+      byId('dialog-branch').textContent = branchName();
+      const activeRow = byId('active-row');
+      if (employee) {
+        nameInput.value = employee.employee_name;
+        idInput.value = employee.national_id ?? '';
+        baseInput.value = String(employee.base_salary ?? 0);
+        allowanceInput.value = String(employee.supervisor_allowance ?? 0);
+        incentivesInput.value = String(employee.incentives ?? 0);
+        activeInput.checked = Number(employee.is_active) === 1;
+        activeRow.classList.remove('hidden');
+        activeRow.classList.add('flex');
+      } else {
+        allowanceInput.value = '0';
+        incentivesInput.value = '0';
+        activeRow.classList.add('hidden');
+        activeRow.classList.remove('flex');
+      }
+      updateGross();
+      dialog.showModal();
+      nameInput.focus();
+    }
+
+    function amountValue(input: HTMLInputElement, label: string, required: boolean): string | null {
+      const value = input.value.trim();
+      if (!value) {
+        if (required) {
+          toast(`${label} مطلوب`, 'error');
+          input.focus();
+          return null;
+        }
+        return '0';
+      }
+      if (!AMOUNT_RE.test(value)) {
+        toast(`${label} يجب أن يكون رقماً غير سالب بمنزلتين عشريتين كحد أقصى`, 'error');
+        input.focus();
+        return null;
+      }
+      return value;
+    }
+
+    async function submit(event: SubmitEvent): Promise<void> {
+      event.preventDefault();
+      if (submitBtn.disabled || !ctx) return;
+
+      const employeeName = nameInput.value.replace(/\s+/g, ' ').trim();
+      if (!employeeName) {
+        toast('اسم الموظف مطلوب', 'error');
+        nameInput.focus();
+        return;
+      }
+
+      const rawId = idInput.value.trim();
+      const originalId = editing?.national_id ?? '';
+      let nationalId: string | null = rawId || null;
+      // Existing records may hold an older format; only a new/changed ID must be 10 digits.
+      if (rawId !== originalId) {
+        const normalized = normalizeDigits(rawId);
+        if (normalized && !/^\d{10}$/.test(normalized)) {
+          toast('رقم الهوية / الإقامة يجب أن يتكون من 10 أرقام فقط', 'error');
+          idInput.focus();
+          return;
+        }
+        nationalId = normalized || null;
+      }
+
+      const baseSalary = amountValue(baseInput, 'الراتب الأساسي', true);
+      if (baseSalary === null) return;
+      const supervisorAllowance = amountValue(allowanceInput, 'بدل الإشراف', false);
+      if (supervisorAllowance === null) return;
+      const incentives = amountValue(incentivesInput, 'الحوافز', false);
+      if (incentives === null) return;
+
+      const current = editing;
+      try {
+        if (current) {
+          await withBusy(submitBtn, 'جاري الحفظ...', () =>
+            api('/api/employees/update', {
+              method: 'PUT',
+              body: {
+                id: current.id,
+                updates: { employeeName, nationalId, baseSalary, supervisorAllowance, incentives, isActive: activeInput.checked },
+              },
+            }),
+          );
+          toast('تم تحديث بيانات الموظف', 'success');
+        } else {
+          await withBusy(submitBtn, 'جاري الحفظ...', () =>
+            api('/api/employees/create', {
+              method: 'POST',
+              body: { branchId: branchSel.value, employeeName, nationalId, baseSalary, supervisorAllowance, incentives },
+            }),
+          );
+          toast('تمت إضافة الموظف', 'success');
+        }
+        dialog.close();
+        editing = null;
+        await load();
+      } catch (error) {
+        toast(message(error), 'error');
+      }
+    }
+
+    async function toggleActive(employee: Employee, button: HTMLButtonElement): Promise<void> {
+      const activate = Number(employee.is_active) !== 1;
+      const question = activate
+        ? `تفعيل الموظف «${employee.employee_name}»؟ سيظهر في مسير الرواتب للأشهر غير المعتمدة.`
+        : `إيقاف الموظف «${employee.employee_name}»؟ لن يظهر في مسيرات الرواتب غير المعتمدة بعد الآن.`;
+      if (!window.confirm(question)) return;
+      try {
+        await withBusy(button, '...', () =>
+          api('/api/employees/update', { method: 'PUT', body: { id: employee.id, updates: { isActive: activate } } }),
+        );
+        toast(activate ? 'تم تفعيل الموظف' : 'تم إيقاف الموظف', 'success');
+        await load();
+      } catch (error) {
+        toast(message(error), 'error');
+      }
+    }
+
+    // ---------------------------------------------------------------- wiring
+
+    function wire(): void {
+      branchSel.addEventListener('change', () => void load());
+      searchInput.addEventListener('input', render);
+      inactiveBox.addEventListener('change', render);
+      addBtn.addEventListener('click', () => openDialog(null));
+      for (const input of [baseInput, allowanceInput, incentivesInput]) input.addEventListener('input', updateGross);
+      form.addEventListener('submit', event => void submit(event as SubmitEvent));
+      dialog.querySelectorAll<HTMLButtonElement>('[data-close]').forEach(btn =>
+        btn.addEventListener('click', () => {
+          if (!submitBtn.disabled) dialog.close();
+        }),
+      );
+      dialog.addEventListener('click', event => {
+        if (event.target === dialog && !submitBtn.disabled) dialog.close();
+      });
+      dialog.addEventListener('cancel', event => {
+        if (submitBtn.disabled) event.preventDefault();
+      });
+      rowsBody.addEventListener('click', event => {
+        const target = event.target as HTMLElement;
+        if (target.closest('[data-retry]')) {
+          void load();
+          return;
+        }
+        const editBtn = target.closest<HTMLButtonElement>('[data-edit]');
+        if (editBtn) {
+          const employee = employees.find(e => e.id === editBtn.dataset.edit);
+          if (employee) openDialog(employee);
+          return;
+        }
+        const toggleBtn = target.closest<HTMLButtonElement>('[data-toggle]');
+        if (toggleBtn) {
+          const employee = employees.find(e => e.id === toggleBtn.dataset.toggle);
+          if (employee) void toggleActive(employee, toggleBtn);
+        }
+      });
+    }
+
+    async function init(): Promise<void> {
+      try {
+        ctx = await loadFinanceContext();
+      } catch (error) {
+        showPageError(`تعذر تحميل بيانات الصفحة: ${message(error)}`, true);
+        return;
+      }
+      const p = ctx.permissions;
+      if (!(p.canViewReports || p.canManageEmployees || p.canGeneratePayroll || p.canManageBonus || p.canManageRequests || p.canApproveRequests)) {
+        showPageError('لا تملك صلاحية عرض بيانات الموظفين.');
+        return;
+      }
+      canManage = p.canManageEmployees;
+      canViewAdjustments = p.canGeneratePayroll || p.canManageEmployees || p.canApproveFinance;
+      showSalary = p.canManageEmployees || p.canGeneratePayroll || p.canApproveFinance;
+      if (canManage) addBtn.classList.remove('hidden');
+
+      fillBranchSelect(branchSel, ctx);
+      const wantedBranch = new URLSearchParams(window.location.search).get('branchId');
+      if (wantedBranch && !branchSel.disabled && [...branchSel.options].some(o => o.value === wantedBranch)) {
+        branchSel.value = wantedBranch;
+      }
+      if (!branchSel.value) {
+        showPageError('لا يوجد فرع مرتبط بحسابك — تواصل مع مدير النظام.');
+        return;
+      }
+      renderHead();
+      wire();
+      await load();
+    }
+
+    void init();
   </script>
 </MainLayout>

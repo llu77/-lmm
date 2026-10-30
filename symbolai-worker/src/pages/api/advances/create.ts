@@ -1,129 +1,80 @@
+// POST /api/advances/create {employeeId, amount, month, year, notes}
+// Backward-compatible wrapper: records the advance in the payroll adjustments
+// ledger (category 'advance') so it is deducted in that month's payroll.
+// New code should call /api/adjustments/create directly.
+
 import type { APIRoute } from 'astro';
-import { requireAuthWithPermissions, requirePermission, logAudit, getClientIP } from '@/lib/permissions';
-import { generateId } from '@/lib/db';
+import { canAccessBranch } from '@/lib/permissions';
+import { parseMonth, toPeriod } from '@/lib/finance/catalog';
+import { getBranchEmployee } from '@/lib/finance/ledger';
+import { fail, financeAuth, ok, readJsonObject, str, type FinanceContext } from '@/lib/finance/http';
+import { createAdjustment } from '../adjustments/create';
 
-export const POST: APIRoute = async ({ request, locals }) => {
-  // Check authentication with permissions
-  const authResult = await requireAuthWithPermissions(
-    locals.runtime.env.SESSIONS,
-    locals.runtime.env.DB,
-    request
-  );
+export interface LegacyTarget {
+  employee: NonNullable<Awaited<ReturnType<typeof getBranchEmployee>>>;
+  period: string;
+  month: number;
+  year: number;
+}
 
-  if (authResult instanceof Response) {
-    return authResult;
-  }
+/** Shared by the advances/deductions wrappers: employee (branch-checked) + month/year → period. */
+export async function resolveLegacyTarget(auth: FinanceContext, body: Record<string, unknown>): Promise<LegacyTarget | Response> {
+  const employeeId = str(body.employeeId, 100);
+  if (!employeeId) return fail('يرجى اختيار الموظف', 400);
+  const month = parseMonth(typeof body.month === 'number' ? body.month : str(body.month, 20));
+  const year = typeof body.year === 'number' ? body.year : Number(str(body.year, 10));
+  if (!month || !Number.isInteger(year) || year < 2000 || year > 2100) return fail('يرجى تحديد الشهر والسنة', 400);
+  const employee = await getBranchEmployee(auth.db, employeeId);
+  if (!employee || !canAccessBranch(auth.session, employee.branchId)) return fail('الموظف غير موجود', 404);
+  return { employee, period: toPeriod(year, month), month, year };
+}
 
-  // Check permission to manage employees (needed for advances)
-  const permError = requirePermission(authResult, 'canManageEmployees');
-  if (permError) {
-    return permError;
-  }
+export const POST: APIRoute = async context => {
+  const auth = await financeAuth(context, ['canGeneratePayroll', 'canManageEmployees']);
+  if (auth instanceof Response) return auth;
+
+  const body = await readJsonObject(context.request);
+  if (!body) return fail('بيانات الطلب غير صالحة', 400);
 
   try {
-    const {
-      employeeId,
-      amount,
-      month,
-      year,
-      notes
-    } = await request.json();
+    const target = await resolveLegacyTarget(auth, body);
+    if (target instanceof Response) return target;
 
-    // Validation
-    if (!employeeId || amount === undefined || !month || !year) {
-      return new Response(
-        JSON.stringify({ error: 'البيانات المطلوبة ناقصة' }),
-        {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
-    }
-
-    // Validate amount is positive
-    const parsedAmount = parseFloat(amount);
-    if (parsedAmount <= 0) {
-      return new Response(
-        JSON.stringify({ error: 'المبلغ يجب أن يكون أكبر من صفر' }),
-        {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
-    }
-
-    // Get employee name
-    const employeeResult = await locals.runtime.env.DB.prepare(
-      `SELECT employee_name FROM employees WHERE id = ?`
-    ).bind(employeeId).first();
-
-    if (!employeeResult) {
-      return new Response(
-        JSON.stringify({ error: 'الموظف غير موجود' }),
-        {
-          status: 404,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
-    }
-
-    // Create advance record
-    const advanceId = generateId();
-    const { username } = authResult.permissions;
-
-    await locals.runtime.env.DB.prepare(`
-      INSERT INTO advances (
-        id, employee_id, employee_name, amount, month, year, description, recorded_by
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(
-      advanceId,
-      employeeId,
-      employeeResult.employee_name,
-      parsedAmount,
-      month,
-      parseInt(year),
-      notes || '',
-      username || 'admin'
-    ).run();
-
-    // Log audit
-    await logAudit(
-      locals.runtime.env.DB,
-      authResult,
-      'create',
-      'advance',
-      advanceId,
-      { employeeId, amount: parsedAmount, month, year },
-      getClientIP(request),
-      request.headers.get('User-Agent') || undefined
-    );
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        advance: {
-          id: advanceId,
-          employeeId,
-          employeeName: employeeResult.employee_name,
-          amount: parsedAmount,
-          month,
-          year: parseInt(year),
-          description: notes
-        }
-      }),
+    const result = await createAdjustment(
+      auth,
+      context.request,
       {
-        status: 201,
-        headers: { 'Content-Type': 'application/json' }
-      }
+        branchId: target.employee.branchId,
+        employeeId: target.employee.id,
+        period: target.period,
+        category: 'advance',
+        amount: body.amount,
+        description: body.notes ?? body.description,
+      },
+      'advances/create',
+    );
+    if (!result.ok) return result.response;
+
+    const { adjustment, warnings } = result;
+    return ok(
+      {
+        advance: {
+          id: adjustment.id,
+          employeeId: adjustment.employeeId,
+          employeeName: adjustment.employeeName,
+          amount: adjustment.amount,
+          month: target.month,
+          year: target.year,
+          period: adjustment.period,
+          description: adjustment.description,
+        },
+        adjustment,
+        warnings,
+      },
+      201,
     );
   } catch (error) {
     console.error('Create advance error:', error);
-    return new Response(
-      JSON.stringify({ error: 'حدث خطأ أثناء إضافة السلفة' }),
-      {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    );
+    return fail('حدث خطأ أثناء إضافة السلفة', 500);
   }
 };
