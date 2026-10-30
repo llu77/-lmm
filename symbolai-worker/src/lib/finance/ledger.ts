@@ -20,7 +20,7 @@ export interface NewAdjustment {
   quantity?: number | null;
   rate?: number | null;
   description?: string | null;
-  sourceType: 'manual' | 'request';
+  sourceType: 'manual' | 'request' | 'bonus_record';
   sourceId?: string | null;
   installmentNo?: number | null;
   installmentCount?: number | null;

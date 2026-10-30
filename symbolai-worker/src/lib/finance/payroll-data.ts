@@ -11,6 +11,7 @@ import {
   type PayrollResult,
 } from './payroll-engine';
 import { getTableColumns } from './schema';
+import { isPayableBonusRow, pickPayableBonusRows } from './bonus-select';
 
 export type PayrollRunStatus = 'draft' | 'approved' | 'paid' | 'cancelled';
 
@@ -129,12 +130,8 @@ function bonusEntryEmployeeId(value: unknown): string {
   return '';
 }
 
-export function isBonusRecordApproved(row: Record<string, unknown>): boolean {
-  const status = typeof row.status === 'string' ? row.status : null;
-  if (status === 'approved') return true;
-  if (status === 'paid' || status === 'rejected' || status === 'cancelled') return false;
-  return row.approved_by !== null && row.approved_by !== undefined && row.approved_by !== '';
-}
+/** The approval rule payroll and the bonus page share (see bonus-select.ts). */
+export const isBonusRecordApproved = isPayableBonusRow;
 
 /**
  * Approved weekly bonus records of the month, turned into one 'bonus' line per
@@ -166,20 +163,30 @@ export async function loadApprovedBonuses(
   const byName = new Map(employees.map(e => [normalizeName(e.name), e]));
   const out: PayrollAdjustmentInput[] = [];
 
-  // The old bonus page inserted a new row on every save, so a week can have
-  // several approved rows. Pay each week once: keep its most recent approval.
-  const latestPerWeek = new Map<string, Record<string, unknown>>();
-  const recency = (row: Record<string, unknown>) => String(row.approved_at ?? row.created_at ?? '');
-  for (const row of result.results ?? []) {
-    if (!isBonusRecordApproved(row)) continue;
-    const week = String(row.week_number ?? row.id);
-    const current = latestPerWeek.get(week);
-    if (!current || recency(row) > recency(current) || (recency(row) === recency(current) && String(row.id) > String(current.id))) {
-      latestPerWeek.set(week, row);
-    }
+  // A week approved after its month's payroll was closed was rolled over to a
+  // later month as 'bonus' ledger entries (source_id `${recordId}:${employeeId}`).
+  // That record is paid there, never here too (e.g. when this month is reopened),
+  // even if those entries were since cancelled.
+  // No ledger table yet (fresh database) means nothing was rolled over; any
+  // other failure must surface, or the record would be paid twice.
+  let rolledOverSourceIds: string[] = [];
+  try {
+    const rolledOver = await db
+      .prepare(`SELECT DISTINCT source_id FROM payroll_adjustments WHERE branch_id = ? AND source_type = 'bonus_record'`)
+      .bind(branchId)
+      .all<{ source_id: string | null }>();
+    rolledOverSourceIds = (rolledOver.results ?? []).map(r => String(r.source_id ?? '')).filter(Boolean);
+  } catch (error) {
+    if (!/no such table/i.test(error instanceof Error ? error.message : String(error))) throw error;
   }
+  const wasRolledOver = (recordId: string) => rolledOverSourceIds.some(sourceId => sourceId.startsWith(`${recordId}:`));
 
-  for (const row of latestPerWeek.values()) {
+  // The old bonus page inserted a new row on every save, so a week can have
+  // several approved rows. Pay each week once — the same rows the bonus page
+  // reports as approved (pickPayableBonusRows: the most recent approval).
+  const payable = pickPayableBonusRows(result.results ?? []).filter(row => !wasRolledOver(String(row.id)));
+
+  for (const row of payable) {
     let entries: BonusEntry[] = [];
     try {
       const parsed = JSON.parse(String(row.employee_bonuses ?? '[]'));

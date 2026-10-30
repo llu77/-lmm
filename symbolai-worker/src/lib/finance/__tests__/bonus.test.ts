@@ -1,12 +1,15 @@
-import { test } from 'node:test';
+import { mock, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { setup, call, type FakeD1 } from './harness';
 import { MONTH_NAMES_AR, addMonths, currentPeriod, parsePeriod } from '../catalog';
 import { computeBranchPayroll } from '../payroll-data';
+import { ensureFinanceSchema } from '../schema';
+import { pickPayableBonusRows } from '../bonus-select';
 import {
   DEFAULT_BONUS_TIERS,
   attributeRevenue,
   bonusFingerprint,
+  bonusRolloverSourceId,
   evaluateTier,
   isWeekComplete,
   parseLooseAmount,
@@ -108,9 +111,13 @@ test('revenue employee JSON is parsed in all the shapes the cashier and the old 
   assert.deepEqual(amounts(JSON.stringify(JSON.stringify([{ name: 'x', revenue: 5 }]))), [['x', 5]]); // double-encoded
   assert.deepEqual(amounts({ date: '2026-10-01', total: 999, employees: [{ name: 'y', amount: 7 }] }), [['y', 7]]);
   assert.deepEqual(amounts([['زيد', 80]]), [['زيد', 80]]);
-  for (const garbage of [null, undefined, '', 'abc', '{', 42, true, [1, 2], [{ name: 'no amount' }], [{ revenue: 100 }], [{ name: 'neg', revenue: -5 }], [{ name: 'z', revenue: 'NaN' }]]) {
+  for (const garbage of [null, undefined, '', 'abc', '{', 42, true, [1, 2], [{ name: 'no amount' }], [{ revenue: 100 }], [{ name: 'zero', revenue: 0 }], [{ name: 'z', revenue: 'NaN' }]]) {
     assert.deepEqual(parseRevenueEmployees(garbage), [], JSON.stringify(garbage));
   }
+  // refund lines are kept (netted per employee later), in every shape
+  assert.deepEqual(amounts([{ name: 'neg', revenue: -5 }]), [['neg', -5]]);
+  assert.deepEqual(amounts([['زيد', '-80']]), [['زيد', -80]]);
+  assert.deepEqual(amounts({ 'أحمد': 700, 'سعيد': -20 }), [['أحمد', 700], ['سعيد', -20]]);
   assert.equal(parseLooseAmount('١٬٣٠٠٫٥٠'), 1300.5);
   assert.equal(parseLooseAmount('12abc'), null);
 });
@@ -268,7 +275,10 @@ for (const variant of ['008', 'legacy'] as const) {
     assert.match(String(approvedNote[0].message), /يُضاف تلقائياً إلى مسير رواتب/);
     assert.equal(notificationsFor(DB, 'u_sup2', 'bonus_approved').length, 0);
 
-    // payroll picks it up
+    // payroll picks it up (straight from bonus_records: the month is open, no ledger rows are written)
+    assert.equal(approved.body.rolledOver, false);
+    assert.equal(approved.body.payrollPeriod, PERIOD);
+    assert.equal(DB.query('SELECT id FROM payroll_adjustments').length, 0);
     const payroll = await computeBranchPayroll(DB as any, 'branch_1010', PERIOD);
     assert.equal(payroll.items.find(i => i.employeeId === 'emp_1')!.bonus, 50);
     assert.equal(payroll.items.find(i => i.employeeId === 'emp_2')!.bonus, 100);
@@ -401,15 +411,24 @@ for (const variant of ['008', 'legacy'] as const) {
     const pending3 = await call(save, env, { token: sup, body: { branchId: 'branch_1010', period: PERIOD, week: 3 } });
     assert.equal(pending3.status, 201);
     DB.raw.prepare(`INSERT INTO payroll_runs (id, branch_id, period, status) VALUES ('run_1', 'branch_1010', ?, 'approved')`).run(PERIOD);
-    const locked = await call(save, env, { token: sup, body: { branchId: 'branch_1010', period: PERIOD, week: 3 } });
-    assert.equal(locked.status, 409);
-    assert.equal(locked.body.locked, true);
-    assert.equal((await call(approve, env, { token: admin, body: { id: pending3.body.record.id } })).status, 409);
+    // a closed payroll no longer blocks the week: it can still be (re)submitted, and approval rolls it over
+    const resent3 = await call(save, env, { token: sup, body: { branchId: 'branch_1010', period: PERIOD, week: 3 } });
+    assert.equal(resent3.status, 201, JSON.stringify(resent3.body));
+    assert.equal(resent3.body.record.status, 'pending');
+    assert.equal(resent3.body.payrollPeriod, addMonths(PERIOD, 1));
+    assert.equal((await call(approve, env, { token: admin, body: { id: pending3.body.record.id } })).status, 404); // replaced
+    const calc3 = await call(calculate, env, { token: admin, body: { branchId: 'branch_1010', period: PERIOD, week: 3 } });
+    assert.equal(calc3.body.locked, true);
+    assert.equal(calc3.body.rolledOver, true);
+    assert.equal(calc3.body.payrollPeriod, addMonths(PERIOD, 1));
+    assert.equal(calc3.body.permissions.canApprove, true);
     const month = await call(list, env, { token: admin, query: { branchId: 'branch_1010', period: PERIOD } });
     assert.equal(month.body.locked, true);
     assert.equal(month.body.payrollStatus, 'approved');
+    assert.equal(month.body.payrollPeriod, addMonths(PERIOD, 1));
     assert.equal(month.body.pendingCount, 1);
     assert.equal(month.body.approvedTotal, 50 + 175);
+    assert.equal(month.body.rolledOverTotal, 0);
   });
 
   test(`legacy month names, duplicate rows and corrupt JSON are tolerated (${variant})`, async () => {
@@ -458,4 +477,322 @@ test('revenue_employee_contributions win over the JSON of the same revenue row (
   assert.equal(calc.status, 200);
   const byId = Object.fromEntries(calc.body.employees.map((e: any) => [e.employeeId, [e.totalRevenue, e.bonusAmount]]));
   assert.deepEqual(byId, { emp_1: [1400, 50], emp_2: [1900, 100] });
+});
+
+// ---------------------------------------------------------------------------
+// Refunds, other-branch ids, NULL status, duplicate approvals, rollover
+// ---------------------------------------------------------------------------
+
+test('refund lines are netted per employee and each total is clamped at zero', () => {
+  const employees = [
+    { id: 'emp_1', name: 'أحمد علي', active: true },
+    { id: 'emp_2', name: 'محمد إسماعيل', active: true },
+  ];
+  const result = attributeRevenue(
+    [
+      ...parseRevenueEmployees([{ name: 'أحمد علي', revenue: 1500 }, { name: 'احمد علي', revenue: -300 }]),
+      { name: null, employeeId: 'emp_1', amountMinor: 100_00 },
+      { name: 'محمد إسماعيل', employeeId: null, amountMinor: 200_00 },
+      { name: 'محمد اسماعيل', employeeId: null, amountMinor: -500_00 },
+      { name: 'مجهول', employeeId: null, amountMinor: -50_00 },
+    ],
+    employees,
+  );
+  assert.equal(result.byEmployee.get('emp_1'), 1300_00);
+  assert.equal(result.byEmployee.has('emp_2'), false); // 200 − 500 → 0, never negative
+  assert.equal(result.attributedMinor, 1300_00);
+  assert.deepEqual(result.unmatched, []); // a net refund is not unmatched revenue
+});
+
+test('refunds in the cashier breakdown lower the weekly bonus (API)', async () => {
+  const { env, DB, data } = await setup('008');
+  addRevenue(DB, 'rf1', day(8), 2000, [{ name: 'أحمد علي', revenue: 2000 }, { employeeId: 'emp_2', revenue: 100 }]);
+  addRevenue(DB, 'rf2', day(9), -300, [{ name: 'أحمد علي', revenue: -300 }]);
+  addRevenue(DB, 'rf3', day(10), -400, [{ employeeId: 'emp_2', revenue: -400 }]);
+  const calc = await call(calculate, env, { token: data.users.supervisor.token, body: { branchId: 'branch_1010', period: PERIOD, week: 2 } });
+  assert.equal(calc.status, 200, JSON.stringify(calc.body));
+  const byId = Object.fromEntries(calc.body.employees.map((e: any) => [e.employeeId, [e.totalRevenue, e.bonusAmount]]));
+  assert.deepEqual(byId, { emp_1: [1700, 50], emp_2: [0, 0] });
+  assert.equal(calc.body.attributedRevenue, 1700);
+  assert.equal(calc.body.totalBonus, 50);
+});
+
+test('attribution: a known id settles the line — another branch or inactive, never a namesake', () => {
+  const employees = [
+    { id: 'emp_9', name: 'خالد سالم', active: true },
+    { id: 'emp_old', name: 'سعيد', active: false },
+    { id: 'emp_new', name: 'سعيد', active: true },
+  ];
+  const result = attributeRevenue(
+    [
+      { name: 'خالد سالم', employeeId: 'emp_3', amountMinor: 2000_00 }, // emp_3 works in another branch
+      { name: 'سعيد', employeeId: 'emp_old', amountMinor: 300_00 }, // inactive here: not given to the active namesake
+      { name: 'سعيد', employeeId: 'emp_unknown', amountMinor: 100_00 }, // unknown id: name matching applies
+    ],
+    employees,
+    new Map([['emp_3', 'خالد سالم']]),
+  );
+  assert.equal(result.byEmployee.has('emp_9'), false);
+  assert.equal(result.byEmployee.get('emp_new'), 100_00);
+  assert.deepEqual(result.unmatched, [
+    { name: 'خالد سالم', totalRevenue: 2000, reason: 'other_branch' },
+    { name: 'سعيد', totalRevenue: 300, reason: 'inactive' },
+  ]);
+});
+
+for (const variant of ['008', 'legacy'] as const) {
+  test(`revenue of another branch's employee id is not credited to a namesake here (${variant})`, async () => {
+    const { env, DB, data } = await setup(variant);
+    // a branch_1010 employee with the same name as emp_3 (خالد سالم, branch_2020)
+    DB.raw.exec(`INSERT INTO employees (id, branch_id, employee_name, national_id, base_salary, is_active) VALUES ('emp_9', 'branch_1010', 'خالد سالم', '9009', 2000, 1)`);
+    addRevenue(DB, 'ob1', day(9), 2000, [{ employeeId: 'emp_3', name: 'خالد سالم', revenue: 2000 }]);
+    addRevenue(DB, 'ob2', day(10), 500, [{ employee_id: 'emp_3', amount: 500 }]); // id only: the name is looked up
+    const calc = await call(calculate, env, { token: data.users.supervisor.token, body: { branchId: 'branch_1010', period: PERIOD, week: 2 } });
+    assert.equal(calc.status, 200, JSON.stringify(calc.body));
+    const emp9 = calc.body.employees.find((e: any) => e.employeeId === 'emp_9');
+    assert.deepEqual([emp9.totalRevenue, emp9.bonusAmount], [0, 0]);
+    assert.equal(calc.body.totalBonus, 0);
+    assert.deepEqual(calc.body.unmatched, [{ name: 'خالد سالم', totalRevenue: 2500, reason: 'other_branch' }]);
+  });
+}
+
+test('a NULL-status row does not block resubmission (008)', async () => {
+  const { env, DB, data } = await setup('008');
+  seedWeek2(DB);
+  const p = parsePeriod(PERIOD)!;
+  DB.raw
+    .prepare(
+      `INSERT INTO bonus_records (id, branch_id, week_number, month, year, start_date, end_date, employee_bonuses, total_paid, status)
+       VALUES ('nul', 'branch_1010', 2, ?, ?, ?, ?, '[]', 0, NULL)`,
+    )
+    .run(String(p.month), p.year, W2.start, W2.end);
+  const body = { branchId: 'branch_1010', period: PERIOD, week: 2 };
+  const calc = await call(calculate, env, { token: data.users.supervisor.token, body });
+  assert.equal(calc.body.record.status, 'pending');
+  assert.equal(calc.body.permissions.canSubmit, true);
+  const sent = await call(save, env, { token: data.users.supervisor.token, body });
+  assert.equal(sent.status, 201, JSON.stringify(sent.body));
+  assert.equal(DB.one('SELECT id FROM bonus_records WHERE id = ?', 'nul'), undefined);
+  assert.equal(DB.query('SELECT id FROM bonus_records').length, 1);
+  assert.equal((await call(approve, env, { token: data.users.admin.token, body: { id: sent.body.record.id } })).status, 200);
+});
+
+test('pickPayableBonusRows keeps one approved row per week: the latest approval', () => {
+  const rows = [
+    { id: 'a', branch_id: 'b1', year: 2026, month: 'سبتمبر', week_number: 2, approved_by: 'x', approved_at: '2026-09-15 10:00:00', created_at: '2026-09-20 10:00:00' },
+    { id: 'b', branch_id: 'b1', year: 2026, month: '9', week_number: 2, status: 'approved', approved_at: '2026-09-16 10:00:00', created_at: '2026-09-14 10:00:00' },
+    { id: 'c', branch_id: 'b1', year: 2026, month: '09', week_number: 2, status: 'pending', created_at: '2026-09-30 10:00:00' },
+    { id: 'd', branch_id: 'b1', year: 2026, month: '9', week_number: 2, status: 'paid', approved_by: 'x', approved_at: '2026-09-30 10:00:00' },
+    { id: 'e', branch_id: 'b1', year: 2026, month: '9', week_number: 2, status: 'rejected', approved_by: 'x', approved_at: '2026-09-30 10:00:00' },
+    // week 3: same recency → larger id wins; approved_at missing → created_at counts
+    { id: 'w3a', branch_id: 'b1', year: 2026, month: '9', week_number: 3, approved_by: 'x', created_at: '2026-09-22 10:00:00' },
+    { id: 'w3b', branch_id: 'b1', year: 2026, month: '9', week_number: 3, approved_by: 'x', created_at: '2026-09-22 10:00:00' },
+    { id: 'w4', branch_id: 'b1', year: 2026, month: '9', week_number: 4, status: 'draft', approved_by: '' },
+  ];
+  assert.deepEqual(pickPayableBonusRows(rows).map(r => r.id), ['b', 'w3b']);
+  assert.deepEqual(pickPayableBonusRows([]), []);
+});
+
+/** Two approved rows for week 2 of PERIOD: 35 approved first, then 50 (on 008 under two month spellings). */
+function seedDoubleApproval(DB: FakeD1, variant: '008' | 'legacy') {
+  const p = parsePeriod(PERIOD)!;
+  const arabic = MONTH_NAMES_AR[p.month - 1];
+  const entries = (amount: number) => JSON.stringify([{ employeeId: 'emp_1', employeeName: 'أحمد علي', totalRevenue: 1500, bonusAmount: amount }]);
+  const rows: Array<[string, string, number, string, string]> = [
+    // id, month, amount, approved_at, created_at — the 35 row was created later but approved earlier
+    ['dup_35', arabic, 35, `${day(16)} 09:00:00`, `${day(15)} 12:00:00`],
+    ['dup_50', variant === '008' ? String(p.month) : arabic, 50, `${day(17)} 09:00:00`, `${day(15)} 08:00:00`],
+  ];
+  for (const [id, month, amount, approvedAt, createdAt] of rows) {
+    if (variant === '008') {
+      DB.raw
+        .prepare(
+          `INSERT INTO bonus_records (id, branch_id, week_number, month, year, start_date, end_date, employee_bonuses, total_paid, status, approved_by, approved_at, created_at)
+           VALUES (?, 'branch_1010', 2, ?, ?, ?, ?, ?, ?, 'approved', 'u_admin', ?, ?)`,
+        )
+        .run(id, month, p.year, W2.start, W2.end, entries(amount), amount, approvedAt, createdAt);
+    } else {
+      DB.raw
+        .prepare(
+          `INSERT INTO bonus_records (id, branch_id, week_number, month, year, employee_bonuses, total_bonus_paid, approved_by, approved_at, created_at)
+           VALUES (?, 'branch_1010', 2, ?, ?, ?, ?, 'boss', ?, ?)`,
+        )
+        .run(id, month, p.year, entries(amount), amount, approvedAt, createdAt);
+    }
+  }
+}
+
+for (const variant of ['008', 'legacy'] as const) {
+  test(`the bonus page shows what payroll pays when a week has several approved rows (${variant})`, async () => {
+    const { env, DB, data } = await setup(variant);
+    seedDoubleApproval(DB, variant);
+    const month = await call(list, env, { token: data.users.admin.token, query: { branchId: 'branch_1010', period: PERIOD } });
+    assert.equal(month.status, 200, JSON.stringify(month.body));
+    const payroll = await computeBranchPayroll(DB as any, 'branch_1010', PERIOD);
+    const paid = payroll.items.find(i => i.employeeId === 'emp_1')!.bonus;
+    assert.equal(paid, 50);
+    assert.equal(month.body.approvedTotal, paid);
+    assert.deepEqual(month.body.employees.map((e: any) => [e.employeeId, e.approvedBonus, e.weeks]), [['emp_1', 50, [2]]]);
+    const w2 = month.body.weeks.find((w: any) => w.week === 2);
+    assert.equal(w2.record.id, 'dup_50');
+    assert.equal(w2.record.total, 50);
+    assert.equal(w2.multipleApproved, true);
+    const calc = await call(calculate, env, { token: data.users.admin.token, body: { branchId: 'branch_1010', period: PERIOD, week: 2 } });
+    assert.equal(calc.body.record.id, 'dup_50');
+  });
+
+  test(`a week is approved once: a duplicate pending row cannot be approved too (${variant})`, async () => {
+    const { env, DB, data } = await setup(variant);
+    const p = parsePeriod(PERIOD)!;
+    const arabic = MONTH_NAMES_AR[p.month - 1];
+    addRevenue(DB, 'r1', day(9), 2000, [{ name: 'أحمد علي', revenue: 2000 }]);
+    const entries = JSON.stringify([{ employeeId: 'emp_1', employeeName: 'أحمد علي', totalRevenue: 2000, bonusAmount: 100 }]);
+    for (const id of ['P1', 'P2']) {
+      if (variant === 'legacy') {
+        DB.raw
+          .prepare(`INSERT INTO bonus_records (id, branch_id, week_number, month, year, employee_bonuses, total_bonus_paid) VALUES (?, 'branch_1010', 2, ?, ?, ?, 100)`)
+          .run(id, arabic, p.year, entries);
+      } else {
+        DB.raw
+          .prepare(
+            `INSERT INTO bonus_records (id, branch_id, week_number, month, year, start_date, end_date, employee_bonuses, total_paid, status)
+             VALUES (?, 'branch_1010', 2, ?, ?, ?, ?, ?, 100, 'draft')`,
+          )
+          .run(id, id === 'P1' ? arabic : String(p.month), p.year, W2.start, W2.end, entries);
+      }
+    }
+    const admin = data.users.admin.token;
+    assert.equal((await call(approve, env, { token: admin, body: { id: 'P1' } })).status, 200);
+    const second = await call(approve, env, { token: admin, body: { id: 'P2' } });
+    assert.equal(second.status, 409);
+    assert.equal(second.body.duplicate, true);
+    const p2 = DB.one<Record<string, unknown>>('SELECT * FROM bonus_records WHERE id = ?', 'P2')!;
+    assert.equal(p2.approved_by, null);
+
+    // the SQL guard alone also refuses (race: both requests passed the pre-check)
+    const { approveStatement, getBonusSchema } = await import('../bonus');
+    const schema = await getBonusSchema(DB as any);
+    const raced = await approveStatement(DB as any, schema, { id: 'P2', branchId: 'branch_1010', period: PERIOD, week: 2 }, 'u_admin').run();
+    assert.equal(Number(raced.meta?.changes ?? 0), 0);
+
+    const month = await call(list, env, { token: admin, query: { branchId: 'branch_1010', period: PERIOD } });
+    assert.equal(month.body.approvedTotal, 100);
+    assert.equal(month.body.weeks.find((w: any) => w.week === 2).multipleApproved, false);
+    const payroll = await computeBranchPayroll(DB as any, 'branch_1010', PERIOD);
+    assert.equal(payroll.items.find(i => i.employeeId === 'emp_1')!.bonus, 100);
+  });
+}
+
+/** 09:00 in Riyadh on 1 November 2026: every week of October is over. */
+const NOV_1 = Date.parse('2026-11-01T06:00:00Z');
+
+for (const variant of ['008', 'legacy'] as const) {
+  test(`a late week of a paid payroll month rolls over to the next open payroll (${variant})`, async () => {
+    mock.timers.enable({ apis: ['Date'], now: NOV_1 });
+    try {
+      const { env, DB, data } = await setup(variant);
+      await ensureFinanceSchema(DB as any);
+      const sup = data.users.supervisor.token;
+      const admin = data.users.admin.token;
+      addRevenue(DB, 'oct_w5', '2026-10-30', 2000, [{ name: 'أحمد علي', revenue: 2000 }]);
+      addRevenue(DB, 'oct_w4', '2026-10-25', 2500, [{ name: 'محمد إسماعيل', revenue: 2500 }]);
+      DB.raw.exec(`INSERT INTO payroll_runs (id, branch_id, period, status) VALUES ('run_oct', 'branch_1010', '2026-10', 'paid')`);
+      const week5 = { branchId: 'branch_1010', period: '2026-10', week: 5 };
+
+      // October's payroll is approved and paid, yet week 5 can still be sent…
+      const calc = await call(calculate, env, { token: sup, body: week5 });
+      assert.equal(calc.status, 200, JSON.stringify(calc.body));
+      assert.equal(calc.body.weekComplete, true);
+      assert.equal(calc.body.locked, true);
+      assert.equal(calc.body.rolledOver, true);
+      assert.equal(calc.body.payrollPeriod, '2026-11');
+      assert.equal(calc.body.permissions.canSubmit, true);
+      const sent = await call(save, env, { token: sup, body: week5 });
+      assert.equal(sent.status, 201, JSON.stringify(sent.body));
+      assert.equal(sent.body.record.status, 'pending');
+      assert.equal(DB.query('SELECT id FROM payroll_adjustments').length, 0); // nothing before approval
+      const id = sent.body.record.id;
+
+      // …and approved on 1 November: it goes to November's payroll as ledger entries
+      const approved = await call(approve, env, { token: admin, body: { id } });
+      assert.equal(approved.status, 200, JSON.stringify(approved.body));
+      assert.equal(approved.body.rolledOver, true);
+      assert.equal(approved.body.payrollPeriod, '2026-11');
+      assert.equal(approved.body.record.status, 'approved');
+      assert.equal(approved.body.record.rolloverPeriod, '2026-11');
+      assert.match(approved.body.message, /نوفمبر 2026/);
+      const rows = DB.query<Record<string, unknown>>('SELECT * FROM payroll_adjustments');
+      assert.equal(rows.length, 1);
+      const r = rows[0];
+      assert.deepEqual(
+        [r.branch_id, r.employee_id, r.employee_name, r.period, r.kind, r.category, r.amount, r.source_type, r.source_id, r.status, r.created_by],
+        ['branch_1010', 'emp_1', 'أحمد علي', '2026-11', 'earning', 'bonus', 100, 'bonus_record', `${id}:emp_1`, 'active', 'u_admin'],
+      );
+      assert.equal(r.source_id, bonusRolloverSourceId(id, 'emp_1'));
+      assert.equal(r.description, 'بونص الأسبوع 5 من أكتوبر 2026 (مرحّل)');
+      const nov = await computeBranchPayroll(DB as any, 'branch_1010', '2026-11');
+      assert.equal(nov.items.find(i => i.employeeId === 'emp_1')!.bonus, 100);
+      const note = notificationsFor(DB, 'u_sup', 'bonus_approved');
+      assert.equal(note.length, 1);
+      assert.match(String(note[0].message), /يُضاف تلقائياً إلى مسير رواتب نوفمبر 2026/);
+
+      // the manager's one-step "submit and approve" rolls over the same way
+      const direct = await call(save, env, { token: admin, body: { ...week5, week: 4, approve: true } });
+      assert.equal(direct.status, 201, JSON.stringify(direct.body));
+      assert.equal(direct.body.rolledOver, true);
+      assert.equal(direct.body.record.rolloverPeriod, '2026-11');
+      const directRow = DB.one<Record<string, unknown>>('SELECT * FROM payroll_adjustments WHERE source_id = ?', `${direct.body.record.id}:emp_2`)!;
+      assert.deepEqual([directRow.period, directRow.category, directRow.amount], ['2026-11', 'bonus', 175]);
+      assert.equal(directRow.description, 'بونص الأسبوع 4 من أكتوبر 2026 (مرحّل)');
+
+      // October's month view says where the bonus went
+      const month = await call(list, env, { token: sup, query: { branchId: 'branch_1010', period: '2026-10' } });
+      assert.equal(month.body.locked, true);
+      assert.equal(month.body.payrollPeriod, '2026-11');
+      assert.equal(month.body.approvedTotal, 275);
+      assert.equal(month.body.rolledOverTotal, 275);
+      assert.equal(month.body.weeks.find((w: any) => w.week === 5).record.rolloverPeriod, '2026-11');
+      assert.equal(month.body.weeks.find((w: any) => w.week === 4).record.rolloverPeriod, '2026-11');
+    } finally {
+      mock.timers.reset();
+    }
+  });
+}
+
+test('rollover skips closed months and lands all-or-nothing (008)', async () => {
+  mock.timers.enable({ apis: ['Date'], now: NOV_1 });
+  try {
+    const { env, DB, data } = await setup('008');
+    await ensureFinanceSchema(DB as any);
+    addRevenue(DB, 'oct_w5', '2026-10-30', 2000, [{ name: 'أحمد علي', revenue: 1500 }, { name: 'محمد إسماعيل', revenue: 500 }]);
+    DB.raw.exec(`INSERT INTO payroll_runs (id, branch_id, period, status) VALUES ('run_oct', 'branch_1010', '2026-10', 'paid'), ('run_nov', 'branch_1010', '2026-11', 'approved')`);
+    const sent = await call(save, env, { token: data.users.supervisor.token, body: { branchId: 'branch_1010', period: '2026-10', week: 5 } });
+    assert.equal(sent.status, 201, JSON.stringify(sent.body));
+    assert.equal(sent.body.payrollPeriod, '2026-12'); // October and November are both closed
+    const id = sent.body.record.id;
+
+    // December's payroll gets approved while the bonus approval is in flight → nothing lands
+    const realBatch = DB.batch.bind(DB);
+    (DB as any).batch = async (statements: any[]) => {
+      if (statements.some(st => /INTO payroll_adjustments/.test(st.sql))) {
+        (DB as any).batch = realBatch;
+        DB.raw.exec(`INSERT INTO payroll_runs (id, branch_id, period, status) VALUES ('run_dec', 'branch_1010', '2026-12', 'approved')`);
+      }
+      return realBatch(statements);
+    };
+    const raced = await call(approve, env, { token: data.users.admin.token, body: { id } });
+    assert.equal(raced.status, 409, JSON.stringify(raced.body));
+    (DB as any).batch = realBatch;
+    assert.equal(DB.query('SELECT id FROM payroll_adjustments').length, 0);
+    assert.equal(DB.one<Record<string, unknown>>('SELECT status, approved_by FROM bonus_records WHERE id = ?', id)!.status, 'pending');
+
+    // retried: January 2027 is the first open payroll now
+    const again = await call(approve, env, { token: data.users.admin.token, body: { id } });
+    assert.equal(again.status, 200, JSON.stringify(again.body));
+    assert.equal(again.body.payrollPeriod, '2027-01');
+    const rows = DB.query<Record<string, unknown>>('SELECT employee_id, period, amount, source_id FROM payroll_adjustments ORDER BY employee_id');
+    assert.deepEqual(rows, [{ employee_id: 'emp_1', period: '2027-01', amount: 50, source_id: `${id}:emp_1` }]); // emp_2 (500) earned nothing
+  } finally {
+    mock.timers.reset();
+  }
 });

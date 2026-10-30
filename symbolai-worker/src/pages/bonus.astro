@@ -16,7 +16,7 @@ if (!cookieHeader?.includes('session=')) {
         <p class="text-muted-foreground mt-2 max-w-3xl leading-relaxed">
           يُحسب بونص كل موظف <strong>تلقائياً</strong> من إيرادات الكاشير المسجّلة في صفحة الإيرادات، لكل أسبوع من الشهر
           (1–7، 8–14، 15–21، 22–28، 29–نهاية الشهر) وفق شرائح يحددها المدير. بعد انتهاء الأسبوع يرسله مشرف الفرع للاعتماد،
-          وبعد اعتماد المدير يُضاف تلقائياً إلى مسير رواتب الشهر.
+          وبعد اعتماد المدير يُضاف تلقائياً إلى مسير رواتب الشهر، أو إلى أول مسير مفتوح بعده إذا كان مسير الشهر قد اعتُمد.
         </p>
       </div>
       <a
@@ -124,7 +124,7 @@ if (!cookieHeader?.includes('session=')) {
       byId,
       type FinanceContextPayload,
     } from '@/lib/finance/client';
-    import { parsePeriod } from '@/lib/finance/catalog';
+    import { parsePeriod, periodLabelAr } from '@/lib/finance/catalog';
 
     type Status = 'pending' | 'approved' | 'rejected' | 'paid';
     interface Entry {
@@ -150,6 +150,7 @@ if (!cookieHeader?.includes('session=')) {
       approvedByName: string | null;
       approvedAt: string | null;
       notes: string | null;
+      rolloverPeriod: string | null;
     }
     interface WeekItem {
       week: number;
@@ -168,9 +169,12 @@ if (!cookieHeader?.includes('session=')) {
       periodLabel: string;
       weeks: WeekItem[];
       approvedTotal: number;
+      rolledOverTotal: number;
       pendingCount: number;
       locked: boolean;
       payrollStatus: string | null;
+      payrollPeriod: string;
+      payrollPeriodLabel: string;
       employees: Array<{ employeeId: string; employeeName: string; approvedBonus: number; weeks: number[] }>;
     }
     interface WeekData {
@@ -186,13 +190,16 @@ if (!cookieHeader?.includes('session=')) {
       attributedRevenue: number;
       rowsWithoutBreakdown: number;
       employees: Entry[];
-      unmatched: Array<{ name: string; totalRevenue: number; reason: 'unknown' | 'inactive' | 'ambiguous' }>;
+      unmatched: Array<{ name: string; totalRevenue: number; reason: 'unknown' | 'inactive' | 'ambiguous' | 'other_branch' }>;
       totalBonus: number;
       eligibleCount: number;
       record: RecordView | null;
       duplicateCount: number;
       changedSinceSubmission: boolean;
       locked: boolean;
+      payrollPeriod: string;
+      payrollPeriodLabel: string;
+      rolledOver: boolean;
       permissions: { canSubmit: boolean; canApprove: boolean; canApproveDirectly: boolean; isManager: boolean };
     }
 
@@ -208,6 +215,7 @@ if (!cookieHeader?.includes('session=')) {
       unknown: 'لا يوجد موظف بهذا الاسم في الفرع',
       inactive: 'الموظف غير نشط',
       ambiguous: 'الاسم يطابق أكثر من موظف',
+      other_branch: 'الموظف مسجّل في فرع آخر',
     };
 
     const branchSelect = byId<HTMLSelectElement>('branch-select');
@@ -314,7 +322,8 @@ if (!cookieHeader?.includes('session=')) {
     function renderLock() {
       if (!month) return;
       if (month.locked) {
-        lockNotice.textContent = `مسير رواتب ${month.periodLabel} لهذا الفرع معتمد — لا يمكن إرسال أو اعتماد بونص جديد لهذا الشهر. لإضافة بونص يجب على المدير إعادة فتح المسير أولاً.`;
+        const state = month.payrollStatus === 'paid' ? 'مدفوع' : 'معتمد';
+        lockNotice.textContent = `مسير رواتب ${month.periodLabel} لهذا الفرع ${state}. يمكن مع ذلك إرسال بونص أسابيع هذا الشهر واعتماده، وعند الاعتماد يُضاف تلقائياً إلى أول مسير رواتب مفتوح: ${month.payrollPeriodLabel}.`;
         lockNotice.classList.remove('hidden');
       } else {
         lockNotice.classList.add('hidden');
@@ -328,7 +337,8 @@ if (!cookieHeader?.includes('session=')) {
           const state = weekState(w.complete, w.record);
           const selected = w.week === active;
           const amount = w.record ? `<p class="mt-3 text-lg font-bold">${m(w.record.total)}</p><p class="text-xs text-muted-foreground">${esc(w.record.eligibleCount)} موظف مستحق</p>` : `<p class="mt-3 text-lg font-bold text-muted-foreground">—</p><p class="text-xs text-muted-foreground">${w.complete ? 'لم يُرسل بعد' : 'الأسبوع جارٍ أو لم يبدأ'}</p>`;
-          const warn = w.multipleApproved ? `<p class="mt-2 text-xs text-red-700">⚠ أكثر من سجل معتمد لهذا الأسبوع</p>` : '';
+          const warn = w.multipleApproved ? `<p class="mt-2 text-xs text-red-700">⚠ أكثر من سجل معتمد لهذا الأسبوع — يُصرف آخر اعتماد فقط</p>` : '';
+          const rolled = w.record?.rolloverPeriod ? `<p class="mt-2 text-xs text-blue-800">مُرحّل إلى مسير ${esc(periodLabelAr(w.record.rolloverPeriod))}</p>` : '';
           return `<button type="button" data-week="${esc(w.week)}" aria-pressed="${selected}"
             class="week-card text-right rounded-lg border bg-card p-4 transition hover:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400 ${selected ? 'border-blue-500 ring-2 ring-blue-500' : ''}">
             <div class="flex items-start justify-between gap-2">
@@ -336,7 +346,7 @@ if (!cookieHeader?.includes('session=')) {
               ${chip(state)}
             </div>
             <p class="mt-1 text-xs text-muted-foreground">${esc(w.label)} (${esc(w.days)} ${w.days > 2 && w.days < 11 ? 'أيام' : 'يوم'})</p>
-            ${amount}${warn}
+            ${amount}${rolled}${warn}
           </button>`;
         })
         .join('');
@@ -377,7 +387,13 @@ if (!cookieHeader?.includes('session=')) {
           <div class="text-left">
             <p class="text-sm text-muted-foreground">إجمالي البونص المعتمد</p>
             <p class="text-3xl font-bold text-green-700">${m(month.approvedTotal)}</p>
-            <p class="text-xs text-muted-foreground">سيُضاف إلى مسير الرواتب تلقائياً</p>
+            <p class="text-xs text-muted-foreground">${
+              month.rolledOverTotal > 0
+                ? `منها ${m(month.rolledOverTotal)} مُرحّلة إلى مسير لاحق لأن مسير هذا الشهر كان معتمداً`
+                : month.locked
+                  ? `أي بونص يُعتمد الآن يُضاف إلى مسير ${esc(month.payrollPeriodLabel)}`
+                  : 'سيُضاف إلى مسير الرواتب تلقائياً'
+            }</p>
           </div>
         </div>
         ${month.pendingCount > 0 ? `<p class="mt-3 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">${esc(month.pendingCount)} ${month.pendingCount === 1 ? 'أسبوع' : 'أسابيع'} بانتظار اعتماد المدير — لا يدخل في المسير قبل الاعتماد.</p>` : ''}
@@ -438,12 +454,18 @@ if (!cookieHeader?.includes('session=')) {
         notes.push(`<p>أُرسل للاعتماد${record.submittedByName ? ` بواسطة <strong>${esc(record.submittedByName)}</strong>` : ''} في ${esc(formatDate(record.submittedAt, true))} بإجمالي ${m(record.total)}.</p>`);
       }
       if (record && (record.status === 'approved' || record.status === 'paid')) {
-        notes.push(`<p class="text-green-800">اعتمده <strong>${esc(record.approvedByName ?? '—')}</strong>${record.approvedAt ? ` في ${esc(formatDate(record.approvedAt, true))}` : ''} — يُضاف تلقائياً إلى مسير رواتب ${esc(d.periodLabel)}.</p>`);
+        const target = record.rolloverPeriod
+          ? `${esc(periodLabelAr(record.rolloverPeriod))} (مُرحّل لأن مسير ${esc(d.periodLabel)} كان معتمداً عند الاعتماد)`
+          : esc(d.periodLabel);
+        notes.push(`<p class="text-green-800">اعتمده <strong>${esc(record.approvedByName ?? '—')}</strong>${record.approvedAt ? ` في ${esc(formatDate(record.approvedAt, true))}` : ''} — يُضاف تلقائياً إلى مسير رواتب ${target}.</p>`);
       }
       if (record?.status === 'rejected') {
         notes.push(`<p class="text-red-800">رُفض الطلب${record.notes ? ` — السبب: <strong>${esc(record.notes)}</strong>` : ''}. يمكن مراجعة الإيرادات ثم إعادة الإرسال.</p>`);
       }
       const warnings: string[] = [];
+      if (d.rolledOver && (!record || !(record.status === 'approved' || record.status === 'paid'))) {
+        warnings.push(`مسير رواتب ${esc(d.periodLabel)} معتمد — عند اعتماد هذا البونص يُضاف تلقائياً إلى مسير رواتب ${esc(d.payrollPeriodLabel)}.`);
+      }
       if (record?.status === 'pending' && d.changedSinceSubmission) {
         warnings.push(`تغيّرت إيرادات هذا الأسبوع أو شرائح البونص منذ إرسال الطلب (المُرسَل ${m(record.total)} — الحالي ${m(d.totalBonus)}). يجب إعادة الإرسال بالأرقام الحالية قبل الاعتماد.`);
       }
@@ -536,9 +558,7 @@ if (!cookieHeader?.includes('session=')) {
       const hint = (text: string) => `<p class="ml-auto text-sm text-muted-foreground">${text}</p>`;
       const noRevenue = d.revenueRowCount === 0;
 
-      if (d.locked) {
-        parts.push(hint('مسير رواتب هذا الشهر معتمد — البونص مقفل.'));
-      } else if (record && (record.status === 'approved' || record.status === 'paid')) {
+      if (record && (record.status === 'approved' || record.status === 'paid')) {
         parts.push(hint('البونص معتمد ويُضاف تلقائياً إلى مسير الرواتب.'));
       } else if (!d.weekComplete) {
         parts.push(hint(`يمكن الإرسال للاعتماد بعد انتهاء الأسبوع في ${esc(formatDate(d.range.end))}.`));
@@ -562,7 +582,7 @@ if (!cookieHeader?.includes('session=')) {
       } else if (record?.status === 'pending') {
         parts.push(hint('بانتظار اعتماد المدير.'));
       }
-      if (noRevenue && !d.locked && d.weekComplete && (!record || record.status !== 'approved')) {
+      if (noRevenue && d.weekComplete && (!record || record.status !== 'approved')) {
         parts.push(hint('لا يمكن الإرسال بدون إيرادات مسجلة.'));
       }
       host.innerHTML = parts.join('');
@@ -582,14 +602,14 @@ if (!cookieHeader?.includes('session=')) {
           );
           toast(r.message, 'success');
         } else if (action === 'approve-direct') {
-          if (!confirm(`اعتماد ${label} بإجمالي ${money(d.totalBonus)}؟ سيُضاف إلى مسير رواتب ${d.periodLabel}.`)) return;
+          if (!confirm(`اعتماد ${label} بإجمالي ${money(d.totalBonus)}؟ سيُضاف إلى مسير رواتب ${d.payrollPeriodLabel}.`)) return;
           const r = await withBusy(btn, 'جاري الاعتماد…', () =>
             api<{ message: string }>('/api/bonus/save', { body: { branchId: branchId(), period: period(), week: d.week, approve: true } }),
           );
           toast(r.message, 'success');
         } else if (action === 'approve') {
           if (!d.record) return;
-          if (!confirm(`اعتماد ${label} بإجمالي ${money(d.record.total)}؟ سيُضاف إلى مسير رواتب ${d.periodLabel}.`)) return;
+          if (!confirm(`اعتماد ${label} بإجمالي ${money(d.record.total)}؟ سيُضاف إلى مسير رواتب ${d.payrollPeriodLabel}.`)) return;
           const id = d.record.id;
           const r = await withBusy(btn, 'جاري الاعتماد…', () => api<{ message: string }>('/api/bonus/approve', { body: { id } }));
           toast(r.message, 'success');

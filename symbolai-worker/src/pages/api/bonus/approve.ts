@@ -3,25 +3,38 @@ import { canAccessBranch, logAudit, getClientIP } from '@/lib/permissions';
 import { financeAuth, ok, fail, readJsonObject, str, getBranchName, canApproveFinance } from '@/lib/finance/http';
 import { periodLabelAr } from '@/lib/finance/catalog';
 import { toMinor } from '@/lib/finance/money';
-import { isPeriodLocked } from '@/lib/finance/payroll-data';
+import { adjustmentInsertStatement, firstOpenPeriod } from '@/lib/finance/ledger';
 import { findRecipients, notifyUsers } from '@/lib/finance/notify';
 import {
+  approvalInsertGuard,
   approveStatement,
+  attachRolloverPeriods,
   attachUserNames,
   bonusFingerprint,
   bonusNotificationText,
   bonusPageLink,
+  bonusRolloverAdjustments,
   computeWeekBonus,
+  findWeekRecords,
   getBonusRecordById,
   getBonusSchema,
   getBonusTiers,
+  isFinalStatus,
   weekRange,
 } from '@/lib/finance/bonus';
 
 /**
  * Manager approval of a pending weekly bonus. The week is recomputed first: if
  * the revenues (or tiers) changed since submission the request is stale (409)
- * and must be resubmitted. Once approved, payroll picks the bonus up.
+ * and must be resubmitted. A week that already has another approved row
+ * cannot be approved twice (409).
+ *
+ * Where the bonus is paid:
+ * - the week's month payroll is still open → payroll reads the approved
+ *   bonus_records row directly (nothing else is written);
+ * - that payroll is already approved/paid → the bonus rolls over to the first
+ *   open payroll month as 'bonus' ledger entries (source 'bonus_record',
+ *   `${recordId}:${employeeId}`), written in the same batch as the approval.
  * Body: {id}
  */
 export const POST: APIRoute = async context => {
@@ -44,8 +57,9 @@ export const POST: APIRoute = async context => {
     if (!record.period || !weekRange(record.period, record.week)) return fail('فترة طلب البونص غير صالحة', 409);
 
     const period = record.period;
-    if (await isPeriodLocked(db, record.branchId, period)) {
-      return fail(`مسير رواتب ${periodLabelAr(period)} معتمد — لا يمكن اعتماد بونص جديد له`, 409, { locked: true });
+    const siblings = await findWeekRecords(db, record.branchId, period, record.week);
+    if (siblings.some(r => r.id !== id && isFinalStatus(r.status))) {
+      return fail('يوجد بونص معتمد آخر لهذا الأسبوع — لا يمكن اعتماد طلب مكرر. حدّث الصفحة', 409, { duplicate: true });
     }
 
     const { tiers } = await getBonusTiers(db);
@@ -63,13 +77,30 @@ export const POST: APIRoute = async context => {
     }
 
     const schema = await getBonusSchema(db);
-    const result = await approveStatement(db, schema, record, actor.id).run();
-    if (!Number(result.meta?.changes ?? 0)) {
-      return fail('تعذر الاعتماد: تغيرت حالة الطلب أو تم قفل مسير الرواتب للتو — حدّث الصفحة', 409);
+    // The week's own payroll if it is still open, else the first open month after it.
+    const payrollPeriod = await firstOpenPeriod(db, record.branchId, period);
+    const rolledOver = payrollPeriod !== period;
+    const rolloverStatements = rolledOver
+      ? bonusRolloverAdjustments({
+          recordId: id,
+          branchId: record.branchId,
+          period,
+          week: record.week,
+          payrollPeriod,
+          // Same lines as the stored request (fingerprints match), with guaranteed employee ids.
+          entries: computation.employees,
+          actorId: actor.id,
+          actorName: actor.displayName,
+        }).map(adj => adjustmentInsertStatement(db, adj, approvalInsertGuard(schema, record)))
+      : [];
+    // Ledger inserts first: they carry the same guards as the approval, so all land or none do.
+    const results = await db.batch([...rolloverStatements, approveStatement(db, schema, record, actor.id, payrollPeriod)]);
+    if (!Number(results[results.length - 1]?.meta?.changes ?? 0)) {
+      return fail('تعذر الاعتماد: تغيرت حالة الطلب أو اعتُمد بونص آخر لهذا الأسبوع أو تم قفل مسير الرواتب للتو — حدّث الصفحة', 409);
     }
 
     const updated = (await getBonusRecordById(db, id)) ?? record;
-    await attachUserNames(db, [updated]);
+    await Promise.all([attachUserNames(db, [updated]), attachRolloverPeriods(db, [updated])]);
     const branchName = await getBranchName(db, record.branchId);
 
     await logAudit(
@@ -78,7 +109,14 @@ export const POST: APIRoute = async context => {
       'update',
       'bonus_record',
       id,
-      { action: 'approve', branchId: record.branchId, period, week: record.week, total: record.total },
+      {
+        action: 'approve',
+        branchId: record.branchId,
+        period,
+        week: record.week,
+        total: record.total,
+        ...(rolledOver ? { rolledOverTo: payrollPeriod, ledgerEntries: rolloverStatements.length } : {}),
+      },
       getClientIP(context.request),
       context.request.headers.get('User-Agent') || undefined,
     );
@@ -88,7 +126,7 @@ export const POST: APIRoute = async context => {
     await notifyUsers(db, recipients, {
       type: 'bonus_approved',
       severity: 'success',
-      ...bonusNotificationText('approved', { week: record.week, period, branchName, total: record.total }),
+      ...bonusNotificationText('approved', { week: record.week, period, branchName, total: record.total, payrollPeriod }),
       link: bonusPageLink(record.branchId, period, record.week),
       relatedEntity: id,
       branchId: record.branchId,
@@ -96,7 +134,11 @@ export const POST: APIRoute = async context => {
 
     return ok({
       record: updated,
-      message: `تم اعتماد بونص الأسبوع ${record.week} وسيُضاف تلقائياً إلى مسير رواتب ${periodLabelAr(period)}`,
+      payrollPeriod,
+      rolledOver,
+      message: rolledOver
+        ? `تم اعتماد بونص الأسبوع ${record.week} — مسير رواتب ${periodLabelAr(period)} معتمد مسبقاً، لذلك أُضيف البونص إلى مسير رواتب ${periodLabelAr(payrollPeriod)}`
+        : `تم اعتماد بونص الأسبوع ${record.week} وسيُضاف تلقائياً إلى مسير رواتب ${periodLabelAr(period)}`,
     });
   } catch (error) {
     console.error('Approve bonus error:', error);

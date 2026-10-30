@@ -2,6 +2,7 @@ import type { APIRoute, APIContext } from 'astro';
 import { financeAuth, ok, fail, readJsonObject, resolveBranchId, getBranchName, canApproveFinance } from '@/lib/finance/http';
 import { parseMonth, parsePeriod, periodLabelAr, toPeriod } from '@/lib/finance/catalog';
 import { isPeriodLocked } from '@/lib/finance/payroll-data';
+import { firstOpenPeriod } from '@/lib/finance/ledger';
 import {
   bonusFingerprint,
   computeWeekBonus,
@@ -16,6 +17,8 @@ import {
 /**
  * Live bonus of one week, computed from the cashier revenues with the current
  * tiers, plus the stored request for that week (if any). Nothing is saved.
+ * `locked` = the week's month payroll is approved/paid; the week can still be
+ * submitted and approved, and then goes to `payrollPeriod` (first open month).
  * Body/query: {branchId, period: 'YYYY-MM', week: 1-5}.
  */
 async function handle(
@@ -48,10 +51,11 @@ async function handle(
     const computation = await computeWeekBonus(db, branchId, period, week, tiers);
     if (!computation) return fail(`${periodLabelAr(period)} لا يحتوي على أسبوع خامس`, 400);
 
-    const [records, locked, branchName] = await Promise.all([
+    const [records, locked, branchName, payrollPeriod] = await Promise.all([
       findWeekRecords(db, branchId, period, week),
       isPeriodLocked(db, branchId, period),
       getBranchName(db, branchId),
+      firstOpenPeriod(db, branchId, period),
     ]);
     const record = pickPrimaryRecord(records);
     const changedSinceSubmission =
@@ -61,7 +65,8 @@ async function handle(
 
     const isManager = canApproveFinance(session);
     const canSubmit = session.permissions.canManageBonus || isManager;
-    const open = !locked && computation.complete && (!record || !isFinalStatus(record.status));
+    // A closed payroll no longer blocks the bonus: approval rolls it over to payrollPeriod.
+    const open = computation.complete && (!record || !isFinalStatus(record.status));
 
     return ok({
       ...computation,
@@ -73,9 +78,12 @@ async function handle(
       duplicateCount: Math.max(0, records.length - 1),
       changedSinceSubmission,
       locked,
+      payrollPeriod,
+      payrollPeriodLabel: periodLabelAr(payrollPeriod),
+      rolledOver: payrollPeriod !== period,
       permissions: {
         canSubmit: canSubmit && open,
-        canApprove: isManager && !locked && record?.status === 'pending',
+        canApprove: isManager && record?.status === 'pending',
         canApproveDirectly: isManager && open,
         isManager,
       },

@@ -13,10 +13,13 @@
 // not import server-only code (http.ts, notify.ts, permissions).
 
 import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types';
-import { MONTH_NAMES_AR, daysInPeriod, monthVariants, parseMonth, parsePeriod, toPeriod, todayIso } from './catalog';
+import { MONTH_NAMES_AR, daysInPeriod, monthVariants, parseMonth, parsePeriod, periodLabelAr, toPeriod, todayIso } from './catalog';
 import { formatAmount, fromMinor, parsePositiveAmount, toMinor } from './money';
-import { isBonusRecordApproved, isPeriodLocked, normalizeArabicName } from './payroll-data';
+import { isPeriodLocked, normalizeArabicName } from './payroll-data';
 import { buildAdaptiveInsert, getTableColumns } from './schema';
+import { isLaterBonusApproval, isPayableBonusRow, pickPayableBonusRows, type BonusRecordRow } from './bonus-select';
+// Type-only: ledger.ts is server-only and must not be bundled into pages that use this module.
+import type { NewAdjustment, SqlGuard } from './ledger';
 
 // ---------------------------------------------------------------------------
 // Tiers
@@ -257,7 +260,7 @@ function nextDay(iso: string): string {
 export interface RevenueShare {
   name: string | null;
   employeeId: string | null;
-  /** Halalas, always > 0. */
+  /** Halalas, never 0. Negative = a refund/correction line, netted against the employee's sales. */
   amountMinor: number;
 }
 
@@ -337,7 +340,7 @@ function shareFromObject(obj: Record<string, unknown>): RevenueShare | null {
   const amount = firstAmount(obj);
   if ((!name && !employeeId) || amount === null) return null;
   const amountMinor = toMinor(amount);
-  return amountMinor > 0 ? { name, employeeId, amountMinor } : null;
+  return amountMinor !== 0 ? { name, employeeId, amountMinor } : null;
 }
 
 function looksLikeEntry(obj: Record<string, unknown>): boolean {
@@ -362,7 +365,7 @@ function collectShares(value: unknown, depth: number): RevenueShare[] {
         const name = cleanName(item[0]);
         const amount = parseLooseAmount(item[1]);
         const amountMinor = amount === null ? 0 : toMinor(amount);
-        if (name && amountMinor > 0) out.push({ name, employeeId: null, amountMinor });
+        if (name && amountMinor !== 0) out.push({ name, employeeId: null, amountMinor });
       }
     }
     return out;
@@ -396,7 +399,7 @@ function collectShares(value: unknown, depth: number): RevenueShare[] {
       employeeId = cleanId(v.employeeId ?? v.employee_id ?? v.id);
     }
     const amountMinor = amount === null ? 0 : toMinor(amount);
-    if (amountMinor > 0) out.push({ name, employeeId, amountMinor });
+    if (amountMinor !== 0) out.push({ name, employeeId, amountMinor });
   }
   return out;
 }
@@ -405,6 +408,7 @@ function collectShares(value: unknown, depth: number): RevenueShare[] {
  * Per-employee revenue shares from a revenues.employees value. Accepts JSON text
  * (also double-encoded), arrays of objects with any of the usual key spellings,
  * [name, amount] pairs, wrapper objects and {"name": amount} maps. Garbage → [].
+ * Negative lines (refunds) are kept: attributeRevenue nets them per employee.
  */
 export function parseRevenueEmployees(raw: unknown): RevenueShare[] {
   let value: unknown = raw;
@@ -434,7 +438,7 @@ export interface BranchEmployeeRef {
   active: boolean;
 }
 
-export type UnmatchedReason = 'unknown' | 'inactive' | 'ambiguous';
+export type UnmatchedReason = 'unknown' | 'inactive' | 'ambiguous' | 'other_branch';
 
 export interface UnmatchedRevenue {
   name: string;
@@ -443,14 +447,26 @@ export interface UnmatchedRevenue {
 }
 
 export interface AttributionResult {
-  /** employee id → halalas (active branch employees only) */
+  /** employee id → halalas, net of refunds and never negative (active branch employees only) */
   byEmployee: Map<string, number>;
   unmatched: UnmatchedRevenue[];
   attributedMinor: number;
 }
 
-/** Credits shares to branch employees: by id first, then by normalized Arabic name. */
-export function attributeRevenue(shares: RevenueShare[], employees: BranchEmployeeRef[]): AttributionResult {
+/**
+ * Credits shares to branch employees: by id first, then by normalized Arabic
+ * name. A share whose id belongs to a known employee is settled by that id
+ * alone — an employee of another branch (`otherBranch`: id → name) or an
+ * inactive one is reported as unmatched and never credited to a namesake.
+ * Name matching is only for shares without an id or with an unknown id.
+ * Every employee's lines (sales and refunds) are netted, and the net is
+ * clamped at zero.
+ */
+export function attributeRevenue(
+  shares: RevenueShare[],
+  employees: BranchEmployeeRef[],
+  otherBranch: ReadonlyMap<string, string> = new Map(),
+): AttributionResult {
   const byId = new Map(employees.map(e => [e.id, e]));
   const byName = new Map<string, BranchEmployeeRef[]>();
   for (const e of employees) {
@@ -461,7 +477,6 @@ export function attributeRevenue(shares: RevenueShare[], employees: BranchEmploy
 
   const credited = new Map<string, number>();
   const unmatched = new Map<string, { name: string; minor: number; reason: UnmatchedReason }>();
-  let attributedMinor = 0;
 
   const addUnmatched = (name: string, minor: number, reason: UnmatchedReason) => {
     const key = `${reason}:${normalizeArabicName(name)}`;
@@ -471,9 +486,16 @@ export function attributeRevenue(shares: RevenueShare[], employees: BranchEmploy
   };
 
   for (const share of shares) {
-    let employee: BranchEmployeeRef | null = share.employeeId ? byId.get(share.employeeId) ?? null : null;
+    if (!share.amountMinor) continue;
+    let employee: BranchEmployeeRef | null = null;
     let reason: UnmatchedReason = 'unknown';
-    if (!employee && share.name) {
+    if (share.employeeId && byId.has(share.employeeId)) {
+      employee = byId.get(share.employeeId)!;
+    } else if (share.employeeId && otherBranch.has(share.employeeId)) {
+      const known = otherBranch.get(share.employeeId);
+      addUnmatched(share.name ?? (known || share.employeeId), share.amountMinor, 'other_branch');
+      continue;
+    } else if (share.name) {
       const candidates = byName.get(normalizeArabicName(share.name)) ?? [];
       const active = candidates.filter(c => c.active);
       if (active.length === 1) employee = active[0];
@@ -490,12 +512,21 @@ export function attributeRevenue(shares: RevenueShare[], employees: BranchEmploy
       continue;
     }
     credited.set(employee.id, (credited.get(employee.id) ?? 0) + share.amountMinor);
-    attributedMinor += share.amountMinor;
+  }
+
+  // Refunds lower an employee's revenue but never below zero.
+  const byEmployee = new Map<string, number>();
+  let attributedMinor = 0;
+  for (const [id, minor] of credited) {
+    if (minor <= 0) continue;
+    byEmployee.set(id, minor);
+    attributedMinor += minor;
   }
 
   return {
-    byEmployee: credited,
+    byEmployee,
     unmatched: [...unmatched.values()]
+      .filter(u => u.minor > 0)
       .map(u => ({ name: u.name, totalRevenue: fromMinor(u.minor), reason: u.reason }))
       .sort((a, b) => b.totalRevenue - a.totalRevenue),
     attributedMinor,
@@ -606,7 +637,7 @@ export async function computeWeekBonus(
       const revenueId = String(row.revenue_id);
       if (!employeeId) continue;
       const list = contributionsByRevenue.get(revenueId) ?? [];
-      if (amountMinor > 0) list.push({ name: null, employeeId, amountMinor });
+      if (amountMinor !== 0) list.push({ name: null, employeeId, amountMinor });
       contributionsByRevenue.set(revenueId, list);
     }
   }
@@ -624,25 +655,29 @@ export async function computeWeekBonus(
     shares.push(...rowShares);
   }
 
-  // Contributions whose employee belongs to no branch employee: show the name if we can find it.
+  // Ids that are not employees of this branch: if they are employees of another
+  // branch, their revenue must not be credited to a namesake here (and we can
+  // show their name when the line has none).
   const knownIds = new Set(employees.map(e => e.id));
-  const strangers = [...new Set(shares.filter(s => !s.name && s.employeeId && !knownIds.has(s.employeeId)).map(s => s.employeeId!))];
-  if (strangers.length > 0) {
+  const strangers = [...new Set(shares.filter(s => s.employeeId && !knownIds.has(s.employeeId)).map(s => s.employeeId!))];
+  const otherBranch = new Map<string, string>();
+  for (let i = 0; i < strangers.length; i += 90) {
+    const chunk = strangers.slice(i, i + 90);
     try {
       const result = await db
-        .prepare(`SELECT id, employee_name FROM employees WHERE id IN (${strangers.map(() => '?').join(', ')})`)
-        .bind(...strangers)
+        .prepare(`SELECT id, employee_name FROM employees WHERE id IN (${chunk.map(() => '?').join(', ')})`)
+        .bind(...chunk)
         .all<Record<string, unknown>>();
-      const names = new Map((result.results ?? []).map(r => [String(r.id), String(r.employee_name ?? '')]));
-      for (const share of shares) {
-        if (!share.name && share.employeeId && names.get(share.employeeId)) share.name = names.get(share.employeeId)!;
-      }
+      for (const row of result.results ?? []) otherBranch.set(String(row.id), String(row.employee_name ?? ''));
     } catch (error) {
-      console.error('Bonus: employee name lookup failed:', error);
+      console.error('Bonus: employee lookup failed:', error);
     }
   }
+  for (const share of shares) {
+    if (!share.name && share.employeeId && otherBranch.get(share.employeeId)) share.name = otherBranch.get(share.employeeId)!;
+  }
 
-  const attribution = attributeRevenue(shares, employees);
+  const attribution = attributeRevenue(shares, employees, otherBranch);
   const sortedTiers = [...tiers].sort((a, b) => toMinor(a.minRevenue) - toMinor(b.minRevenue));
   const lines: BonusEntry[] = employees
     .filter(e => e.active)
@@ -732,13 +767,19 @@ export interface BonusRecordView {
   notes: string | null;
   startDate: string | null;
   endDate: string | null;
+  /**
+   * Set when the bonus was approved after its month's payroll was closed and
+   * was therefore added to a later payroll ('YYYY-MM') as ledger entries.
+   * Filled by attachRolloverPeriods.
+   */
+  rolloverPeriod: string | null;
 }
 
 export function bonusRecordStatus(row: Record<string, unknown>): BonusRecordStatus {
   const status = typeof row.status === 'string' ? row.status : null;
   if (status === 'rejected' || status === 'cancelled') return 'rejected';
   if (status === 'paid') return 'paid';
-  return isBonusRecordApproved(row) ? 'approved' : 'pending';
+  return isPayableBonusRow(row) ? 'approved' : 'pending';
 }
 
 function parseJson(value: unknown): unknown {
@@ -818,6 +859,7 @@ export function readBonusRecord(row: Record<string, unknown>): BonusRecordView {
     notes: typeof row.notes === 'string' && row.notes.trim() ? row.notes : null,
     startDate: typeof row.start_date === 'string' ? row.start_date : null,
     endDate: typeof row.end_date === 'string' ? row.end_date : null,
+    rolloverPeriod: null,
   };
 }
 
@@ -878,38 +920,101 @@ export async function getBonusRecordById(db: D1Database, id: string): Promise<Bo
   return row ? readBonusRecord(row) : null;
 }
 
-const STATUS_RANK: Record<BonusRecordStatus, number> = { approved: 0, paid: 0, pending: 1, rejected: 2 };
+/** A view in the shape of a raw bonus_records row, for the selector shared with payroll. */
+function viewAsRow(r: BonusRecordView): BonusRecordRow & { view: BonusRecordView } {
+  return {
+    id: r.id,
+    branch_id: r.branchId,
+    year: r.year,
+    month: r.month,
+    week_number: r.week,
+    status: r.status,
+    approved_by: r.approvedBy,
+    approved_at: r.approvedAt,
+    created_at: r.submittedAt,
+    view: r,
+  };
+}
 
-/** The record that represents a week: approved beats pending beats rejected; newest first within a rank. */
+/**
+ * The approved records payroll pays (bonus-select's pickPayableBonusRows):
+ * one per week — the latest approval — even when a week has several
+ * approved rows (legacy duplicates, mixed month spellings).
+ */
+export function payableRecords(records: BonusRecordView[]): BonusRecordView[] {
+  return pickPayableBonusRows(records.map(viewAsRow)).map(r => r.view);
+}
+
+function byLatestApproval(a: BonusRecordView, b: BonusRecordView): number {
+  const ra = viewAsRow(a);
+  const rb = viewAsRow(b);
+  return isLaterBonusApproval(ra, rb) ? -1 : isLaterBonusApproval(rb, ra) ? 1 : 0;
+}
+
+function byNewestSubmission(a: BonusRecordView, b: BonusRecordView): number {
+  const sa = String(a.submittedAt ?? '');
+  const sb = String(b.submittedAt ?? '');
+  if (sa !== sb) return sa > sb ? -1 : 1;
+  return a.id === b.id ? 0 : a.id > b.id ? -1 : 1;
+}
+
+/**
+ * The record that represents a week: the approved row payroll pays (latest
+ * approval), else a paid row, else the newest pending, else the newest rejected.
+ */
 export function pickPrimaryRecord(records: BonusRecordView[]): BonusRecordView | null {
   if (records.length === 0) return null;
-  return [...records].sort((a, b) => {
-    const rank = STATUS_RANK[a.status] - STATUS_RANK[b.status];
-    if (rank !== 0) return rank;
-    return String(b.submittedAt ?? '').localeCompare(String(a.submittedAt ?? ''));
-  })[0];
+  const payable = payableRecords(records).sort(byLatestApproval);
+  if (payable.length > 0) return payable[0];
+  const paid = records.filter(r => r.status === 'paid').sort(byLatestApproval);
+  if (paid.length > 0) return paid[0];
+  const pending = records.filter(r => r.status === 'pending').sort(byNewestSubmission);
+  if (pending.length > 0) return pending[0];
+  return [...records].sort(byNewestSubmission)[0];
 }
 
 export function isFinalStatus(status: BonusRecordStatus): boolean {
   return status === 'approved' || status === 'paid';
 }
 
-/** SQL for "this row is approved/paid" — mirrors isBonusRecordApproved. */
+/**
+ * SQL for "this row is approved/paid" — mirrors isPayableBonusRow plus 'paid'.
+ * NULL status is read as '' so a NULL-status draft is never "unknown" (a NULL
+ * here would make `NOT finalCondition` NULL too and hide the row from deletes).
+ */
 function finalCondition(schema: BonusSchema, alias = ''): string {
   const col = (name: string) => `${alias}${name}`;
   const approvedBy = `COALESCE(${col('approved_by')}, '') != ''`;
   if (!schema.hasStatus) return `(${approvedBy})`;
-  return `(${col('status')} IN ('approved', 'paid') OR (COALESCE(${col('status')}, '') NOT IN ('rejected', 'cancelled') AND ${approvedBy}))`;
+  const status = `COALESCE(${col('status')}, '')`;
+  return `(${status} IN ('approved', 'paid') OR (${status} NOT IN ('rejected', 'cancelled') AND ${approvedBy}))`;
 }
 
 /** SQL for "this row awaits the manager". */
-function pendingCondition(schema: BonusSchema): string {
-  const notApproved = `COALESCE(approved_by, '') = ''`;
+function pendingCondition(schema: BonusSchema, alias = ''): string {
+  const col = (name: string) => `${alias}${name}`;
+  const notApproved = `COALESCE(${col('approved_by')}, '') = ''`;
   if (!schema.hasStatus) return `(${notApproved})`;
-  return `(COALESCE(status, 'pending') IN ('pending', 'draft') AND ${notApproved})`;
+  return `(COALESCE(${col('status')}, 'pending') IN ('pending', 'draft') AND ${notApproved})`;
 }
 
 const LOCKED_RUN_SQL = `EXISTS (SELECT 1 FROM payroll_runs WHERE branch_id = ? AND period = ? AND status IN ('approved', 'paid'))`;
+
+/** "No other approved/paid row exists for this branch/year/week under any spelling of the month." */
+function noOtherFinalRowGuard(
+  schema: BonusSchema,
+  record: Pick<BonusRecordView, 'id' | 'branchId' | 'period' | 'week'>,
+): SqlGuard {
+  const p = parsePeriod(record.period ?? '');
+  if (!p) throw new Error(`Invalid bonus period: ${record.period}`);
+  const variants = monthVariants(p.month);
+  return {
+    sql: `NOT EXISTS (SELECT 1 FROM bonus_records o
+            WHERE o.branch_id = ? AND o.year = ? AND o.week_number = ? AND o.month IN (${variants.map(() => '?').join(', ')})
+              AND o.id != ? AND ${finalCondition(schema, 'o.')})`,
+    params: [record.branchId, p.year, record.week, ...variants, record.id],
+  };
+}
 
 function sqliteNow(): string {
   return new Date().toISOString().replace('T', ' ').slice(0, 19);
@@ -922,12 +1027,27 @@ export interface SubmissionInput {
   actorName: string;
   /** Admin "submit and approve" in one step. */
   approve: boolean;
+  /**
+   * Approve only: the payroll month the bonus goes to — the week's own month,
+   * or (rollover) the first open month after it when that payroll is closed.
+   * The batch is a no-op if this payroll gets approved/paid meanwhile.
+   */
+  payrollPeriod?: string | null;
+  /**
+   * Approve + rollover only: builds the ledger inserts (adjustmentInsertStatement)
+   * with the submission's guard, so the approval and its ledger entries land
+   * together or not at all.
+   */
+  rollover?: (guard: SqlGuard) => D1PreparedStatement[];
 }
 
 /**
  * Statements (run them in one db.batch) that replace the week's unapproved
- * rows with a fresh submission. Both are no-ops when the week is already
- * approved or the period's payroll is locked; check `results[insertIndex].meta.changes`.
+ * rows with a fresh submission. All of them are no-ops when the week already
+ * has an approved row — or, when approving, when the target payroll is
+ * closed; check `results[insertIndex].meta.changes`. A pending submission is
+ * accepted even if the week's own payroll is already approved: approving it
+ * later rolls it over to the next open payroll.
  */
 export function submissionStatements(
   db: D1Database,
@@ -941,12 +1061,18 @@ export function submissionStatements(
   const monthIn = `month IN (${variants.map(() => '?').join(', ')})`;
   const weekWhere = `branch_id = ? AND year = ? AND week_number = ? AND ${monthIn}`;
   const weekParams = [c.branchId, p.year, c.week, ...variants];
-  const guard = `NOT EXISTS (SELECT 1 FROM bonus_records WHERE ${weekWhere} AND ${finalCondition(schema)}) AND NOT ${LOCKED_RUN_SQL}`;
-  const guardParams = [...weekParams, c.branchId, c.period];
+  let guard = `NOT EXISTS (SELECT 1 FROM bonus_records WHERE ${weekWhere} AND ${finalCondition(schema)})`;
+  const guardParams: unknown[] = [...weekParams];
+  if (input.approve) {
+    guard += ` AND NOT ${LOCKED_RUN_SQL}`;
+    guardParams.push(c.branchId, input.payrollPeriod ?? c.period);
+  }
 
   const deleteStmt = db
     .prepare(`DELETE FROM bonus_records WHERE ${weekWhere} AND NOT ${finalCondition(schema)} AND ${guard}`)
     .bind(...weekParams, ...guardParams);
+
+  const rolloverStmts = input.approve && input.rollover ? input.rollover({ sql: guard, params: guardParams }) : [];
 
   const now = sqliteNow();
   const entries = c.employees.map(e => ({ ...e }));
@@ -961,6 +1087,7 @@ export function submissionStatements(
     attributedRevenue: c.attributedRevenue,
     unmatched: c.unmatched,
     tiers: c.tiers,
+    ...(input.approve && input.payrollPeriod && input.payrollPeriod !== c.period ? { rolledOverTo: input.payrollPeriod } : {}),
   };
   const values: Record<string, unknown> = {
     id: input.id,
@@ -984,24 +1111,142 @@ export function submissionStatements(
   const insert = buildAdaptiveInsert('bonus_records', schema.columns, values);
   const insertSql = insert.sql.replace(/\)\s*VALUES\s*\((.*)\)\s*$/s, `) SELECT $1 WHERE ${guard}`);
   const insertStmt = db.prepare(insertSql).bind(...insert.params, ...guardParams);
-  return { statements: [deleteStmt, insertStmt], insertIndex: 1 };
+  const statements = [deleteStmt, ...rolloverStmts, insertStmt];
+  return { statements, insertIndex: statements.length - 1 };
 }
 
-/** Marks a pending record approved (no-op if it is no longer pending or the payroll got locked). */
+/**
+ * Marks a pending record approved. No-op (→ 409) when it is no longer
+ * pending, when another approved/paid row already exists for the same
+ * branch/year/week (any month spelling), or when the payroll it goes to —
+ * `payrollPeriod`, default the record's own month — is approved/paid.
+ */
 export function approveStatement(
   db: D1Database,
   schema: BonusSchema,
-  record: Pick<BonusRecordView, 'id' | 'branchId' | 'period'>,
+  record: Pick<BonusRecordView, 'id' | 'branchId' | 'period' | 'week'>,
   actorId: string,
+  payrollPeriod?: string | null,
 ): D1PreparedStatement {
   const sets = [schema.hasStatus ? `status = 'approved'` : null, 'approved_by = ?', schema.columns.has('approved_at') ? 'approved_at = ?' : null]
     .filter(Boolean)
     .join(', ');
   const params: unknown[] = [actorId];
   if (schema.columns.has('approved_at')) params.push(sqliteNow());
+  const noDuplicate = noOtherFinalRowGuard(schema, record);
   return db
-    .prepare(`UPDATE bonus_records SET ${sets} WHERE id = ? AND ${pendingCondition(schema)} AND NOT ${LOCKED_RUN_SQL}`)
-    .bind(...params, record.id, record.branchId, record.period ?? '');
+    .prepare(
+      `UPDATE bonus_records SET ${sets}
+       WHERE id = ? AND ${pendingCondition(schema)} AND ${noDuplicate.sql} AND NOT ${LOCKED_RUN_SQL}`,
+    )
+    .bind(...params, record.id, ...noDuplicate.params, record.branchId, payrollPeriod ?? record.period ?? '');
+}
+
+/**
+ * Guard for the rollover ledger inserts that accompany approveStatement in the
+ * same batch (placed BEFORE it): the same conditions, evaluated on the same
+ * state, so either the approval and all its entries land or nothing does. The
+ * target payroll's lock is checked by adjustmentInsertStatement itself.
+ */
+export function approvalInsertGuard(
+  schema: BonusSchema,
+  record: Pick<BonusRecordView, 'id' | 'branchId' | 'period' | 'week'>,
+): SqlGuard {
+  const noDuplicate = noOtherFinalRowGuard(schema, record);
+  return {
+    sql: `EXISTS (SELECT 1 FROM bonus_records b WHERE b.id = ? AND ${pendingCondition(schema, 'b.')}) AND ${noDuplicate.sql}`,
+    params: [record.id, ...noDuplicate.params],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Rollover: a week approved after its month's payroll was closed
+// ---------------------------------------------------------------------------
+//
+// The bonus goes to the first open payroll month as 'bonus' ledger entries
+// (payroll_adjustments), one per employee with a bonus:
+//   source_type = 'bonus_record', source_id = `${recordId}:${employeeId}`.
+// Payroll must not also pay such a record from bonus_records directly (e.g.
+// if the old month is reopened): any ledger row whose source_id starts with
+// `${recordId}:` marks the record as rolled over.
+
+export const BONUS_ROLLOVER_SOURCE_TYPE = 'bonus_record' as const;
+
+export function bonusRolloverSourceId(recordId: string, employeeId: string): string {
+  return `${recordId}:${employeeId}`;
+}
+
+/** "بونص الأسبوع 5 من أكتوبر 2026 (مرحّل)" */
+export function bonusRolloverDescription(week: number, period: string): string {
+  return `بونص الأسبوع ${week} من ${periodLabelAr(period)} (مرحّل)`;
+}
+
+export interface RolloverInput {
+  recordId: string;
+  branchId: string;
+  /** The week's own month. */
+  period: string;
+  week: number;
+  /** The open payroll month that receives the bonus. */
+  payrollPeriod: string;
+  entries: ReadonlyArray<Pick<BonusEntry, 'employeeId' | 'employeeName' | 'bonusAmount'>>;
+  actorId: string;
+  actorName: string;
+}
+
+/** One ledger entry per employee with a bonus > 0 (pass each to adjustmentInsertStatement). */
+export function bonusRolloverAdjustments(input: RolloverInput): NewAdjustment[] {
+  const out: NewAdjustment[] = [];
+  for (const entry of input.entries) {
+    const minor = toMinor(entry.bonusAmount);
+    if (minor <= 0) continue;
+    const employeeId = String(entry.employeeId ?? '').trim();
+    // Payroll skips a rolled-over record entirely, so a line without an id would be lost.
+    if (!employeeId) throw new Error(`Bonus ${input.recordId}: entry without employee id cannot be rolled over`);
+    out.push({
+      branchId: input.branchId,
+      employeeId,
+      employeeName: entry.employeeName || employeeId,
+      period: input.payrollPeriod,
+      category: 'bonus',
+      amount: fromMinor(minor),
+      description: bonusRolloverDescription(input.week, input.period),
+      sourceType: BONUS_ROLLOVER_SOURCE_TYPE,
+      sourceId: bonusRolloverSourceId(input.recordId, employeeId),
+      createdBy: input.actorId,
+      createdByName: input.actorName,
+    });
+  }
+  return out;
+}
+
+/** Fills rolloverPeriod on approved/paid records that were rolled over to a later payroll. */
+export async function attachRolloverPeriods(db: D1Database, records: BonusRecordView[]): Promise<void> {
+  const finals = records.filter(r => isFinalStatus(r.status));
+  if (finals.length === 0) return;
+  const branchIds = [...new Set(finals.map(r => r.branchId))];
+  try {
+    for (const branchId of branchIds) {
+      const result = await db
+        .prepare(
+          `SELECT source_id, period, status FROM payroll_adjustments
+           WHERE branch_id = ? AND source_type = ? AND source_id IS NOT NULL
+           ORDER BY CASE WHEN status = 'active' THEN 0 ELSE 1 END, period`,
+        )
+        .bind(branchId, BONUS_ROLLOVER_SOURCE_TYPE)
+        .all<{ source_id: string; period: string; status: string }>();
+      const rows = result.results ?? [];
+      for (const record of finals) {
+        if (record.branchId !== branchId) continue;
+        const prefix = `${record.id}:`;
+        const hit = rows.find(row => String(row.source_id).startsWith(prefix));
+        if (hit) record.rolloverPeriod = String(hit.period);
+      }
+    }
+  } catch (error) {
+    // payroll_adjustments may not exist on a fresh database; nothing was rolled over then.
+    console.error('Bonus: rollover lookup failed:', error);
+  }
 }
 
 /**
@@ -1028,17 +1273,23 @@ export interface WeekOverview {
   days: number;
   label: string;
   complete: boolean;
+  /** The approved row payroll pays when there is one (see pickPrimaryRecord). */
   record: BonusRecordView | null;
   /** Other rows stored for the same week (legacy duplicates). */
   duplicateCount: number;
-  /** More than one approved row: payroll would add the bonus twice. */
+  /** More than one approved row (legacy duplicates): only the latest approval is paid. */
   multipleApproved: boolean;
 }
 
 export interface PeriodOverview {
   weeks: WeekOverview[];
-  /** What reaches payroll: approved bonus lines of the month. */
+  /**
+   * Approved bonus of the month as payroll pays it: one approved row per week
+   * (the latest approval). Includes weeks rolled over to a later payroll.
+   */
   approvedTotal: number;
+  /** Part of approvedTotal paid in a later payroll because this month's was already closed. */
+  rolledOverTotal: number;
   pendingCount: number;
   locked: boolean;
   /** Approved bonus per employee for the month. */
@@ -1052,7 +1303,7 @@ export async function loadPeriodOverview(
   today: string = todayIso(),
 ): Promise<PeriodOverview> {
   const [records, locked] = await Promise.all([loadPeriodRecords(db, branchId, period), isPeriodLocked(db, branchId, period)]);
-  await attachUserNames(db, records);
+  await Promise.all([attachUserNames(db, records), attachRolloverPeriods(db, records)]);
 
   const weeks: WeekOverview[] = weeksOfPeriod(period).map(range => {
     const own = records.filter(r => r.week === range.week);
@@ -1067,15 +1318,16 @@ export async function loadPeriodOverview(
     };
   });
 
-  // Mirrors loadApprovedBonuses: every approved row's positive lines.
+  // Same choice as payroll (pickPayableBonusRows): one approved row per week, its positive lines.
   let approvedMinor = 0;
+  let rolledOverMinor = 0;
   const perEmployee = new Map<string, { employeeId: string; employeeName: string; minor: number; weeks: number[] }>();
-  for (const r of records) {
-    if (r.status !== 'approved') continue;
+  for (const r of payableRecords(records)) {
     for (const e of r.entries) {
       const minor = toMinor(e.bonusAmount);
       if (minor <= 0) continue;
       approvedMinor += minor;
+      if (r.rolloverPeriod) rolledOverMinor += minor;
       const key = e.employeeId || normalizeArabicName(e.employeeName);
       const item = perEmployee.get(key) ?? { employeeId: e.employeeId, employeeName: e.employeeName, minor: 0, weeks: [] };
       item.minor += minor;
@@ -1087,6 +1339,7 @@ export async function loadPeriodOverview(
   return {
     weeks,
     approvedTotal: fromMinor(approvedMinor),
+    rolledOverTotal: fromMinor(rolledOverMinor),
     pendingCount: weeks.filter(w => w.record?.status === 'pending').length,
     locked,
     employees: [...perEmployee.values()]
@@ -1098,7 +1351,7 @@ export async function loadPeriodOverview(
 /** Week records (all rows) for one week of a period. */
 export async function findWeekRecords(db: D1Database, branchId: string, period: string, week: number): Promise<BonusRecordView[]> {
   const records = (await loadPeriodRecords(db, branchId, period)).filter(r => r.week === week);
-  await attachUserNames(db, records);
+  await Promise.all([attachUserNames(db, records), attachRolloverPeriods(db, records)]);
   return records;
 }
 
@@ -1114,13 +1367,26 @@ export function bonusPageLink(branchId: string, period: string, week: number): s
 
 export function bonusNotificationText(
   kind: 'submitted' | 'approved' | 'rejected',
-  info: { week: number; period: string; branchName: string; total: number; reason?: string | null },
+  info: {
+    week: number;
+    period: string;
+    branchName: string;
+    total: number;
+    reason?: string | null;
+    /** Approved: the payroll month that pays it, when it differs from the week's month (rollover). */
+    payrollPeriod?: string | null;
+  },
 ): { title: string; message: string } {
-  const p = parsePeriod(info.period);
-  const month = p ? `${MONTH_NAMES_AR[p.month - 1]} ${p.year}` : info.period;
+  const month = periodLabelAr(info.period);
   const head = `بونص الأسبوع ${info.week} من ${month} — ${info.branchName}: ${sar(info.total)}`;
   if (kind === 'submitted') return { title: 'طلب اعتماد بونص', message: head };
   if (kind === 'approved') {
+    if (info.payrollPeriod && info.payrollPeriod !== info.period) {
+      return {
+        title: 'تم اعتماد البونص',
+        message: `${head} — مسير رواتب ${month} معتمد مسبقاً، لذلك يُضاف تلقائياً إلى مسير رواتب ${periodLabelAr(info.payrollPeriod)}`,
+      };
+    }
     return { title: 'تم اعتماد البونص', message: `${head} — يُضاف تلقائياً إلى مسير رواتب ${month}` };
   }
   return { title: 'تم رفض طلب البونص', message: `${head} — السبب: ${info.reason ?? '—'}` };

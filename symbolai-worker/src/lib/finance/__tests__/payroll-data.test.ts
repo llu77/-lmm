@@ -108,3 +108,20 @@ test('riyadhDate prints the Riyadh calendar day of UTC timestamps', () => {
   assert.equal(riyadhDate(''), '');
   assert.equal(riyadhDate('garbage-value'), 'garbage-va');
 });
+
+test('a bonus rolled over to a later payroll is never also paid in its own month', async () => {
+  const { DB } = await setup('legacy');
+  const db = DB as any;
+  await ensureFinanceSchema(db);
+  insertLegacyBonus(DB, 'b_rolled', 1, 35, '2026-11-02 10:00:00');
+  insertLegacyBonus(DB, 'b_own', 2, 50, '2026-10-16 10:00:00');
+  // Week 1 was approved after October's payroll closed: it went to November's ledger,
+  // and that entry was later cancelled. Reopening October must still not pay it.
+  DB.raw.exec(`INSERT INTO payroll_adjustments (id, branch_id, employee_id, employee_name, period, kind, category, amount, source_type, source_id, status)
+               VALUES ('adj_roll', 'branch_1010', 'emp_1', 'أحمد علي', '2026-11', 'earning', 'bonus', 35, 'bonus_record', 'b_rolled:emp_1', 'cancelled'),
+                      ('adj_other_branch', 'branch_2020', 'emp_3', 'خالد سالم', '2026-11', 'earning', 'bonus', 20, 'bonus_record', 'b_own:emp_3', 'active')`);
+  const employees = await loadActiveEmployees(db, 'branch_1010');
+  const bonuses = await loadApprovedBonuses(db, 'branch_1010', '2026-10', employees);
+  // Another branch's rollover rows do not hide this branch's records.
+  assert.deepEqual(bonuses.map(b => [b.sourceId, b.amount]), [['b_own', 50]]);
+});

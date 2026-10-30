@@ -11,12 +11,14 @@ import {
   newId,
 } from '@/lib/finance/http';
 import { parsePeriod, periodLabelAr } from '@/lib/finance/catalog';
-import { isPeriodLocked } from '@/lib/finance/payroll-data';
+import { adjustmentInsertStatement, firstOpenPeriod } from '@/lib/finance/ledger';
 import { findRecipients, notifyByPermission, notifyUsers } from '@/lib/finance/notify';
 import {
+  attachRolloverPeriods,
   attachUserNames,
   bonusNotificationText,
   bonusPageLink,
+  bonusRolloverAdjustments,
   computeWeekBonus,
   findWeekRecords,
   getBonusRecordById,
@@ -34,6 +36,10 @@ import {
  * revenues and stores it as a pending request for the manager (replacing any
  * earlier pending/rejected request of that week). The manager may pass
  * `approve: true` to submit and approve in one step.
+ *
+ * A week whose month payroll is already approved/paid can still be submitted
+ * and approved: on approval it rolls over to the first open payroll month as
+ * 'bonus' ledger entries (see approve.ts), in the same batch.
  * Body: {branchId, period: 'YYYY-MM', week: 1-5, approve?: boolean}
  */
 export const POST: APIRoute = async context => {
@@ -63,9 +69,6 @@ export const POST: APIRoute = async context => {
   }
 
   try {
-    if (await isPeriodLocked(db, branchId, period)) {
-      return fail(`مسير رواتب ${periodLabelAr(period)} معتمد — لا يمكن تعديل البونص`, 409, { locked: true });
-    }
     const existing = await findWeekRecords(db, branchId, period, week);
     if (existing.some(r => isFinalStatus(r.status))) return fail('بونص هذا الأسبوع معتمد بالفعل', 409);
 
@@ -78,12 +81,30 @@ export const POST: APIRoute = async context => {
 
     const schema = await getBonusSchema(db);
     const id = newId('bonus');
+    // The week's own payroll if it is still open, else the first open month after it.
+    const payrollPeriod = await firstOpenPeriod(db, branchId, period);
+    const rolledOver = payrollPeriod !== period;
     const { statements, insertIndex } = submissionStatements(db, schema, {
       id,
       computation,
       actorId: actor.id,
       actorName: actor.displayName,
       approve,
+      payrollPeriod,
+      rollover:
+        approve && rolledOver
+          ? guard =>
+              bonusRolloverAdjustments({
+                recordId: id,
+                branchId,
+                period,
+                week,
+                payrollPeriod,
+                entries: computation.employees,
+                actorId: actor.id,
+                actorName: actor.displayName,
+              }).map(adj => adjustmentInsertStatement(db, adj, guard))
+          : undefined,
     });
 
     let changes = 0;
@@ -99,7 +120,7 @@ export const POST: APIRoute = async context => {
     if (changes !== 1) return fail('تعذر الحفظ: تم اعتماد بونص هذا الأسبوع أو قفل مسير الرواتب للتو', 409);
 
     const record = await getBonusRecordById(db, id);
-    if (record) await attachUserNames(db, [record]);
+    if (record) await Promise.all([attachUserNames(db, [record]), attachRolloverPeriods(db, [record])]);
     const branchName = await getBranchName(db, branchId);
 
     await logAudit(
@@ -115,6 +136,7 @@ export const POST: APIRoute = async context => {
         totalBonus: computation.totalBonus,
         eligible: computation.eligibleCount,
         status: approve ? 'approved' : 'pending',
+        ...(approve && rolledOver ? { rolledOverTo: payrollPeriod } : {}),
         replaced: existing.map(r => ({ id: r.id, status: r.status, total: r.total })),
       },
       getClientIP(context.request),
@@ -122,7 +144,7 @@ export const POST: APIRoute = async context => {
     );
 
     const link = bonusPageLink(branchId, period, week);
-    const info = { week, period, branchName, total: computation.totalBonus };
+    const info = { week, period, branchName, total: computation.totalBonus, payrollPeriod };
     if (approve) {
       const recipients = (await findRecipients(db, branchId, 'can_manage_bonus', { includeAllBranchUsers: false })).filter(
         uid => uid !== actor.id,
@@ -145,13 +167,20 @@ export const POST: APIRoute = async context => {
       );
     }
 
+    const target = periodLabelAr(payrollPeriod);
     return ok(
       {
         record,
         computation,
+        payrollPeriod,
+        rolledOver,
         message: approve
-          ? `تم اعتماد بونص الأسبوع ${week} وسيُضاف إلى مسير رواتب ${periodLabelAr(period)}`
-          : `تم إرسال بونص الأسبوع ${week} لاعتماد المدير`,
+          ? rolledOver
+            ? `تم اعتماد بونص الأسبوع ${week} — مسير رواتب ${periodLabelAr(period)} معتمد مسبقاً، لذلك أُضيف البونص إلى مسير رواتب ${target}`
+            : `تم اعتماد بونص الأسبوع ${week} وسيُضاف إلى مسير رواتب ${target}`
+          : rolledOver
+            ? `تم إرسال بونص الأسبوع ${week} لاعتماد المدير — مسير رواتب ${periodLabelAr(period)} معتمد، لذلك يُضاف عند الاعتماد إلى أول مسير مفتوح`
+            : `تم إرسال بونص الأسبوع ${week} لاعتماد المدير`,
       },
       201,
     );
