@@ -171,6 +171,7 @@ test('locked period refuses new entries and cancellations', async () => {
   assert.equal(first.status, 201);
 
   DB.raw.exec(`INSERT INTO payroll_runs (id, branch_id, period, status) VALUES ('run_1', 'branch_1010', '${PERIOD}', 'approved')`);
+  DB.raw.exec(`INSERT INTO payroll_run_items (id, run_id, employee_id, employee_name) VALUES ('item_1', 'run_1', 'emp_1', 'أحمد علي')`);
   const locked = await call(createAdjustment, env, { token: sup, body: { employeeId: 'emp_1', period: PERIOD, category: 'overtime', amount: 100 } });
   assert.equal(locked.status, 409);
   assert.equal(locked.body.error, 'مسير رواتب هذا الشهر معتمد — لا يمكن إضافة بنود');
@@ -412,3 +413,63 @@ for (const variant of ['008', 'legacy'] as const) {
     }
   });
 }
+
+for (const variant of ['008', 'legacy'] as const) {
+  test(`entries of employees left off an approved payroll stay cancellable (${variant})`, async () => {
+    const { env, DB, data } = await setup(variant);
+    const sup = data.users.supervisor.token;
+    const onSheet = await call(createAdjustment, env, { token: sup, body: { employeeId: 'emp_1', period: PERIOD, category: 'violation', amount: 100 } });
+    const offSheet = await call(createAdjustment, env, { token: sup, body: { employeeId: 'emp_2', period: PERIOD, category: 'advance', amount: 400 } });
+    assert.equal(offSheet.status, 201);
+    // Approved with emp_1 only: emp_2 was inactive when the sheet was built.
+    DB.raw.exec(`INSERT INTO payroll_runs (id, branch_id, period, status) VALUES ('run_1', 'branch_1010', '${PERIOD}', 'approved')`);
+    DB.raw.exec(`INSERT INTO payroll_run_items (id, run_id, employee_id, employee_name) VALUES ('item_1', 'run_1', 'emp_1', 'أحمد علي')`);
+    DB.raw.exec(`UPDATE payroll_adjustments SET payroll_run_id = 'run_1' WHERE id = '${onSheet.body.adjustment.id}'`);
+
+    const listed = await call(listAdjustments, env, { token: sup, query: { period: PERIOD } });
+    assert.equal(listed.body.locked, true);
+    const byId = new Map(listed.body.adjustments.map((a: any) => [a.id, a]));
+    const orphan: any = byId.get(offSheet.body.adjustment.id);
+    const posted: any = byId.get(onSheet.body.adjustment.id);
+    assert.deepEqual([orphan.offSheet, orphan.cancellable], [true, true]);
+    assert.deepEqual([posted.offSheet, posted.cancellable], [false, false]);
+    // Only what the approved sheet carried counts.
+    assert.equal(listed.body.summary.deductions, 100);
+
+    // Still locked for new entries and for employees on the sheet.
+    const add = await call(createAdjustment, env, { token: sup, body: { employeeId: 'emp_2', period: PERIOD, category: 'late', amount: 10 } });
+    assert.equal(add.status, 409);
+    const posted409 = await call(cancelAdjustment, env, { token: sup, body: { id: onSheet.body.adjustment.id, reason: 'خطأ' } });
+    assert.equal(posted409.status, 409);
+    const manual = await call(createAdjustment, env, { token: sup, body: { employeeId: 'emp_1', period: '2026-11', category: 'late', amount: 10 } });
+    DB.raw.exec(`UPDATE payroll_adjustments SET period = '${PERIOD}' WHERE id = '${manual.body.adjustment.id}'`);
+    const unstamped = await call(cancelAdjustment, env, { token: sup, body: { id: manual.body.adjustment.id, reason: 'خطأ' } });
+    assert.equal(unstamped.status, 409);
+
+    const cancelled = await call(cancelAdjustment, env, { token: sup, body: { id: offSheet.body.adjustment.id, reason: 'ترك العمل قبل المسير' } });
+    assert.equal(cancelled.status, 200, JSON.stringify(cancelled.body));
+    assert.equal(cancelled.body.adjustment.status, 'cancelled');
+    assert.deepEqual(cancelled.body.warnings, []);
+  });
+}
+
+test('cancelling an advance installment warns that its payout voucher still stands', async () => {
+  const { env, DB, data } = await setup('008');
+  const { ensureFinanceSchema } = await import('../schema');
+  await ensureFinanceSchema(DB as any);
+  DB.raw.exec(`INSERT INTO payroll_adjustments (id, branch_id, employee_id, employee_name, period, kind, category, amount, source_type, source_id, installment_no, installment_count, created_by_name)
+               VALUES ('adj_a1', 'branch_1010', 'emp_2', 'محمد إسماعيل', '${PERIOD}', 'deduction', 'advance', 300, 'request', 'req_adv', 1, 2, 'محمد أحمد'),
+                      ('adj_v1', 'branch_1010', 'emp_2', 'محمد إسماعيل', '${PERIOD}', 'deduction', 'violation', 50, 'request', 'req_vio', NULL, NULL, 'محمد أحمد')`);
+  DB.raw.exec(`INSERT INTO financial_vouchers (id, branch_id, voucher_type, sequence_no, voucher_number, voucher_date, party_name, amount, purpose, payment_method, status, source_type, source_id)
+               VALUES ('v_1', 'branch_1010', 'payment', 1, 'PV-2026-00001', '2026-10-01', 'محمد إسماعيل', 600, 'سلفة', 'cash', 'approved', 'request', 'req_adv'),
+                      ('v_2', 'branch_1010', 'payment', 2, 'PV-2026-00002', '2026-10-01', 'محمد إسماعيل', 600, 'سلفة', 'cash', 'cancelled', 'request', 'req_adv')`);
+  const sup = data.users.supervisor.token;
+  const res = await call(cancelAdjustment, env, { token: sup, body: { id: 'adj_a1', reason: 'سُددت نقداً' } });
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  assert.equal(res.body.warnings.length, 1);
+  assert.match(res.body.warnings[0], /PV-2026-00001/);
+  assert.match(res.body.warnings[0], /معتمداً/);
+  const other = await call(cancelAdjustment, env, { token: sup, body: { id: 'adj_v1', reason: 'خطأ' } });
+  assert.equal(other.status, 200);
+  assert.deepEqual(other.body.warnings, []);
+});

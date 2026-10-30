@@ -58,7 +58,25 @@ export const GET: APIRoute = async context => {
       .prepare(`SELECT * FROM payroll_adjustments WHERE ${where.join(' AND ')} ORDER BY created_at DESC, rowid DESC`)
       .bind(...params)
       .all<Record<string, unknown>>();
-    const all = (result.results ?? []).map(mapAdjustmentRow);
+    const run = await getOpenRun(db, branchId, period);
+    const locked = run !== null && (run.status === 'approved' || run.status === 'paid');
+    // Once the month is approved, only employees on the sheet were paid. An
+    // open entry of anyone else (left off as inactive or transferred) was never
+    // paid or deducted: it stays cancellable and is not in the summary.
+    let onSheet: Set<string> | null = null;
+    if (locked && run) {
+      const items = await db
+        .prepare('SELECT employee_id FROM payroll_run_items WHERE run_id = ?')
+        .bind(run.id)
+        .all<{ employee_id: string }>();
+      onSheet = new Set((items.results ?? []).map(r => String(r.employee_id)));
+    }
+    const all = (result.results ?? []).map(row => {
+      const a = mapAdjustmentRow(row);
+      const open = a.status === 'active' && !a.payrollRunId;
+      const offSheet = open && onSheet !== null && !onSheet.has(a.employeeId);
+      return { ...a, offSheet, cancellable: open && (onSheet === null || offSheet) };
+    });
     const adjustments = status === 'all' ? all : all.filter(a => a.status === status);
 
     // Legacy rows are always deductions, cannot be cancelled and always count
@@ -112,11 +130,8 @@ export const GET: APIRoute = async context => {
       byCategoryMinor[cat] = (byCategoryMinor[cat] ?? 0) + minor;
       count++;
     };
-    for (const a of all) if (a.status === 'active') add(a.category, a.kind === 'earning', a.amount);
+    for (const a of all) if (a.status === 'active' && !a.offSheet) add(a.category, a.kind === 'earning', a.amount);
     for (const l of legacyRows) add(l.category, false, l.amount);
-
-    const run = await getOpenRun(db, branchId, period);
-    const locked = run !== null && (run.status === 'approved' || run.status === 'paid');
 
     return ok({
       branchId,

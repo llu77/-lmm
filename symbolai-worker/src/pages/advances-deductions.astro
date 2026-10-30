@@ -292,6 +292,9 @@ if (!cookieHeader?.includes('session=')) {
       installmentCount: number | null;
       status: 'active' | 'cancelled';
       payrollRunId: string | null;
+      /** Left off the approved payroll (inactive or transferred employee): never paid or deducted. */
+      offSheet?: boolean;
+      cancellable?: boolean;
       createdByName: string | null;
       createdAt: string;
       cancelledByName: string | null;
@@ -561,6 +564,10 @@ if (!cookieHeader?.includes('session=')) {
       if (a.payrollRunId) {
         return '<span class="inline-block rounded bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-800">مرحّل للمسير</span>';
       }
+      if (a.offSheet) {
+        return '<span class="inline-block rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">غير مدرج في المسير</span>' +
+          '<div class="mt-1 max-w-[14rem] text-xs text-muted-foreground">الموظف لم يكن ضمن المسير المعتمد — لم يُصرف ولم يُخصم</div>';
+      }
       return '<span class="inline-block rounded bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">نشط</span>';
     }
 
@@ -573,7 +580,7 @@ if (!cookieHeader?.includes('session=')) {
       } else if (a.quantity !== null) {
         calc = `${escapeHtml(formatQuantity(a.quantity))} ${escapeHtml(unit)}`;
       }
-      const canCancel = canEdit && a.status === 'active' && !locked && !a.payrollRunId;
+      const canCancel = canEdit && (a.cancellable ?? (a.status === 'active' && !locked && !a.payrollRunId));
       const muted = a.status === 'cancelled' ? 'opacity-60' : '';
       return `<tr class="border-b align-top hover:bg-gray-50 ${muted}">
         <td class="p-3 font-medium">${escapeHtml(a.employeeName)}</td>
@@ -606,7 +613,11 @@ if (!cookieHeader?.includes('session=')) {
       const lockedBanner = byId('locked-banner');
       if (data.locked) {
         lockedBanner.innerHTML = `<p class="font-semibold">مسير رواتب ${escapeHtml(label)} ${escapeHtml(RUN_STATUS_AR[run?.status ?? 'approved'] ?? '')} — لا يمكن إضافة بنود أو إلغاؤها لهذا الشهر.</p>
-          <p class="mt-1 text-sm">لإجراء تعديل يجب على المدير إعادة فتح المسير من صفحة الرواتب، أو أضف البند على الشهر التالي.</p>`;
+          <p class="mt-1 text-sm">لإجراء تعديل يجب على المدير إعادة فتح المسير من صفحة الرواتب، أو أضف البند على الشهر التالي.</p>${
+            data.adjustments.some(a => a.offSheet)
+              ? '<p class="mt-1 text-sm">يمكن إلغاء بنود الموظفين غير المدرجين في المسير المعتمد، لأنها لم تُصرف ولم تُخصم.</p>'
+              : ''
+          }`;
         lockedBanner.classList.remove('hidden');
       } else {
         lockedBanner.classList.add('hidden');
@@ -897,11 +908,12 @@ if (!cookieHeader?.includes('session=')) {
         return;
       }
       try {
-        await withBusy(cancelSubmit, 'جاري الإلغاء...', () =>
-          api('/api/adjustments/cancel', { method: 'POST', body: { id: cancellingId, reason } }),
+        const res = await withBusy(cancelSubmit, 'جاري الإلغاء...', () =>
+          api<{ warnings?: string[] }>('/api/adjustments/cancel', { method: 'POST', body: { id: cancellingId, reason } }),
         );
         cancelDialog.close();
         toast('تم إلغاء البند', 'success');
+        for (const warning of res.warnings ?? []) toast(warning, 'info');
         await loadData();
       } catch (error) {
         toast(message(error), 'error');
